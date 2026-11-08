@@ -1,6 +1,6 @@
 # Automated social telemetry setup
 
-The workflow reads public RSS feeds every 30 minutes and writes an estimated hashtag sample to the `SocialTelemetry` tab. The dashboard reads that tab through the existing Python backend on startup and refreshes it periodically. Feed article matches and the derived mention, velocity, and polarization values are estimates, not a census of social posts or a sentiment analysis.
+The workflow reads Google News RSS results for Zimbabwe-related queries every 30 minutes and writes an estimated topic sample to the `SocialTelemetry` tab. Each mention is a matching article, not a social post. Narrative velocity is an index adding 10 points per matching article published in the last 24 hours (capped at 100); polarization is a lexical proxy based on contested-language terms (0–10). Neither is a measured social-media count, sentiment, or validated polarization measure. The publisher uses only Python's standard library.
 
 ## 1. Deploy the Google Apps Script bridge
 
@@ -24,6 +24,6 @@ The scheduled workflow is [`.github/workflows/telemetry_sync.yml`](./.github/wor
 
 ## 3. Configure the KUVHURA backend
 
-Set `GOOGLE_SHEETS_WEB_APP_URL` in the environment of the server running `server.py`, using the same deployed URL. Restart the backend after setting it. The dashboard's social telemetry panel then loads from the sheet automatically; no sheet ID or link needs to be entered in the dashboard.
+Set `GOOGLE_SHEETS_WEB_APP_URL` in the environment of the Node.js backend (`server.js`), using the same deployed URL. Restart the backend after setting it. The dashboard's social telemetry panel then loads from the sheet automatically; no sheet ID or link needs to be entered in the dashboard.
 
 For local development, set the variable in the shell before starting the server. Without it, the dashboard keeps using its existing direct Bluesky and Mastodon feeds.
