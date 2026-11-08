@@ -13,6 +13,8 @@ In Apps Script **Project Settings → Script Properties**, add:
 
 Deploy as a **Web app**, executing as yourself, with access set to **Anyone**. Copy the deployment URL. The read endpoint returns only the telemetry data; writes require the token.
 
+When changing the Apps Script later, saving the editor is not enough to update the live web app. Open **Deploy → Manage deployments**, edit the web app deployment, select **New version**, and deploy it. Keep the same deployment URL in the GitHub secret.
+
 ## 2. Configure GitHub Actions
 
 In the repository's **Settings → Secrets and variables → Actions**, configure:
