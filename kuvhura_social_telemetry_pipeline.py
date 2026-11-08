@@ -84,8 +84,8 @@ def calculate_metrics(counts, timestamp=None):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    web_app_url = os.environ.get("GOOGLE_SHEETS_WEB_APP_URL")
-    sync_token = os.environ.get("GOOGLE_SHEETS_WEB_APP_TOKEN")
+    web_app_url = os.environ.get("GOOGLE_SHEETS_WEB_APP_URL", "").strip()
+    sync_token = os.environ.get("GOOGLE_SHEETS_WEB_APP_TOKEN", "").strip()
     if not web_app_url or not sync_token:
         raise SystemExit(
             "GOOGLE_SHEETS_WEB_APP_URL and GOOGLE_SHEETS_WEB_APP_TOKEN must be configured"
@@ -99,7 +99,15 @@ def main():
         headers={"Accept": "application/json"},
         timeout=30,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as error:
+        if error.response is not None and error.response.status_code == 404:
+            raise RuntimeError(
+                "Google Apps Script returned HTTP 404; check that the secret contains "
+                "the current deployed web app URL ending in /exec, without extra text"
+            ) from error
+        raise
     try:
         result = response.json()
     except requests.exceptions.JSONDecodeError as error:

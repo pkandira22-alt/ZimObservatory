@@ -23,6 +23,24 @@ class SocialTelemetryTests(unittest.TestCase):
             ["2026-11-08T12:00:00Z", "#ZimResources", 260, 90.0, 6.6],
         )
 
+    @patch.object(pipeline.requests, "post")
+    @patch.object(pipeline, "calculate_metrics", return_value=[["timestamp", "#tag", 1, 50, 5]])
+    @patch.object(pipeline, "fetch_rss_and_public_feeds", return_value={"#tag": 0})
+    def test_main_trims_github_secret_whitespace(self, _fetch, _metrics, mock_post):
+        response = MagicMock()
+        response.json.return_value = {"status": "success"}
+        mock_post.return_value = response
+        environment = {
+            "GOOGLE_SHEETS_WEB_APP_URL": " https://script.google.com/macros/s/id/exec \n",
+            "GOOGLE_SHEETS_WEB_APP_TOKEN": " token \n",
+        }
+
+        with patch.dict(os.environ, environment):
+            pipeline.main()
+
+        self.assertEqual(mock_post.call_args.args[0], "https://script.google.com/macros/s/id/exec")
+        self.assertEqual(mock_post.call_args.kwargs["json"]["token"], "token")
+
     @patch.object(pipeline.feedparser, "parse")
     @patch.object(pipeline.requests, "get")
     def test_feed_ingestion_counts_matching_articles(self, mock_get, mock_parse):
