@@ -962,7 +962,7 @@
             Waiting for a live public-post sample
           </div>
           <p id="speechVectorDesc" style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-bottom: 12px;">
-            This tracker counts hashtags in recent public Bluesky posts returned for the Zimbabwe search. It does not cover private channels or all social platforms.
+            This tracker counts hashtags in recent public Bluesky and Mastodon posts returned by feeds for Zimbabwe. It does not cover private channels or all social platforms.
           </p>
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
             <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px; border-radius: 6px; text-align: center;">
@@ -975,7 +975,7 @@
             </div>
             <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px; border-radius: 6px; text-align: center;">
               <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Source Scope</div>
-              <div id="metricThrottling" style="font-size: 14px; font-weight: 900; color: var(--zim-gold);">Bluesky only</div>
+              <div id="metricThrottling" style="font-size: 14px; font-weight: 900; color: var(--zim-gold);">Bluesky + Mastodon</div>
             </div>
           </div>
         </div>
@@ -1323,7 +1323,7 @@
       <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px;">
         <div class="card-panel">
           <div class="panel-hdr"><span>Evidence & Live Feeds</span></div>
-          <p style="font-size:12px; color:#CBD5E1; line-height:1.7;">The hashtag panel queries recent public Bluesky posts matching “Zimbabwe” and compares hashtag mentions per post in the newest and preceding halves of the returned sample. It is not a measure of all social media, sentiment, polarization, or private messaging. Other source badges indicate an integration or local dataset, not necessarily a continuously updated official feed.</p>
+          <p style="font-size:12px; color:#CBD5E1; line-height:1.7;">The hashtag panel combines recent public Bluesky search results with public Mastodon #Zimbabwe timelines when those feeds are available, then compares hashtag mentions per post in the newest and preceding halves of the sample. It is not a measure of all social media, sentiment, polarization, or private messaging. Other source badges indicate an integration or local dataset, not necessarily a continuously updated official feed.</p>
         </div>
         <div class="card-panel">
           <div class="panel-hdr"><span>Regional Model & Risk Signals</span></div>
@@ -2562,13 +2562,15 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
         const tags = Array.isArray(data.hashtags) ? data.hashtags : [];
         const topTag = tags[0];
-        if (badge) badge.textContent = 'Live public Bluesky sample';
+        const sources = Array.isArray(data.sources) ? data.sources : [data.source].filter(Boolean);
+        const platforms = [...new Set(sources.map((source) => source.startsWith('Mastodon') ? 'Mastodon' : source))];
+        if (badge) badge.textContent = `Live public sample · ${platforms.length} ${platforms.length === 1 ? 'source' : 'sources'}`;
         if (title) title.textContent = topTag ? topTag.tag : 'No hashtags in the latest sample';
         if (description) {
-          description.textContent = `${data.scannedPosts} public posts matching “Zimbabwe” were returned. Hashtag trajectory compares the newest and preceding halves of this sample; this is not a sentiment or polarization score.`;
+          description.textContent = `${data.scannedPosts} public posts were returned by feeds for “Zimbabwe.” Hashtag trajectory compares the newest and preceding halves of this multi-source sample; this is not a sentiment or polarization score.`;
         }
         if (scanned) scanned.textContent = String(data.scannedPosts || 0);
-        if (sourceScope) sourceScope.textContent = 'Bluesky only';
+        if (sourceScope) sourceScope.textContent = platforms.join(' + ') || 'Public feeds';
         if (velocity) {
           if (!topTag) {
             velocity.textContent = 'No hashtags';
@@ -2605,7 +2607,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
         if (updatedAt) {
           const time = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'unknown time';
-          updatedAt.textContent = `Source: ${data.source}. Sample refreshed ${time}. Refreshes every 2 minutes.`;
+          updatedAt.textContent = `Sources: ${sources.join(', ') || data.source}. Sample refreshed ${time}. Refreshes every 2 minutes.`;
         }
       } catch (error) {
         if (badge) badge.textContent = 'Public feed unavailable';
@@ -2613,7 +2615,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         if (description) description.textContent = error.message || 'The public feed is currently unavailable. No sample trends are being shown.';
         if (velocity) velocity.textContent = 'Unavailable';
         if (scanned) scanned.textContent = '0';
-        if (sourceScope) sourceScope.textContent = 'Bluesky only';
+        if (sourceScope) sourceScope.textContent = 'Bluesky + Mastodon';
         if (list) {
           const message = document.createElement('div');
           message.style.color = 'var(--text-muted)';

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 import json
+import logging
 import os
 import re
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from html.parser import HTMLParser
 from io import BytesIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from threading import Lock
 from datetime import datetime, timezone
@@ -25,6 +28,70 @@ INDEX_PATH = os.path.join(BASE_DIR, "index.html")
 SOCIAL_CACHE = {"expires_at": 0, "payload": None}
 SOCIAL_CACHE_LOCK = Lock()
 HASHTAG_PATTERN = re.compile(r"(?<![\w])#[\w][\w-]*", re.UNICODE)
+SOCIAL_FEEDS = (
+    (
+        "Bluesky",
+        "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=Zimbabwe&sort=latest&limit=100",
+    ),
+    (
+        "Mastodon (mastodon.social)",
+        "https://mastodon.social/api/v1/timelines/tag/Zimbabwe?limit=40",
+    ),
+    (
+        "Mastodon (mastodon.online)",
+        "https://mastodon.online/api/v1/timelines/tag/Zimbabwe?limit=40",
+    ),
+    (
+        "Mastodon (mas.to)",
+        "https://mas.to/api/v1/timelines/tag/Zimbabwe?limit=40",
+    ),
+)
+LOGGER = logging.getLogger(__name__)
+
+
+class _HTMLTextParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+
+def _plain_text(html):
+    parser = _HTMLTextParser()
+    parser.feed(html or "")
+    return " ".join(parser.parts)
+
+
+def _fetch_social_source(feed):
+    source, url = feed
+    request = Request(
+        url,
+        headers={"Accept": "application/json", "User-Agent": "KUVHURA-Observatory/1.0"},
+    )
+    with urlopen(request, timeout=8) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    posts = []
+    if source == "Bluesky":
+        for item in payload.get("posts", []):
+            record = item.get("record", {})
+            posts.append({
+                "text": record.get("text", ""),
+                "created_at": record.get("createdAt"),
+                "url": item.get("uri"),
+            })
+    else:
+        if not isinstance(payload, list):
+            raise ValueError("Mastodon returned an invalid status list")
+        for item in payload:
+            posts.append({
+                "text": _plain_text(item.get("content", "")),
+                "created_at": item.get("created_at"),
+                "url": item.get("url"),
+            })
+    return source, posts
 
 
 def connect_db():
@@ -152,92 +219,96 @@ def fetch_social_hashtag_trends():
         if SOCIAL_CACHE["payload"] and SOCIAL_CACHE["expires_at"] > now.timestamp():
             return SOCIAL_CACHE["payload"]
 
-    source = "Bluesky public search"
-    params = urlencode({"q": "Zimbabwe", "sort": "latest", "limit": 100})
-    request = Request(
-        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{params}",
-        headers={"Accept": "application/json", "User-Agent": "KUVHURA-Observatory/1.0"},
-    )
+    fetched_posts = []
+    failed_sources = []
+    with ThreadPoolExecutor(max_workers=len(SOCIAL_FEEDS)) as executor:
+        futures = [executor.submit(_fetch_social_source, feed) for feed in SOCIAL_FEEDS]
+        for feed, future in zip(SOCIAL_FEEDS, futures):
+            source = feed[0]
+            try:
+                fetched_posts.append(future.result())
+            except Exception as exc:
+                LOGGER.warning("Social feed %s failed: %s", source, exc)
+                failed_sources.append(source)
 
-    try:
-        with urlopen(request, timeout=10) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        posts = payload.get("posts", [])
-        parsed_posts = []
+    parsed_posts = []
+    seen_posts = set()
+    for source, posts in fetched_posts:
         for item in posts:
-            record = item.get("record", {})
-            text = record.get("text", "")
-            created_at = record.get("createdAt")
+            identity = item["url"] or (source, item["text"], item["created_at"])
+            if identity in seen_posts:
+                continue
+            seen_posts.add(identity)
+            created_at = item["created_at"]
             try:
                 created = datetime.fromisoformat(created_at.replace("Z", "+00:00")) if created_at else None
                 if created and created.tzinfo is None:
                     created = created.replace(tzinfo=timezone.utc)
             except (TypeError, ValueError):
                 created = None
-            parsed_posts.append({"text": text, "created": created})
-
-        parsed_posts.sort(key=lambda post: post["created"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-        split_at = (len(parsed_posts) + 1) // 2
-        latest_sample = parsed_posts[:split_at]
-        earlier_sample = parsed_posts[split_at:]
-        tag_counts = {}
-        for sample_name, sample in (("latest", latest_sample), ("earlier", earlier_sample)):
-            for post in sample:
-                for tag in HASHTAG_PATTERN.findall(post["text"]):
-                    key = tag.casefold()
-                    if key not in tag_counts:
-                        tag_counts[key] = {"tag": tag, "latestMentions": 0, "earlierMentions": 0}
-                    field = "latestMentions" if sample_name == "latest" else "earlierMentions"
-                    tag_counts[key][field] += 1
-
-        trends = []
-        for item in tag_counts.values():
-            latest_count = item["latestMentions"]
-            earlier_count = item["earlierMentions"]
-            if earlier_count == 0:
-                trajectory = "new" if latest_count else "no baseline"
-                change_pct = None
-            else:
-                latest_rate = latest_count / max(1, len(latest_sample))
-                earlier_rate = earlier_count / max(1, len(earlier_sample))
-                change_pct = round(((latest_rate - earlier_rate) / earlier_rate) * 100)
-                trajectory = "rising" if change_pct >= 20 else "falling" if change_pct <= -20 else "steady"
-            trends.append({
-                "tag": item["tag"],
-                "mentions": latest_count + earlier_count,
-                "latestMentions": latest_count,
-                "earlierMentions": earlier_count,
-                "changePct": change_pct,
-                "trajectory": trajectory,
+            parsed_posts.append({
+                "text": item["text"],
+                "created": created,
+                "source": source,
             })
-        trends.sort(key=lambda item: (item["latestMentions"], item["mentions"]), reverse=True)
 
-        valid_dates = [post["created"] for post in parsed_posts if post["created"]]
-        result = {
-            "available": True,
-            "source": source,
-            "query": "Zimbabwe",
-            "updatedAt": now.isoformat(timespec="seconds"),
-            "scannedPosts": len(parsed_posts),
-            "latestSamplePosts": len(latest_sample),
-            "earlierSamplePosts": len(earlier_sample),
-            "coverageStart": min(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
-            "coverageEnd": max(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
-            "hashtags": trends[:8],
-        }
-        if not parsed_posts:
-            result["available"] = False
-            result["message"] = "No matching public posts were returned."
-    except Exception:
-        result = {
-            "available": False,
-            "source": source,
-            "query": "Zimbabwe",
-            "updatedAt": now.isoformat(timespec="seconds"),
-            "scannedPosts": 0,
-            "hashtags": [],
-            "message": "The public feed could not be reached. Try again when the data source is available.",
-        }
+    parsed_posts.sort(
+        key=lambda post: post["created"] or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+    split_at = (len(parsed_posts) + 1) // 2
+    latest_sample = parsed_posts[:split_at]
+    earlier_sample = parsed_posts[split_at:]
+    tag_counts = {}
+    for sample_name, sample in (("latest", latest_sample), ("earlier", earlier_sample)):
+        for post in sample:
+            for tag in HASHTAG_PATTERN.findall(post["text"]):
+                key = tag.casefold()
+                if key not in tag_counts:
+                    tag_counts[key] = {"tag": tag, "latestMentions": 0, "earlierMentions": 0}
+                field = "latestMentions" if sample_name == "latest" else "earlierMentions"
+                tag_counts[key][field] += 1
+
+    trends = []
+    for item in tag_counts.values():
+        latest_count = item["latestMentions"]
+        earlier_count = item["earlierMentions"]
+        if earlier_count == 0:
+            trajectory = "new" if latest_count else "no baseline"
+            change_pct = None
+        else:
+            latest_rate = latest_count / max(1, len(latest_sample))
+            earlier_rate = earlier_count / max(1, len(earlier_sample))
+            change_pct = round(((latest_rate - earlier_rate) / earlier_rate) * 100)
+            trajectory = "rising" if change_pct >= 20 else "falling" if change_pct <= -20 else "steady"
+        trends.append({
+            "tag": item["tag"],
+            "mentions": latest_count + earlier_count,
+            "latestMentions": latest_count,
+            "earlierMentions": earlier_count,
+            "changePct": change_pct,
+            "trajectory": trajectory,
+        })
+    trends.sort(key=lambda item: (item["latestMentions"], item["mentions"]), reverse=True)
+
+    available_sources = list(dict.fromkeys(post["source"] for post in parsed_posts))
+    valid_dates = [post["created"] for post in parsed_posts if post["created"]]
+    result = {
+        "available": bool(parsed_posts),
+        "source": " + ".join(available_sources) if available_sources else "Bluesky and Mastodon public feeds",
+        "sources": available_sources,
+        "failedSources": failed_sources,
+        "query": "Zimbabwe",
+        "updatedAt": now.isoformat(timespec="seconds"),
+        "scannedPosts": len(parsed_posts),
+        "latestSamplePosts": len(latest_sample),
+        "earlierSamplePosts": len(earlier_sample),
+        "coverageStart": min(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
+        "coverageEnd": max(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
+        "hashtags": trends[:8],
+    }
+    if not parsed_posts:
+        result["message"] = "No matching public posts could be retrieved from Bluesky or Mastodon feeds."
 
     with SOCIAL_CACHE_LOCK:
         SOCIAL_CACHE["payload"] = result
