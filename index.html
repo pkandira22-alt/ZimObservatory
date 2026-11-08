@@ -17,6 +17,8 @@
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     :root {
@@ -340,6 +342,18 @@
       justify-content: space-between;
       align-items: center;
     }
+    .spatial-map-layout { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 20px; align-items: start; }
+    #zimbabweMap { width: 100%; height: 390px; border: 1px solid var(--border-panel); border-radius: 8px; background: #0B1422; }
+    .spatial-filter { padding: 7px 10px; font-size: 11px; }
+    .spatial-filter[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 1px; }
+    .spatial-map-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .spatial-map-links a { color: var(--zim-gold); font-size: 11px; font-weight: 700; }
+    .spatial-map-note { margin-top: 10px; color: var(--text-muted); font-size: 10px; line-height: 1.5; }
+    .spatial-marker { display: block; width: 16px; height: 16px; border: 2px solid white; border-radius: 50%; box-shadow: 0 1px 6px #000; }
+    @media (max-width: 850px) {
+      .spatial-map-layout { grid-template-columns: 1fr; }
+      #zimbabweMap { height: 340px; }
+    }
 
     /* Sliders */
     .slider-row { margin-bottom: 12px; }
@@ -539,7 +553,7 @@
           <a href="#home">Overview / Introduction</a>
           <a href="#observatory">Live Observatory &amp; Tools</a>
           <a href="#advancedModulesPanel">Institutional Modules</a>
-          <a href="#spatial3DMapPanel">Spatial Extraction Map</a>
+          <a href="#spatialMapPanel">Zimbabwe Spatial Map</a>
           <a href="#socialSpeechTracker">Narrative Telemetry</a>
           <a href="#leadershipMatrix">Leadership Matrix</a>
           <a href="#corruption">Whistleblower Dossier</a>
@@ -911,41 +925,43 @@
       </div>
     </div>
 
-    <!-- 3D INTERACTIVE SPATIAL EXTRACTION & CORRUPTION MAP PANEL -->
-    <div class="card-panel" id="spatial3DMapPanel" style="margin-bottom: 24px; border-top: 4px solid #10B981;">
+    <!-- INTERACTIVE ZIMBABWE SPATIAL CONTEXT MAP -->
+    <div class="card-panel" id="spatialMapPanel" style="margin-bottom: 24px; border-top: 4px solid #10B981;">
       <div class="panel-hdr">
         <span style="color: #34D399; display: flex; align-items: center; gap: 8px;">
-          🗺️ 3D SPATIAL EXTRACTION & CORRUPTION TOPOGRAPHY (INTERACTIVE REGIONAL MAP)
+          🗺️ ZIMBABWE SPATIAL CONTEXT MAP
         </span>
-        <span style="font-size:10px; color:var(--zim-gold);" id="map3dBadge">WebGL 3D Engine Active</span>
+        <span style="font-size:10px; color:var(--zim-gold);" id="spatialMapStatus" role="status">Loading interactive map…</span>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; align-items: center;">
+      <div class="spatial-map-layout">
         <div>
           <div style="font-size: 11px; text-transform: uppercase; font-weight: 800; color: var(--zim-gold); margin-bottom: 6px;">
-            Critical Analytical Dimension: Spatial Revenue Leakage & Patronage Hubs
+            Places behind the national indicators
           </div>
           <p style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-bottom: 12px;">
-            National macro equations alone do not capture geographic bottlenecks. This 3D interactive topography model maps elite mineral rent extraction nodes (Great Dyke platinum/lithium, Marange diamonds) against grassroots administrative shakedowns across provinces. 
+            Explore Zimbabwe’s mining areas, urban markets and rural case-study localities. Select a marker to see its location and open it in Google Maps or Google Earth.
           </p>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-            <button class="btn btn-green" onclick="select3DNode('MINING')">💎 Extractive Mega-Nodes</button>
-            <button class="btn btn-purple" onclick="select3DNode('VENDING')">🏪 Urban Extortion Hubs</button>
-            <button class="btn btn-red" onclick="select3DNode('RURAL')">🌾 Rural Food Aid Gates</button>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;" aria-label="Filter map locations">
+            <button type="button" class="btn btn-outline spatial-filter" data-spatial-filter="ALL" aria-pressed="true" onclick="filterSpatialNodes('ALL')">All locations</button>
+            <button type="button" class="btn btn-green spatial-filter" data-spatial-filter="MINING" aria-pressed="false" onclick="filterSpatialNodes('MINING')">💎 Mining areas</button>
+            <button type="button" class="btn btn-purple spatial-filter" data-spatial-filter="VENDING" aria-pressed="false" onclick="filterSpatialNodes('VENDING')">🏪 Urban markets</button>
+            <button type="button" class="btn btn-red spatial-filter" data-spatial-filter="RURAL" aria-pressed="false" onclick="filterSpatialNodes('RURAL')">🌾 Rural localities</button>
           </div>
           <div id="nodeInfoBox" style="background: #070B14; border: 1px solid var(--border-soft); padding: 10px; border-radius: 8px; font-size: 11.5px; color: #F8FAFC;">
-            <strong>Selected Node:</strong> Extractive Mega-Nodes (Great Dyke / Marange)<br/>
-            <strong>Leakage Impact:</strong> Generates 68% of Elite Rent Extraction ($E$). Direct offshore arbitrage with zero domestic reinvestment.
+            <strong id="spatialNodeName">Selected location:</strong> <span id="spatialNodeValue">Gutu North, Masvingo</span><br/>
+            <strong>Context:</strong> <span id="spatialNodeContext">Rural case-study locality associated with food-aid and agricultural-input reporting in this dashboard.</span>
           </div>
+          <div class="spatial-map-links">
+            <a id="spatialGoogleMaps" href="https://www.google.com/maps/search/?api=1&amp;query=-19.66%2C31.45" target="_blank" rel="noopener noreferrer">Open selected location in Google Maps ↗</a>
+            <a id="spatialGoogleEarth" href="https://earth.google.com/web/@-19.66,31.45,1500a,0d,35y,0h,0t,0r" target="_blank" rel="noopener noreferrer">Open Google Earth ↗</a>
+          </div>
+          <p class="spatial-map-note">
+            Map pins are approximate place references, not incident coordinates. Dossier entries and model scores are claims or analytical inputs from this dashboard; their presence here does not independently verify an allegation. Map tiles © OpenStreetMap contributors.
+          </p>
         </div>
 
-        <div style="background: #070B14; border: 1px solid var(--border-panel); border-radius: 10px; padding: 10px; text-align: center; position: relative;">
-          <!-- Interactive 3D Canvas -->
-          <canvas id="topography3DCanvas" width="340" height="220" style="width: 100%; height: 220px; border-radius: 6px; background: radial-gradient(circle at center, #0F172A 0%, #070B14 100%); cursor: grab;"></canvas>
-          <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
-            Click & drag to rotate 3D extraction topography. Click nodes to inspect.
-          </div>
-        </div>
+        <div id="zimbabweMap" role="application" aria-label="Interactive map of Zimbabwe showing mining, urban market and rural case-study locations"></div>
       </div>
     </div>
 
@@ -2156,7 +2172,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       renderCorruptionTable();
       renderSectorTable();
       initChart();
-      setTimeout(init3DCanvas, 200);
+      setTimeout(initSpatialMap, 200);
       runPredictiveLoop();
       // Auto-fetch live external macro feeds on startup
       setTimeout(() => { fetchGlobalMacroTelemetry(true); }, 1500);
@@ -2234,130 +2250,96 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
 
 
-    // 3D Interactive Topography Canvas Engine
-    let canvas3D, ctx3D;
-    let angle3D = 0;
-    let selectedNodeType = 'MINING';
-    let nodes3D = [
-      { name: "Great Dyke / Marange", type: "MINING", x: 60, y: 50, z: -20, color: "#D4AF37", radius: 10, desc: "Primary Mineral Rent Extraction Node (E = 8.8)" },
-      { name: "Harare / Mbare Musika", type: "VENDING", x: 0, y: 10, z: 20, color: "#991B1B", radius: 8, desc: "Urban Extortion & Space Baron Hub (P = 8.9)" },
-      { name: "Bulawayo CBD / Roadblocks", type: "VENDING", x: -80, y: 40, z: 10, color: "#F87171", radius: 7, desc: "Traffic Shakedown & Informal Commerce Grid" },
-      { name: "Gutu / Mashonaland Rural", type: "RURAL", x: 40, y: -40, z: -10, color: "#22C55E", radius: 8, desc: "Pfumvudza Input & Food Aid Gatekeeping (I = 8.8)" },
-      { name: "Mutapa Holding Conduit", type: "MINING", x: -20, y: -20, z: -40, color: "#6366F1", radius: 9, desc: "Offshore Parastatal Arbitrage & Procurement Bypass" }
+    const spatialNodes = [
+      { id: "gutu-north", name: "Gutu North, Masvingo", type: "RURAL", lat: -19.66, lng: 31.45, color: "#22C55E", context: "Rural case-study locality associated with food-aid and agricultural-input reporting in this dashboard." },
+      { id: "chiweshe", name: "Chiweshe, Mashonaland Central", type: "RURAL", lat: -17.02, lng: 31.30, color: "#22C55E", context: "Rural locality referenced by an agricultural-input case entry in this dashboard." },
+      { id: "mbare", name: "Mbare Musika, Harare", type: "VENDING", lat: -17.87, lng: 31.05, color: "#A78BFA", context: "Urban market locality used in the dashboard’s informal-vending example." },
+      { id: "bulawayo", name: "Bulawayo CBD", type: "VENDING", lat: -20.15, lng: 28.58, color: "#A78BFA", context: "Urban market and transport context represented in the dashboard’s city examples." },
+      { id: "great-dyke", name: "Great Dyke corridor near Kwekwe, Midlands", type: "MINING", lat: -18.93, lng: 29.82, color: "#D4AF37", context: "Approximate reference to the mineral-bearing Great Dyke corridor; this pin is not a mine boundary or incident location." },
+      { id: "marange", name: "Marange / Chiadzwa area, Manicaland", type: "MINING", lat: -19.35, lng: 32.25, color: "#D4AF37", context: "Approximate reference to the Marange diamond area; this pin is not a mine boundary or incident location." }
     ];
+    let spatialMap;
+    let selectedSpatialCategory = "ALL";
+    let selectedSpatialNode = spatialNodes[0];
+    const spatialMarkers = new Map();
 
+    function initSpatialMap() {
+      const mapElement = document.getElementById("zimbabweMap");
+      const badge = document.getElementById("spatialMapStatus");
+      if (!mapElement) return;
+      if (!window.L) {
+        badge.textContent = "Interactive map unavailable — check your connection";
+        return;
+      }
 
-
-    function init3DCanvas() {
-      canvas3D = document.getElementById('topography3DCanvas');
-      if (!canvas3D) return;
-      
-      // Ensure correct pixel dimensions with fallback
-      const parentWidth = canvas3D.parentElement ? canvas3D.parentElement.clientWidth : 0;
-      canvas3D.width = parentWidth > 50 ? parentWidth : 340;
-      canvas3D.height = 220;
-
-      ctx3D = canvas3D.getContext('2d');
-
-      let isDragging = false;
-      let lastMouseX = 0;
-
-      canvas3D.addEventListener('mousedown', (e) => { isDragging = true; lastMouseX = e.clientX; });
-      window.addEventListener('mouseup', () => { isDragging = false; });
-      canvas3D.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        const delta = e.clientX - lastMouseX;
-        angle3D += delta * 0.015;
-        lastMouseX = e.clientX;
-        render3DScene();
+      spatialMap = L.map(mapElement, { scrollWheelZoom: false }).setView([-19.0, 29.8], 6);
+      const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 18,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'
+      }).addTo(spatialMap);
+      tiles.on("tileerror", () => {
+        badge.textContent = "Map tiles could not load — check your connection";
+      });
+      tiles.once("load", () => {
+        badge.textContent = "OpenStreetMap · pan and zoom";
       });
 
-      // Also support touch events for mobile/tablets
-      canvas3D.addEventListener('touchstart', (e) => { isDragging = true; lastMouseX = e.touches[0].clientX; });
-      window.addEventListener('touchend', () => { isDragging = false; });
-      canvas3D.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        const delta = e.touches[0].clientX - lastMouseX;
-        angle3D += delta * 0.015;
-        lastMouseX = e.touches[0].clientX;
-        render3DScene();
+      spatialNodes.forEach(node => {
+        const icon = L.divIcon({
+          className: "",
+          html: `<span class="spatial-marker" style="background:${node.color}"></span>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+        const marker = L.marker([node.lat, node.lng], { icon, title: node.name, alt: node.name });
+        marker.bindTooltip(node.name);
+        marker.on("click", () => selectSpatialNode(node.id));
+        spatialMarkers.set(node.id, marker);
       });
 
-      setInterval(() => {
-        if (!isDragging) {
-          angle3D += 0.008;
-          render3DScene();
+      filterSpatialNodes("ALL");
+      selectSpatialNode("gutu-north");
+      spatialMap.invalidateSize();
+    }
+
+    function selectSpatialNode(id) {
+      const node = spatialNodes.find(location => location.id === id);
+      if (!node) return;
+      selectedSpatialNode = node;
+      document.getElementById("spatialNodeValue").textContent = node.name;
+      document.getElementById("spatialNodeContext").textContent = node.context;
+      const coordinates = `${node.lat},${node.lng}`;
+      document.getElementById("spatialGoogleMaps").href =
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordinates)}`;
+      document.getElementById("spatialGoogleEarth").href =
+        `https://earth.google.com/web/@${node.lat},${node.lng},1500a,0d,35y,0h,0t,0r`;
+      if (spatialMap) {
+        if (selectedSpatialCategory !== "ALL" && selectedSpatialCategory !== node.type) {
+          filterSpatialNodes("ALL");
         }
-      }, 40);
-
-      render3DScene();
-    }
-
-
-
-    function select3DNode(type) {
-      selectedNodeType = type;
-      const node = nodes3D.find(n => n.type === type) || nodes3D[0];
-      const box = document.getElementById('nodeInfoBox');
-      if (box) {
-        box.innerHTML = `<strong>Selected Category:</strong> ${node.name}<br/><strong>Telemetry Profile:</strong> ${node.desc}`;
+        spatialMap.panTo([node.lat, node.lng]);
       }
     }
 
-    function render3DScene() {
-      if (!ctx3D) return;
-      ctx3D.clearRect(0, 0, canvas3D.width, canvas3D.height);
-
-      const cx = canvas3D.width / 2;
-      const cy = canvas3D.height / 2;
-
-      // Draw wireframe grid plane representing Zimbabwe terrain topography
-      ctx3D.strokeStyle = 'rgba(42, 57, 80, 0.4)';
-      ctx3D.lineWidth = 1;
-      for (let i = -3; i <= 3; i++) {
-        let x1 = cx + i * 40;
-        let y1 = cy - 60;
-        let x2 = cx + i * 50;
-        let y2 = cy + 80;
-        ctx3D.beginPath(); ctx3D.moveTo(x1, y1); ctx3D.lineTo(x2, y2); ctx3D.stroke();
-      }
-
-      // Render 3D Nodes with rotation
-      nodes3D.forEach(node => {
-        // Rotate around Y axis
-        let cosA = Math.cos(angle3D);
-        let sinA = Math.sin(angle3D);
-        let rotX = node.x * cosA - node.z * sinA;
-        let rotZ = node.x * sinA + node.z * cosA;
-
-        let screenX = cx + rotX;
-        let screenY = cy + node.y + (rotZ * 0.3);
-
-        let isSelected = node.type === selectedNodeType;
-        let r = isSelected ? node.radius * 1.4 : node.radius;
-
-        // Draw pulse ring
-        ctx3D.strokeStyle = node.color;
-        ctx3D.lineWidth = isSelected ? 2.5 : 1;
-        ctx3D.beginPath();
-        ctx3D.arc(screenX, screenY, r + (Math.sin(Date.now() * 0.005) * 4), 0, Math.PI * 2);
-        ctx3D.stroke();
-
-        // Draw solid node circle
-        ctx3D.fillStyle = node.color;
-        ctx3D.beginPath();
-        ctx3D.arc(screenX, screenY, r, 0, Math.PI * 2);
-        ctx3D.fill();
-
-        // Draw Label
-        ctx3D.fillStyle = isSelected ? "#FFFFFF" : "#94A3B8";
-        ctx3D.font = isSelected ? "bold 10px sans-serif" : "9px sans-serif";
-        ctx3D.textAlign = "center";
-        ctx3D.fillText(node.name, screenX, screenY - r - 6);
+    function filterSpatialNodes(type) {
+      selectedSpatialCategory = type;
+      document.querySelectorAll("[data-spatial-filter]").forEach(button => {
+        button.setAttribute("aria-pressed", String(button.dataset.spatialFilter === type));
       });
+      spatialNodes.forEach(node => {
+        const marker = spatialMarkers.get(node.id);
+        if (!marker || !spatialMap) return;
+        if (type === "ALL" || node.type === type) {
+          marker.addTo(spatialMap);
+        } else {
+          marker.remove();
+        }
+      });
+      if (selectedSpatialNode && type !== "ALL" && selectedSpatialNode.type !== type) {
+        const firstVisible = spatialNodes.find(node => node.type === type);
+        if (firstVisible) selectSpatialNode(firstVisible.id);
+      }
     }
-
-    window.addEventListener('DOMContentLoaded', () => { setTimeout(init3DCanvas, 500); });
 
 
 
