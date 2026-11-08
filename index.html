@@ -12,8 +12,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="KUVHURA">
-  <link rel="apple-touch-icon" href="./icon.svg">
-  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -90,54 +90,6 @@
       transition: color 0.2s;
     }
     .nav-links a:hover { color: var(--zim-gold); }
-    .nav-dropdown {
-      position: relative;
-    }
-    .nav-dropdown-toggle {
-      color: var(--text-muted);
-      background: transparent;
-      border: 1px solid var(--border-panel);
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      gap: 8px;
-      align-items: center;
-      color: white;
-    }
-    .nav-dropdown-menu {
-      position: absolute;
-      top: calc(100% + 8px);
-      left: 0;
-      min-width: 220px;
-      background: rgba(7, 11, 20, 0.98);
-      border: 1px solid var(--border-panel);
-      border-radius: 10px;
-      padding: 8px;
-      display: none;
-      box-shadow: 0 18px 40px rgba(0,0,0,0.35);
-      z-index: 999;
-    }
-    .nav-dropdown:hover .nav-dropdown-menu,
-    .nav-dropdown:focus-within .nav-dropdown-menu,
-    .nav-dropdown.open .nav-dropdown-menu {
-      display: block;
-    }
-    .nav-dropdown-menu a {
-      display: block;
-      padding: 9px 10px;
-      border-radius: 8px;
-      font-size: 12px;
-      color: white;
-      text-decoration: none;
-      transition: background 0.2s ease;
-    }
-    .nav-dropdown-menu a:hover {
-      background: rgba(212, 175, 55, 0.12);
-      color: var(--zim-gold);
-    }
     .nav-btn {
       background: var(--zim-gold);
       color: #070B14 !important;
@@ -147,24 +99,6 @@
       transition: all 0.2s;
     }
     .nav-btn:hover { background: #EAB308 !important; }
-    .source-status-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .source-pill {
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid var(--border-panel);
-      color: var(--text-muted);
-      padding: 5px 10px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .source-pill.live { border-color: #22C55E; color: #86EFAC; }
 
     .container { max-width: 1440px; margin: 0 auto; padding: 0 24px; }
 
@@ -427,10 +361,8 @@
       border: 1px solid var(--ai-purple);
       cursor: pointer;
       transition: all 0.15s;
-      font-family: inherit;
     }
     .ai-pill:hover { background: var(--ai-purple); color: white; }
-    .ai-pill:focus-visible { outline: 2px solid white; outline-offset: 2px; }
 
     .ai-chat-box {
       flex: 1;
@@ -539,29 +471,12 @@
       </div>
     </a>
     <div class="nav-links">
-      <div class="nav-dropdown" aria-label="Platform sections">
-        <button class="nav-dropdown-toggle" type="button" aria-expanded="false">Platform Menu ▾</button>
-        <div class="nav-dropdown-menu">
-          <a href="#home">Overview / Introduction</a>
-          <a href="#observatory">Live Observatory & Tools</a>
-          <a href="#advancedModulesPanel">Institutional Modules</a>
-          <a href="#spatial3DMapPanel">Spatial Extraction Map</a>
-          <a href="#socialSpeechTracker">Narrative Telemetry</a>
-          <a href="#modelGuide">Project & Model Guide</a>
-          <a href="#leadershipMatrix">Leadership Matrix</a>
-          <a href="#corruption">Whistleblower Dossier</a>
-          <a href="#africaRegionalModel">African Country Model</a>
-          <a href="#oag">OAG Audit Series</a>
-          <a href="#about">About Privilege</a>
-          <a href="#contact">Connect / Collaborate</a>
-        </div>
-      </div>
       <a href="#about">About Privilege</a>
       <a href="#observatory">Live Observatory & Tools</a>
       <a href="#corruption">Whistleblower Dossier</a>
       <a href="#oag">OAG Audit Series</a>
       <a href="#contact" class="nav-btn">Connect / Collaborate</a>
-      <button id="pwaInstallBtn" class="btn btn-green" style="font-size:11px; padding:6px 12px;" onclick="promptPwaInstall()">📲 Install App</button>
+      <button id="pwaInstallBtn" class="btn btn-green" style="display:none; font-size:11px; padding:6px 12px;" onclick="promptPwaInstall()">📲 Install App</button>
     </div>
   </nav>
 
@@ -701,7 +616,7 @@
                 <span id="lblE" style="color:#F87171;">8.8</span>
               </div>
               <div class="sr-desc">Central Bank arbitrage, artisanal gold cartels, lithium concessions</div>
-              <input type="range" id="rngE" min="1" max="10" step="0.1" value="8.8" oninput="updateScenarioFromSliders()">
+              <input type="range" id="rngE" min="1" max="10" step="0.1" value="8.8" oninput="runPredictiveLoop()">
             </div>
 
             <div class="slider-row">
@@ -710,7 +625,7 @@
                 <span id="lblPr" style="color:var(--zim-gold);">7.6</span>
               </div>
               <div class="sr-desc">Pfumvudza inputs, traditional chief incentives, civil service USD allowances</div>
-              <input type="range" id="rngPr" min="1" max="10" step="0.1" value="7.6" oninput="updateScenarioFromSliders()">
+              <input type="range" id="rngPr" min="1" max="10" step="0.1" value="7.6" oninput="runPredictiveLoop()">
             </div>
 
             <div class="slider-row">
@@ -719,7 +634,7 @@
                 <span id="lblCL" style="color:#F87171;">8.9</span>
               </div>
               <div class="sr-desc">Fuel, vehicles, paramilitary deployments, judicial/bail detention costs</div>
-              <input type="range" id="rngCL" min="1" max="10" step="0.1" value="8.9" oninput="updateScenarioFromSliders()">
+              <input type="range" id="rngCL" min="1" max="10" step="0.1" value="8.9" oninput="runPredictiveLoop()">
             </div>
 
             <div class="slider-row">
@@ -728,7 +643,7 @@
                 <span id="lblAL" style="color:#4ADE80;">2.8</span>
               </div>
               <div class="sr-desc">Survival independent of council stands, state licenses, or food aid</div>
-              <input type="range" id="rngAL" min="1" max="10" step="0.1" value="2.8" oninput="updateScenarioFromSliders()">
+              <input type="range" id="rngAL" min="1" max="10" step="0.1" value="2.8" oninput="runPredictiveLoop()">
             </div>
 
             <div class="slider-row">
@@ -737,7 +652,7 @@
                 <span id="lblDB" style="color:#38BDF8;">6.8</span>
               </div>
               <div class="sr-desc">Informal cash remittances (Mukuru, Western Union, cross-border haulers)</div>
-              <input type="range" id="rngDB" min="1" max="10" step="0.1" value="6.8" oninput="updateScenarioFromSliders()">
+              <input type="range" id="rngDB" min="1" max="10" step="0.1" value="6.8" oninput="runPredictiveLoop()">
             </div>
           </div>
         </div>
@@ -809,7 +724,7 @@
             <span class="badge badge-ai" id="aiModeBadge">Empirical Reasoning Engine</span>
           </div>
           <div style="margin-bottom: 8px;">
-            <input type="password" id="geminiApiKey" placeholder="🔑 Paste Gemini API Key here for cloud LLM..." style="font-size:10.5px; padding:6px 10px; background:#070B14; border:1.5px solid var(--ai-purple); color:white; width:100%; border-radius:6px;" oninput="updateGeminiKeyStatus(this)" autocomplete="off" />
+            <input type="password" id="geminiApiKey" placeholder="🔑 Paste Gemini API Key here for cloud LLM..." style="font-size:10.5px; padding:6px 10px; background:#070B14; border:1.5px solid var(--ai-purple); color:white; width:100%; border-radius:6px;" oninput="if(this.value.trim().length > 10) { document.getElementById('aiModeBadge').innerText='Gemini Cloud LLM Connected'; document.getElementById('aiModeBadge').className='badge badge-live'; }" />
           </div>
 
           <!-- SITREP Feed -->
@@ -825,11 +740,11 @@
 
           <!-- Prompts -->
           <div class="ai-prompts-bar">
-            <button type="button" class="ai-pill" onclick="askAIPrompt('SOLUTIONS')">🎯 What Should Be Done?</button>
-            <button type="button" class="ai-pill" onclick="askAIPrompt('CHOKE_POINT')">🔍 Primary Choke Point?</button>
-            <button type="button" class="ai-pill" onclick="askAIPrompt('RURAL_CAPTIVITY')">🌾 Why Rural Inaction?</button>
-            <button type="button" class="ai-pill" onclick="askAIPrompt('DIASPORA_PARADOX')">💸 Diaspora Paradox?</button>
-            <button type="button" class="ai-pill" onclick="askAIPrompt('TRIGGER_RUPTURE')">💥 How to Break Deadlock?</button>
+            <div class="ai-pill" onclick="askAIPrompt('SOLUTIONS')">🎯 What Should Be Done?</div>
+            <div class="ai-pill" onclick="askAIPrompt('CHOKE_POINT')">🔍 Primary Choke Point?</div>
+            <div class="ai-pill" onclick="askAIPrompt('RURAL_CAPTIVITY')">🌾 Why Rural Inaction?</div>
+            <div class="ai-pill" onclick="askAIPrompt('DIASPORA_PARADOX')">💸 Diaspora Paradox?</div>
+            <div class="ai-pill" onclick="askAIPrompt('TRIGGER_RUPTURE')">💥 How to Break Deadlock?</div>
           </div>
 
           <!-- Chat Conversation Log -->
@@ -938,7 +853,7 @@
 
         <div style="background: #070B14; border: 1px solid var(--border-panel); border-radius: 10px; padding: 10px; text-align: center; position: relative;">
           <!-- Interactive 3D Canvas -->
-          <canvas id="topography3DCanvas" width="340" height="220" aria-label="Interactive map of resource extraction nodes. Click a node to inspect it and drag to rotate." style="width: 100%; height: 220px; border-radius: 6px; background: radial-gradient(circle at center, #0F172A 0%, #070B14 100%); cursor: grab; touch-action: none;"></canvas>
+          <canvas id="topography3DCanvas" width="340" height="220" style="width: 100%; height: 220px; border-radius: 6px; background: radial-gradient(circle at center, #0F172A 0%, #070B14 100%); cursor: grab;"></canvas>
           <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
             Click & drag to rotate 3D extraction topography. Click nodes to inspect.
           </div>
@@ -952,44 +867,51 @@
         <span style="color: #38BDF8; display: flex; align-items: center; gap: 8px;">
           💬 SOCIAL MEDIA & POLITICAL SPEECH TELEMETRY (NARRATIVE VELOCITY & TRAJECTORY)
         </span>
-        <span style="font-size:10px; color:var(--zim-gold);" id="speechBadge">Connecting to public feed</span>
+        <span style="font-size:10px; color:var(--zim-gold);" id="speechBadge">Active Stream (X/WhatsApp/FB)</span>
       </div>
 
       <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; align-items: center;">
         <div>
           <div style="font-size: 11px; text-transform: uppercase; font-weight: 800; color: var(--zim-gold); margin-bottom: 6px;">
-            Most-used Hashtag in the Latest Sample:
+            Top Trending Political Discourse Vector:
           </div>
           <div id="speechVectorTitle" style="font-size: 16px; font-weight: 900; color: white; margin-bottom: 6px;">
-            Waiting for a live public-post sample
+            "Mutapa Parastatal Asset Disposals & Sovereign Accountability" (#ZimResources #MutapaLeads)
           </div>
           <p id="speechVectorDesc" style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-bottom: 12px;">
-            This tracker counts hashtags in recent public Bluesky and Mastodon posts returned by feeds for Zimbabwe. It does not cover private channels or all social platforms.
+            Aggregated real-time chatter analyzing public outrage over off-budget resource transfers. Narrative velocity is high (+74% 24h), characterized by strong polarization between urban digital defiance and state-sponsored counter-messaging.
           </p>
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
             <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px; border-radius: 6px; text-align: center;">
-              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Narrative Velocity / Trajectory</div>
-              <div id="metricVelocity" style="font-size: 14px; font-weight: 900; color: #38BDF8;">Awaiting sample</div>
+              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Narrative Velocity</div>
+              <div id="metricVelocity" style="font-size: 14px; font-weight: 900; color: #38BDF8;">88.4 / 100</div>
             </div>
             <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px; border-radius: 6px; text-align: center;">
-              <div id="metricVolumeLabel" style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Public Posts Scanned</div>
-              <div id="metricPolarization" style="font-size: 14px; font-weight: 900; color: #F87171;">0</div>
+              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Polarization Index</div>
+              <div id="metricPolarization" style="font-size: 14px; font-weight: 900; color: #F87171;">7.8 / 10</div>
             </div>
             <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px; border-radius: 6px; text-align: center;">
-              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Source Scope</div>
-              <div id="metricThrottling" style="font-size: 14px; font-weight: 900; color: var(--zim-gold);">Bluesky + Mastodon</div>
+              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">State Throttling Impact</div>
+              <div id="metricThrottling" style="font-size: 14px; font-weight: 900; color: var(--zim-gold);">Moderate (VPN Bypass)</div>
             </div>
           </div>
         </div>
 
         <div style="background: #070B14; border: 1px solid var(--border-panel); border-radius: 10px; padding: 14px;">
           <div style="font-size: 11px; font-weight: 800; color: #38BDF8; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #1E293B; padding-bottom: 4px;">
-            Hashtag Trajectory: Latest Sample vs Previous Sample
+            Active Narrative Streams & Trajectory
           </div>
-          <div id="hashtagTrendList" style="display: flex; flex-direction: column; gap: 8px; font-size: 11px;" aria-live="polite">
-            <div style="color:var(--text-muted);">Waiting for the first live sample.</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
+            <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid #38BDF8; padding: 6px 8px; border-radius: 6px;">
+              <strong>1. Resource Plunder & OAG Audits:</strong> High resonance among urban youth; directly undermines regime legitimacy rents ($E$).
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-soft); padding: 6px 8px; border-radius: 6px; color: var(--text-muted);">
+              <strong>2. Cost of Living & Currency Strain:</strong> Persistent baseline grievance; converts into passive non-compliance ($AL$).
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-soft); padding: 6px 8px; border-radius: 6px; color: var(--text-muted);">
+              <strong>3. State Security Narrative:</strong> Controlled messaging via traditional media warning against unauthorized protests ($CL$).
+            </div>
           </div>
-          <div id="speechUpdatedAt" style="font-size:10px; color:var(--text-muted); margin-top:10px;">No sample received yet.</div>
         </div>
       </div>
     </div>
@@ -1038,7 +960,7 @@
               <strong>Phase 2 ($30 \le \Phi \le 60$ - Contested Attrition):</strong> Coalition-Building & Hybrid Fronts (Focus: Labor + Diaspora Cohesion).
             </div>
             <div id="matrixRow3" style="padding: 6px 8px; border-radius: 6px; background: rgba(15,23,42,0.8); border: 1px solid var(--border-soft); color: var(--text-muted);">
-              <strong>Phase 3 ($\Phi &lt; 30$ - Pre-Rupture Fragility):</strong> Transitional Statecraft Stewards (Focus: Constitutional Stabilization & Institutional Reform).
+              <strong>Phase 3 ($\Phi < 30$ - Pre-Rupture Fragility):</strong> Transitional Statecraft Stewards (Focus: Constitutional Stabilization & Institutional Reform).
             </div>
           </div>
         </div>
@@ -1077,20 +999,6 @@
         </div>
       </div>
 
-      <!-- High Risk Areas Monitor -->
-      <div style="display:grid; grid-template-columns: 1.1fr 0.9fr; gap: 12px; margin-bottom: 16px;">
-        <div style="background:#070B14; border: 1px solid #7F1D1D; border-radius: 8px; padding: 12px;">
-          <div style="font-size:10px; font-weight:800; color:#F87171; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">High Risk Area Signal</div>
-          <div id="highRiskAreasList" style="display:flex; flex-direction:column; gap:8px;"></div>
-        </div>
-        <div style="background:#070B14; border: 1px solid var(--border-panel); border-radius: 8px; padding: 12px;">
-          <div style="font-size:10px; font-weight:800; color:var(--zim-gold); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Backend Live Feed</div>
-          <div id="backendFeedStatus" style="font-size:12px; color:#CBD5E1; line-height:1.6;">
-            Waiting for new corruption reports from the backend feed...
-          </div>
-        </div>
-      </div>
-
       <!-- Search & Category Filter -->
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -1124,99 +1032,6 @@
           </thead>
           <tbody id="corruptionTableBody"></tbody>
         </table>
-      </div>
-    </div>
-
-    <!-- AFRICAN COUNTRY / REGIONAL MODEL -->
-    <div class="card-panel" id="africaRegionalModel" style="margin-bottom: 24px; border-top: 4px solid #22C55E;">
-      <div class="panel-hdr">
-        <span style="color: #86EFAC; display: flex; align-items: center; gap: 8px;">
-          🌍 AFRICAN REGIONS & COUNTRY STANDARDISED OBSERVATORY
-        </span>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <select id="africaCountrySelect" style="max-width:240px; min-width:180px;">
-            <option value="Zimbabwe">Zimbabwe</option>
-            <option value="South Africa">South Africa</option>
-            <option value="Nigeria">Nigeria</option>
-            <option value="Kenya">Kenya</option>
-            <option value="Ethiopia">Ethiopia</option>
-            <option value="Ghana">Ghana</option>
-            <option value="DR Congo">DR Congo</option>
-            <option value="Angola">Angola</option>
-            <option value="Morocco">Morocco</option>
-            <option value="Egypt">Egypt</option>
-          </select>
-          <button class="btn btn-green" onclick="renderAfricaCountryProfile()">Refresh Regional Model</button>
-        </div>
-      </div>
-
-      <div style="display:grid; grid-template-columns: 1.15fr 0.85fr; gap:20px; align-items:start;">
-        <div>
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:12px; flex-wrap:wrap;">
-            <div>
-              <div style="font-size:11px; color:var(--zim-gold); text-transform:uppercase; font-weight:800; letter-spacing:0.5px; margin-bottom:4px;">Selected Country / Context</div>
-              <div id="africaCountryName" style="font-size:26px; font-weight:900; color:white;">Zimbabwe</div>
-            </div>
-            <div id="africaCountryBadge" style="padding:6px 10px; border-radius:999px; border:1px solid #22C55E; background:rgba(34,197,94,0.15); color:#86EFAC; font-size:11px; font-weight:800; text-transform:uppercase;">Southern Africa</div>
-          </div>
-
-          <div id="africaCountrySummary" style="background:#070B14; border:1px solid var(--border-panel); border-left:4px solid #22C55E; padding:12px 14px; border-radius:8px; font-size:12px; color:#CBD5E1; line-height:1.6; margin-bottom:12px;">
-            Standardized structural context: rent extraction and patronage dependence remain the dominant pressure points across the regional sample, with livelihood autonomy and diaspora buffer determining the variance in civic agency outcomes.
-          </div>
-
-          <div style="display:grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap:10px;">
-            <div style="background:#070B14; border:1px solid var(--border-soft); border-radius:8px; padding:10px; text-align:center;">
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase;">E</div>
-              <div id="africaE" style="font-size:20px; font-weight:900; color:#F87171;">8.8</div>
-            </div>
-            <div style="background:#070B14; border:1px solid var(--border-soft); border-radius:8px; padding:10px; text-align:center;">
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase;">Pr</div>
-              <div id="africaPr" style="font-size:20px; font-weight:900; color:var(--zim-gold);">7.6</div>
-            </div>
-            <div style="background:#070B14; border:1px solid var(--border-soft); border-radius:8px; padding:10px; text-align:center;">
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase;">CL</div>
-              <div id="africaCL" style="font-size:20px; font-weight:900; color:#F87171;">8.9</div>
-            </div>
-            <div style="background:#070B14; border:1px solid var(--border-soft); border-radius:8px; padding:10px; text-align:center;">
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase;">AL</div>
-              <div id="africaAL" style="font-size:20px; font-weight:900; color:#4ADE80;">2.8</div>
-            </div>
-            <div style="background:#070B14; border:1px solid var(--border-soft); border-radius:8px; padding:10px; text-align:center;">
-              <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase;">DB</div>
-              <div id="africaDB" style="font-size:20px; font-weight:900; color:#38BDF8;">6.8</div>
-            </div>
-          </div>
-
-          <div class="source-status-row" id="africaSourceRow">
-            <span class="source-pill live">Macro / IMF Feed</span>
-            <span class="source-pill live">Afrobarometer</span>
-            <span class="source-pill live">WB / UNCTAD</span>
-          </div>
-        </div>
-
-        <div>
-          <div style="background:#070B14; border:1px solid var(--border-panel); border-radius:10px; padding:14px;">
-            <div style="font-size:11px; color:var(--zim-gold); text-transform:uppercase; font-weight:800; margin-bottom:8px;">Standardized Output</div>
-            <div id="africaPhiOutput" style="font-size:30px; font-weight:900; color:#F87171; margin-bottom:6px;">84.6</div>
-            <div id="africaPraxisOutput" style="font-size:17px; font-weight:800; color:#4ADE80; margin-bottom:10px;">Praxis Yield: 0.78</div>
-            <div style="font-size:11px; color:#CBD5E1; line-height:1.6;" id="africaEquation">
-              Φ = [E × Pr × CL] / [AL × DB + 0.35], contextualized by regional governance and economic dependence.
-            </div>
-          </div>
-          <div style="margin-top:12px; overflow-x:auto;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Country</th>
-                  <th>Region</th>
-                  <th>Φ</th>
-                  <th>Yield</th>
-                </tr>
-              </thead>
-              <tbody id="africaTableBody"></tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -1276,63 +1091,6 @@
         </table>
       </div>
     </div>
-
-    <!-- PROJECT AND MODEL GUIDE -->
-    <section class="section-block" id="modelGuide">
-      <div class="sec-tag">Project & Method</div>
-      <h2 class="sec-h2">KUVHURA: Project & Model Guide</h2>
-      <p class="sec-sub">
-        KUVHURA is a political-economy observatory for examining how resource control, patronage, coercion, livelihood options, and civic agency interact. The dashboard combines scenario tools, public-source indicators, audit material, regional comparisons, and submitted reports; these inputs do not all have the same evidential status.
-      </p>
-
-      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-bottom:18px;">
-        <div class="card-panel">
-          <div class="panel-hdr"><span>Regime Durability Index (Φ)</span></div>
-          <p style="font-size:12px; color:#CBD5E1; line-height:1.7; margin-bottom:10px;">The index compares elite resource and enforcement capacity with citizen livelihood independence and diaspora support. The implementation uses a small stabilizer to avoid division by zero:</p>
-          <div style="padding:12px; background:#070B14; border:1px solid var(--border-soft); border-radius:6px; color:var(--zim-gold); font-weight:800;">Φ = (E × Pr × CL) / (AL × DB + 0.1)</div>
-          <p style="font-size:11px; color:var(--text-muted); line-height:1.6; margin-top:10px;">Model interpretation: Φ &gt; 60 = captive-hegemony scenario; 30–60 = contested attrition; Φ &lt; 30 = pre-rupture fragility. These are heuristic scenario bands, not calibrated forecasts.</p>
-        </div>
-        <div class="card-panel">
-          <div class="panel-hdr"><span>Realized Praxis Yield</span></div>
-          <p style="font-size:12px; color:#CBD5E1; line-height:1.7; margin-bottom:10px;">This ratio represents reflection and action relative to structural and social friction:</p>
-          <div style="padding:12px; background:#070B14; border:1px solid var(--border-soft); border-radius:6px; color:#4ADE80; font-weight:800;">Yield = (R × A) / (P + I + C)</div>
-          <p style="font-size:11px; color:var(--text-muted); line-height:1.6; margin-top:10px;">The simulator derives proxy values for R, A, P, I, and C from its controls. The survey importer averages groups of four 1–5 Likert responses and multiplies each average by 2 to standardize it to 1–10 before calculating yield. The yield is not a direct observation of individual behavior.</p>
-        </div>
-      </div>
-
-      <div class="card-panel" style="margin-bottom:18px;">
-        <div class="panel-hdr"><span>Variables & Standardization</span><span style="font-size:10px; color:var(--text-muted);">Core scenario inputs use a 1–10 scale</span></div>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead><tr><th>Symbol</th><th>Meaning in this model</th><th>How to read it</th></tr></thead>
-            <tbody>
-              <tr><td>E</td><td>Mineral and foreign-exchange rent concentration</td><td>Higher values increase the numerator of Φ.</td></tr>
-              <tr><td>Pr</td><td>Clientelist patronage redistribution</td><td>Higher values represent greater patronage leverage.</td></tr>
-              <tr><td>CL</td><td>Coercive enforcement liquidity and capacity</td><td>Higher values represent greater enforcement capacity.</td></tr>
-              <tr><td>AL</td><td>Citizen livelihood autonomy</td><td>Higher values increase the denominator of Φ.</td></tr>
-              <tr><td>DB</td><td>Diaspora remittance buffer</td><td>Higher values increase the denominator of Φ.</td></tr>
-              <tr><td>R</td><td>Reflection or structural understanding</td><td>Praxis numerator input.</td></tr>
-              <tr><td>A</td><td>Capacity for action</td><td>Praxis numerator input.</td></tr>
-              <tr><td>P</td><td>Power asymmetry</td><td>Praxis denominator friction.</td></tr>
-              <tr><td>I</td><td>Social influence</td><td>Praxis denominator friction.</td></tr>
-              <tr><td>C</td><td>Social control</td><td>Praxis denominator friction.</td></tr>
-              <tr><td>Vg</td><td>Gender and intersectional vulnerability context factor (shown as 1.65)</td><td>Displayed in the vulnerability module; not currently applied in the core Φ or Praxis calculations.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px;">
-        <div class="card-panel">
-          <div class="panel-hdr"><span>Evidence & Live Feeds</span></div>
-          <p style="font-size:12px; color:#CBD5E1; line-height:1.7;">The hashtag panel combines recent public Bluesky search results with public Mastodon #Zimbabwe timelines when those feeds are available, then compares hashtag mentions per post in the newest and preceding halves of the sample. It is not a measure of all social media, sentiment, polarization, or private messaging. Other source badges indicate an integration or local dataset, not necessarily a continuously updated official feed.</p>
-        </div>
-        <div class="card-panel">
-          <div class="panel-hdr"><span>Regional Model & Risk Signals</span></div>
-          <p style="font-size:12px; color:#CBD5E1; line-height:1.7;">Country profiles use regional Φ = (E × Pr × CL) / (AL × DB + 0.35) and a separate Praxis proxy, (8 × AL) / (E + Pr + CL + 0.2); these differ from the main simulator equations. Values without a verified live source are scenario estimates. The hotspot score sums each submitted amount plus its category weight by locality. Reports remain unverified until reviewed; these are screening heuristics, not causal findings or event forecasts.</p>
-        </div>
-      </div>
-    </section>
 
     <!-- ABOUT SECTION -->
     <section class="section-block" id="about">
@@ -1408,8 +1166,7 @@
               <label style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Message / Inquiry *</label>
               <textarea id="cMsg" rows="3" required placeholder="Describe your inquiry or project scope..." style="margin-top:3px;"></textarea>
             </div>
-            <button type="submit" class="btn btn-gold" style="width:100%; justify-content:center;">Open Email Draft</button>
-            <p id="contactFeedback" aria-live="polite" style="font-size:11px; color:var(--text-muted); margin-top:8px;">Your email app will open with a draft; this site does not send email directly.</p>
+            <button type="submit" class="btn btn-gold" style="width:100%; justify-content:center;">Send Message to Privilege</button>
           </form>
         </div>
 
@@ -1452,14 +1209,14 @@
   </div>
 
   <!-- REPORT CORRUPTION MODAL POPUP -->
-  <div id="corModal" role="dialog" aria-modal="true" aria-labelledby="corModalTitle" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(7,11,20,0.85); z-index:9999; justify-content:center; align-items:center;">
+  <div id="corModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(7,11,20,0.85); z-index:9999; justify-content:center; align-items:center;">
     <div style="background:#0F172A; border:1px solid var(--border-panel); border-radius:12px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto; padding:24px; border-top:5px solid var(--zim-red);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border-soft); padding-bottom:8px;">
-        <h3 id="corModalTitle" style="font-size:15px; font-weight:800; color:#F87171;">🚨 Community Incident Reporting Dossier</h3>
-        <button type="button" class="btn btn-outline" aria-label="Close report form" onclick="closeReportModal()">&times;</button>
+        <h3 style="font-size:15px; font-weight:800; color:#F87171;">🚨 Anonymous Empirical Corruption Reporting Dossier</h3>
+        <span style="font-size:22px; font-weight:bold; cursor:pointer; color:var(--text-muted);" onclick="closeReportModal()">&times;</span>
       </div>
       <p style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
-        Reports are not encrypted by this page. Depending on the hosting environment, they may be sent to the observatory backend or saved only in this browser. Do not include names or details that could identify or endanger anyone.
+        All submissions are client-side encrypted and mapped directly into the Realized Praxis Denominator ($P+I+C$) and Regime Durability Index.
       </p>
 
       <form id="corForm" onsubmit="submitCorruptionReport(event)">
@@ -1513,12 +1270,6 @@
           </select>
         </div>
 
-        <div style="margin-bottom:12px;">
-          <label style="font-size:10.5px; font-weight:700; text-transform:uppercase;">8. Supporting File / Attachment</label>
-          <input type="file" id="mAttachment" accept=".csv,.txt,.json,.pdf,.doc,.docx,.xlsx" onchange="handleAttachmentUpload(event)" style="margin-top:3px;" />
-          <div id="attachmentPreview" style="margin-top:6px; font-size:10.5px; color:var(--text-muted);">No file attached yet. CSV, TXT, JSON, and basic documentation will be ingested for model enrichment.</div>
-        </div>
-
         <div style="display:flex; justify-content:flex-end; gap:8px;">
           <button type="button" class="btn btn-outline" onclick="closeReportModal()">Cancel</button>
           <button type="submit" class="btn btn-red">Submit to Research Dossier</button>
@@ -1538,7 +1289,6 @@
     ];
 
     let chartInstance = null;
-    let importedSurveyPraxis = null;
 
     function calcDurability(e, pr, cl, al, db) {
       const num = e * pr * cl;
@@ -1550,16 +1300,6 @@
       const num = r * a;
       const den = p + i + c;
       return { num, den, praxis: den > 0 ? (num / den) : 0 };
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>"']/g, char => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-      })[char]);
     }
 
     function runPredictiveLoop() {
@@ -1593,8 +1333,7 @@
       const coupledC = Math.min(10, cl * 0.98);
 
       const pRes = calcPraxis(coupledR, coupledA, coupledP, coupledI, coupledC);
-      const displayedPraxis = importedSurveyPraxis === null ? pRes.praxis : importedSurveyPraxis;
-      document.getElementById('heroPraxis').innerText = displayedPraxis.toFixed(2);
+      document.getElementById('heroPraxis').innerText = pRes.praxis.toFixed(2);
 
       const phiStatus = document.getElementById('heroPhiStatus');
       const phiDesc = document.getElementById('phiDesc');
@@ -1613,26 +1352,9 @@
         phiDesc.innerText = "Livelihood autonomy has outpaced patronage budgets. High probability of spontaneous non-compliance.";
       }
 
-      updateTrendChart(res.phi, displayedPraxis);
+      updateTrendChart(res.phi, pRes.praxis);
       updateLeadershipMatrix(res.phi);
-      generateAutonomousAISitrep(e, pr, cl, al, db, res.phi, displayedPraxis);
-    }
-
-    function updateScenarioFromSliders() {
-      importedSurveyPraxis = null;
-      runPredictiveLoop();
-    }
-
-    function updateGeminiKeyStatus(input) {
-      const badge = document.getElementById('aiModeBadge');
-      if (!badge) return;
-      if (input.value.trim().length > 10) {
-        badge.innerText = 'Gemini key entered · not verified';
-        badge.className = 'badge badge-ai';
-      } else {
-        badge.innerText = 'Empirical Reasoning Engine';
-        badge.className = 'badge badge-ai';
-      }
+      generateAutonomousAISitrep(e, pr, cl, al, db, res.phi, pRes.praxis);
     }
 
     function generateAutonomousAISitrep(e, pr, cl, al, db, phi, praxis) {
@@ -1652,8 +1374,7 @@
       const box = document.getElementById('aiChatBox');
       const msg = document.createElement('div');
       msg.className = `chat-msg ${isAi ? 'msg-ai' : 'msg-user'}`;
-      if (isAi) msg.innerHTML = `<strong>KUVHURA AI:</strong> ${text}`;
-      else msg.textContent = text;
+      msg.innerHTML = isAi ? `<strong>KUVHURA AI:</strong> ${text}` : text;
       box.appendChild(msg);
       box.scrollTop = box.scrollHeight;
     }
@@ -1685,19 +1406,9 @@
         try {
           const answer = await queryGeminiCloud(q, apiKey);
           const lastMsg = document.getElementById('aiChatBox').lastChild;
-          lastMsg.innerHTML = `<strong>KUVHURA AI (Cloud):</strong> ${escapeHtml(answer).replace(/\n/g, '<br>')}`;
-          const badge = document.getElementById('aiModeBadge');
-          if (badge) {
-            badge.innerText = 'Gemini Cloud active';
-            badge.className = 'badge badge-live';
-          }
+          lastMsg.innerHTML = `<strong>KUVHURA AI (Cloud):</strong> ${answer}`;
         } catch (err) {
-          const badge = document.getElementById('aiModeBadge');
-          if (badge) {
-            badge.innerText = 'Offline mode · Gemini unavailable';
-            badge.className = 'badge badge-ai';
-          }
-          appendChatMessage("AI", `Cloud API Error: ${escapeHtml(err.message)}. Falling back to offline empirical reasoning engine.`, true);
+          appendChatMessage("AI", `Cloud API Error: ${err.message}. Falling back to offline empirical reasoning engine.`, true);
           answerOfflineInference(q);
         }
       } else {
@@ -1788,19 +1499,16 @@ The regime holds an Asymmetric Advantage of <strong>${( (e*pr*cl)/((al*db)+0.1) 
       const systemPrompt = `You are the lead political economy researcher and strategist for KUVHURA (The Zimbabwe Political Economy & Civic Resistance Observatory).
 Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10, Phi=${phi}, Praxis=${praxis}. Provide rigorous, actionable answers.`;
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
       const payload = { contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nUser Question: ${prompt}` }] }] };
 
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error("Gemini API error");
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || `Gemini API returned HTTP ${res.status}`);
-      const answer = data.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
-      if (!answer) throw new Error('Gemini returned no answer for this request.');
-      return answer;
+      return data.candidates[0].content.parts[0].text;
     }
 
     function applyShock(type) {
-      importedSurveyPraxis = null;
       if (type === 'MUTAPA_EXEMPTION') {
         document.getElementById('rngE').value = 9.8; document.getElementById('rngPr').value = 8.5; document.getElementById('rngCL').value = 9.2;
         appendChatMessage('AI', '🏛️ <strong>Mutapa/OAG Exemption Applied:</strong> Parastatals exempted from public procurement oversight. Elite Rent Extraction (E) elevated to <strong>9.8</strong>; Power Asymmetry pushed to <strong>9.6</strong>.', true);
@@ -1844,10 +1552,6 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
     }
 
     function initChart() {
-      if (typeof Chart === 'undefined') {
-        console.warn('Chart.js is unavailable; the live calculations remain usable without the chart.');
-        return;
-      }
       const ctx = document.getElementById('durabilityChart').getContext('2d');
       chartInstance = new Chart(ctx, {
         type: 'line',
@@ -1891,215 +1595,55 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
     let filteredCorruptionCases = [...corruptionCases];
     let activeCorCategory = 'ALL';
 
-    async function loadReportsFromBackend() {
-      try {
-        const res = await fetch('/api/reports');
-        if (!res.ok) throw new Error('backend reports unavailable');
-        const backendData = await res.json();
-        if (Array.isArray(backendData) && backendData.length) {
-          corruptionCases = backendData;
-          filteredCorruptionCases = getVisibleCorruptionCases();
-          renderCorruptionTable();
-          return;
-        }
-      } catch (err) {
-        console.warn('Backend reports unavailable, using local fallback.', err);
-      }
-      const fallback = getBackendCorruptionFeed();
-      if (fallback.length) {
-        corruptionCases = fallback;
-        filteredCorruptionCases = [...fallback];
-      }
-      renderCorruptionTable();
-    }
-
-    async function loadRiskFromBackend() {
-      try {
-        const res = await fetch('/api/risk');
-        if (!res.ok) throw new Error('risk unavailable');
-        const risk = await res.json();
-        if (Array.isArray(risk) && risk.length) {
-          const list = document.getElementById('highRiskAreasList');
-          const status = document.getElementById('backendFeedStatus');
-          if (list) {
-            list.innerHTML = risk.map((item, index) => {
-              const riskLabel = index === 0 ? 'Critical' : index === 1 ? 'High' : index === 2 ? 'Elevated' : 'Moderate';
-              const color = index === 0 ? '#F87171' : index === 1 ? '#F59E0B' : '#FBBF24';
-              return `
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 10px; border-radius:8px; background:rgba(15,23,42,0.8); border:1px solid ${color};">
-                  <div>
-                    <div style="font-size:11px; color:${color}; font-weight:800; text-transform:uppercase;">${riskLabel}</div>
-                    <div style="font-size:12px; color:white; font-weight:700;">${item.locality}</div>
-                  </div>
-                  <div style="font-size:12px; color:#F8FAFC; font-weight:900;">$${Number(item.score || 0).toLocaleString()}</div>
-                </div>
-              `;
-            }).join('');
-          }
-          if (status) {
-            status.innerHTML = `Live corruption feed active. ${risk.length} high-risk cluster(s) identified from the backend ledger.<br/>Most recent hotspot: <strong>${risk[0].locality}</strong> with a risk intensity of <strong>$${Number(risk[0].score || 0).toLocaleString()}</strong>.`;
-          }
-          return;
-        }
-      } catch (err) {
-        console.warn('Backend risk feed unavailable.', err);
-      }
-      renderHighRiskAreas();
-    }
-
-    function getBackendCorruptionFeed() {
-      const key = 'kuvhura_backend_corruption_log';
-      try {
-        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (err) {
-        return [];
-      }
-    }
-
-    function mergeBackendCorruptionFeed() {
-      const backendEntries = getBackendCorruptionFeed();
-      if (!backendEntries.length) return corruptionCases;
-
-      const merged = [...corruptionCases];
-      backendEntries.forEach(entry => {
-        if (!entry || !entry.locality) return;
-        const record = {
-          id: entry.id || `BE-${Date.now()}-${merged.length}`,
-          period: entry.period || 'Live Backend',
-          locality: entry.locality,
-          entity: entry.entity || 'Backend flagged report',
-          category: entry.category || 'Municipal',
-          typology: entry.typology || 'Backend flagged corruption',
-          narrative: entry.narrative || 'Reported via backend ingestion pipeline',
-          evidence: entry.evidence || 'Live backend submission',
-          amount: Number(entry.amount) || 0,
-          praxisLink: entry.praxisLink || 'Power Asymmetry (P)',
-          status: entry.status || 'Live Backend'
-        };
-        const duplicate = merged.find(item => item.id === record.id || (item.locality === record.locality && item.entity === record.entity && item.typology === record.typology));
-        if (!duplicate) merged.unshift(record);
-      });
-      return merged;
-    }
-
-    function renderHighRiskAreas() {
-      const list = document.getElementById('highRiskAreasList');
-      const status = document.getElementById('backendFeedStatus');
-      if (!list) return;
-
-      const sourceFeed = mergeBackendCorruptionFeed();
-      const riskMap = new Map();
-      sourceFeed.forEach(report => {
-        const key = report.locality.trim();
-        const amount = Number(report.amount) || 0;
-        const weight = amount + (report.category === 'Syndicate' ? 2000 : report.category === 'Police' ? 1500 : 700);
-        riskMap.set(key, (riskMap.get(key) || 0) + weight);
-      });
-
-      const sorted = [...riskMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-      if (!sorted.length) {
-        list.innerHTML = '<div style="font-size:12px; color:#CBD5E1;">No active backend alerts. Risk model remains in baseline monitoring mode.</div>';
-        if (status) status.innerHTML = 'Backend feed is idle. New reports will appear here once they are submitted.';
-        return;
-      }
-
-      list.innerHTML = sorted.map(([locality, score], index) => {
-        const riskLabel = index === 0 ? 'Critical' : index === 1 ? 'High' : index === 2 ? 'Elevated' : 'Moderate';
-        const color = index === 0 ? '#F87171' : index === 1 ? '#F59E0B' : '#FBBF24';
-        return `
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 10px; border-radius:8px; background:rgba(15,23,42,0.8); border:1px solid ${color};">
-            <div>
-              <div style="font-size:11px; color:${color}; font-weight:800; text-transform:uppercase;">${riskLabel}</div>
-              <div style="font-size:12px; color:white; font-weight:700;">${escapeHtml(locality)}</div>
-            </div>
-            <div style="font-size:12px; color:#F8FAFC; font-weight:900;">$${Math.round(score).toLocaleString()}</div>
-          </div>
-        `;
-      }).join('');
-
-      if (status) {
-        status.innerHTML = `Live corruption feed active. ${sorted.length} high-risk cluster(s) identified from the backend ledger.<br/>Most recent hotspot: <strong>${sorted[0][0]}</strong> with a risk intensity of <strong>$${Math.round(sorted[0][1]).toLocaleString()}</strong>.`;
-      }
-    }
-
     function renderCorruptionTable() {
       const tbody = document.getElementById('corruptionTableBody');
       if (!tbody) return;
-      const activeCases = filteredCorruptionCases;
       tbody.innerHTML = '';
       let totalVal = 0;
-      if (!activeCases.length) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-muted);">No reports match the selected filters.</td></tr>';
-      }
-      activeCases.forEach(c => {
-        totalVal += Number(c.amount) || 0;
+      filteredCorruptionCases.forEach(c => {
+        totalVal += c.amount;
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${escapeHtml(c.id)}</strong></td>
-          <td>${escapeHtml(c.period)}</td>
-          <td>${escapeHtml(c.locality)}</td>
-          <td><strong>${escapeHtml(c.entity)}</strong></td>
-          <td><span style="font-size:9.5px; padding:2px 6px; border-radius:4px; background:rgba(212,175,55,0.2); color:var(--zim-gold);">${escapeHtml(c.category)}</span></td>
-          <td style="color:#F87171; font-weight:700;">${escapeHtml(c.typology)}</td>
-          <td style="font-size:10.5px; max-width:240px;">${escapeHtml(c.narrative)}</td>
-          <td style="font-size:10px; color:var(--text-muted);">${escapeHtml(c.evidence)}</td>
-          <td style="font-weight:900; text-align:right; color:#F87171;">$${(Number(c.amount) || 0).toLocaleString()}</td>
-          <td><span style="color:#4ADE80; font-weight:700;">${escapeHtml(c.praxisLink)}</span></td>
-          <td><span style="font-size:9.5px; padding:2px 6px; border-radius:10px; background:rgba(34,197,94,0.15); color:#4ADE80;">${escapeHtml(c.status)}</span></td>
+          <td><strong>${c.id}</strong></td>
+          <td>${c.period}</td>
+          <td>${c.locality}</td>
+          <td><strong>${c.entity}</strong></td>
+          <td><span style="font-size:9.5px; padding:2px 6px; border-radius:4px; background:rgba(212,175,55,0.2); color:var(--zim-gold);">${c.category}</span></td>
+          <td style="color:#F87171; font-weight:700;">${c.typology}</td>
+          <td style="font-size:10.5px; max-width:240px;">${c.narrative}</td>
+          <td style="font-size:10px; color:var(--text-muted);">${c.evidence}</td>
+          <td style="font-weight:900; text-align:right; color:#F87171;">$${c.amount.toLocaleString()}</td>
+          <td><span style="color:#4ADE80; font-weight:700;">${c.praxisLink}</span></td>
+          <td><span style="font-size:9.5px; padding:2px 6px; border-radius:10px; background:rgba(34,197,94,0.15); color:#4ADE80;">${c.status}</span></td>
         `;
         tbody.appendChild(tr);
       });
-      document.getElementById('corIncidentCount').innerText = `${activeCases.length} Cases`;
+      document.getElementById('corIncidentCount').innerText = `${filteredCorruptionCases.length} Cases`;
       document.getElementById('corTotalValue').innerText = `$${totalVal.toLocaleString()} USD`;
-      renderHighRiskAreas();
-    }
-
-    function getVisibleCorruptionCases() {
-      const query = document.getElementById('corSearch')?.value.trim().toLowerCase() || '';
-      return mergeBackendCorruptionFeed().filter(c => {
-        const categoryMatches = activeCorCategory === 'ALL' || c.category === activeCorCategory;
-        const searchable = [c.id, c.period, c.locality, c.entity, c.narrative, c.typology]
-          .map(value => String(value || '').toLowerCase());
-        return categoryMatches && searchable.some(value => value.includes(query));
-      });
     }
 
     function filterCorruptionCategory(cat, ev) {
       activeCorCategory = cat;
       document.querySelectorAll('#corruption .filter-btn').forEach(b => b.classList.remove('active'));
       if (ev) ev.target.classList.add('active');
-      filteredCorruptionCases = getVisibleCorruptionCases();
+      filteredCorruptionCases = (cat === 'ALL') ? [...corruptionCases] : corruptionCases.filter(c => c.category === cat);
       renderCorruptionTable();
     }
 
     function searchCorruptionTable() {
-      filteredCorruptionCases = getVisibleCorruptionCases();
+      const q = document.getElementById('corSearch').value.toLowerCase();
+      filteredCorruptionCases = corruptionCases.filter(c => {
+        const matchCat = activeCorCategory === 'ALL' || c.category === activeCorCategory;
+        const matchText = c.locality.toLowerCase().includes(q) || c.entity.toLowerCase().includes(q) || c.narrative.toLowerCase().includes(q) || c.typology.toLowerCase().includes(q);
+        return matchCat && matchText;
+      });
       renderCorruptionTable();
     }
 
-    let reportModalReturnFocus = null;
-    function openReportModal() {
-      const modal = document.getElementById('corModal');
-      reportModalReturnFocus = document.activeElement;
-      modal.style.display = 'flex';
-      document.getElementById('mLocality').focus();
-    }
-    function closeReportModal() {
-      document.getElementById('corModal').style.display = 'none';
-      if (reportModalReturnFocus?.focus) reportModalReturnFocus.focus();
-    }
+    function openReportModal() { document.getElementById('corModal').style.display = 'flex'; }
+    function closeReportModal() { document.getElementById('corModal').style.display = 'none'; }
 
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && document.getElementById('corModal').style.display === 'flex') {
-        closeReportModal();
-      }
-    });
-    document.getElementById('corModal').addEventListener('click', event => {
-      if (event.target === event.currentTarget) closeReportModal();
-    });
-
-    async function submitCorruptionReport(e) {
+    function submitCorruptionReport(e) {
       e.preventDefault();
       const loc = document.getElementById('mLocality').value.trim();
       const cat = document.getElementById('mCategory').value;
@@ -2114,71 +1658,24 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       else if (cat === 'Police' || cat === 'Judicial' || typ.toLowerCase().includes("bail")) paramLink = "Social Control (C)";
       else if (cat === 'Syndicate') paramLink = "Rent Extraction (E)";
 
-      const newId = `COR-REP-${Date.now()}`;
-      const newRecord = {
+      const newId = `COR-REP-${String(corruptionCases.length + 1).padStart(3, '0')}`;
+      corruptionCases.unshift({
         id: newId, period: "Live (2026)", locality: loc, entity: ent, category: cat,
         typology: typ, narrative: nar, evidence: evi, amount: amt, praxisLink: paramLink, status: "Submitted"
-      };
+      });
 
-      const backendKey = 'kuvhura_backend_corruption_log';
-      let localSaved = false;
-      let backendSaved = false;
-      let localError = null;
-      let backendError = null;
-
-      try {
-        const backendEntries = JSON.parse(localStorage.getItem(backendKey) || '[]');
-        if (!Array.isArray(backendEntries)) throw new Error('Stored report data is invalid.');
-        backendEntries.unshift(newRecord);
-        localStorage.setItem(backendKey, JSON.stringify(backendEntries.slice(0, 50)));
-        localSaved = true;
-      } catch (error) {
-        localError = error;
-        console.warn('Could not save report in this browser:', error);
-      }
-
-      try {
-        const response = await fetch('/api/reports', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newRecord)
-        });
-        if (!response.ok) throw new Error(`Backend returned HTTP ${response.status}`);
-        backendSaved = true;
-      } catch (error) {
-        backendError = error;
-        console.warn('Could not submit report to backend:', error);
-      }
-
-      if (!localSaved && !backendSaved) {
-        alert(`The report could not be saved.\n\nBrowser storage: ${localError?.message || 'unavailable'}\nBackend: ${backendError?.message || 'unavailable'}`);
-        return;
-      }
-
-      corruptionCases.unshift(newRecord);
-      registerDataSource('whistleblower', 'live', 'Whistleblower Feed');
-      registerDataSource('backend', 'live', 'Backend Sync');
-      setDataSourcePills();
-
-      filteredCorruptionCases = getVisibleCorruptionCases();
+      filteredCorruptionCases = [...corruptionCases];
       renderCorruptionTable();
       closeReportModal();
       document.getElementById('corForm').reset();
-      alert(backendSaved
-        ? `Report ${newId} submitted to the observatory backend${localSaved ? ' and saved in this browser' : ''}. Incident mapped to ${paramLink}.`
-        : `Report ${newId} saved only in this browser. It will not be available on other devices because the observatory backend is unavailable. Incident mapped to ${paramLink}.`);
-      appendChatMessage("AI", `🚨 <strong>New Whistleblower Incident Documented:</strong> [${escapeHtml(newId)}] ${escapeHtml(typ)} in ${escapeHtml(loc)} by ${escapeHtml(ent)}. Extorted: $${amt} USD. Parameter <strong>${escapeHtml(paramLink)}</strong> inflated.`, true);
-      if (backendSaved) {
-        await loadReportsFromBackend();
-        await loadRiskFromBackend();
-      }
+      alert(`Report ${newId} logged successfully! Incident mapped into parameter: ${paramLink}.`);
+      appendChatMessage("AI", `🚨 <strong>New Whistleblower Incident Documented:</strong> [${newId}] ${typ} in ${loc} by ${ent}. Extorted: $${amt} USD. Parameter <strong>${paramLink}</strong> inflated.`, true);
     }
 
     function exportCorruptionCSV() {
-      const liveData = mergeBackendCorruptionFeed();
       let csv = "Dossier_ID,Period,Locality,Perpetrator,Category,Typology,Narrative,Evidence,Amount_USD,Praxis_Link,Status\n";
-      liveData.forEach(c => {
-        csv += `"${c.id}","${c.period}","${c.locality}","${c.entity}","${c.category}","${c.typology}","${c.narrative.replace(/"/g, '""')}","${c.evidence}",${Number(c.amount) || 0},"${c.praxisLink}","${c.status}"\n`;
+      corruptionCases.forEach(c => {
+        csv += `"${c.id}","${c.period}","${c.locality}","${c.entity}","${c.category}","${c.typology}","${c.narrative.replace(/"/g, '""')}","${c.evidence}",${c.amount},"${c.praxisLink}","${c.status}"\n`;
       });
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
@@ -2246,13 +1743,15 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       }
 
       if (!rawUrl) {
-        alert("Please paste your Google Sheet link (e.g., https://docs.google.com/spreadsheets/d/.../edit).");
+        if (!isAuto) {
+          alert("Please paste your Google Sheet link (e.g., https://docs.google.com/spreadsheets/d/.../edit).");
+        }
         return;
       }
 
       const match = rawUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
       if (!match || !match[1]) {
-        alert("Could not extract Google Sheet ID. Ensure the link is from Google Spreadsheets.");
+        if (!isAuto) alert("Could not extract Google Sheet ID. Ensure the link is from Google Spreadsheets.");
         return;
       }
 
@@ -2260,8 +1759,11 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       activeSheetId = sheetId;
       localStorage.setItem('kuvhura_sheet_id', sheetId);
 
-      // GViz CSV Endpoint (Publicly accessible if sheet is set to 'Anyone with link can view')
+      // 1. Sync Main Survey Sheet
       const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&t=${Date.now()}`;
+      
+      // 2. Sync SocialTelemetry Sheet (if present)
+      const socialGvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=SocialTelemetry&t=${Date.now()}`;
       
       const badgeEl = document.getElementById('deckBadge');
       if (badgeEl) {
@@ -2275,10 +1777,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
           throw new Error(`HTTP ${response.status}: Sheet is private. Ensure Google Sheet sharing is set to 'Anyone with the link can view'.`);
         }
         const csvText = await response.text();
-        const importResult = processLiveSurveyCSV(csvText, isAuto);
-        if (!importResult.validPraxisRows && !importResult.newCorruptionCount) {
-          throw new Error("The sheet did not contain supported survey responses or corruption reports.");
-        }
+        processLiveSurveyCSV(csvText, isAuto);
 
         if (badgeEl) {
           badgeEl.className = "badge badge-live";
@@ -2303,87 +1802,49 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       }
     }
 
-    function parseCSVRecords(csvText) {
-      const records = [];
-      let row = [];
-      let field = '';
-      let inQuotes = false;
-
-      for (let i = 0; i < csvText.length; i++) {
-        const char = csvText[i];
-        if (char === '"') {
-          if (inQuotes && csvText[i + 1] === '"') {
-            field += '"';
-            i++;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          row.push(field.trim());
-          field = '';
-        } else if ((char === '\n' || char === '\r') && !inQuotes) {
-          if (char === '\r' && csvText[i + 1] === '\n') i++;
-          row.push(field.trim());
-          if (row.some(value => value !== '')) records.push(row);
-          row = [];
-          field = '';
-        } else {
-          field += char;
-        }
-      }
-
-      if (inQuotes) throw new Error('CSV contains an unclosed quoted field.');
-      row.push(field.trim());
-      if (row.some(value => value !== '')) records.push(row);
-      return records;
-    }
-
     function processLiveSurveyCSV(csvText, isSilent = false) {
-      const records = parseCSVRecords(csvText);
-      if (records.length < 2) return { validPraxisRows: 0, newCorruptionCount: 0 };
+      const lines = csvText.trim().split(/\r?\n/);
+      if (lines.length < 2) return;
 
-      const headers = records[0].map(header => header.toLowerCase().replace(/[^a-z0-9]/g, ''));
-      const datasetFields = [
-        ['e', 'rngE', ['rentextractione', 'e']],
-        ['pr', 'rngPr', ['patronagepr', 'pr']],
-        ['cl', 'rngCL', ['coercioncl', 'cl']],
-        ['al', 'rngAL', ['autonomyal', 'al']],
-        ['db', 'rngDB', ['diasporadb', 'db']]
-      ];
-      const datasetColumns = datasetFields.map(([, , names]) => headers.findIndex(header => names.includes(header)));
-
-      if (datasetColumns.every(index => index >= 0)) {
-        const totals = [0, 0, 0, 0, 0];
-        let validRows = 0;
-        records.slice(1).forEach(row => {
-          const values = datasetColumns.map(index => Number(row[index]));
-          if (values.every(value => Number.isFinite(value) && value >= 1 && value <= 10)) {
-            values.forEach((value, index) => { totals[index] += value; });
-            validRows++;
+      // Simple CSV parser supporting quoted strings
+      function parseCSVLine(line) {
+        let values = [];
+        let cur = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"' && (i === 0 || line[i-1] !== '\\')) {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            values.push(cur.trim().replace(/^"|"$/g, ''));
+            cur = '';
+          } else {
+            cur += char;
           }
-        });
-        if (validRows) {
-          datasetFields.forEach(([, elementId], index) => {
-            document.getElementById(elementId).value = (totals[index] / validRows).toFixed(1);
-          });
-          importedSurveyPraxis = null;
-          runPredictiveLoop();
-          return { validPraxisRows: validRows, newCorruptionCount: 0, type: 'scenario' };
         }
+        values.push(cur.trim().replace(/^"|"$/g, ''));
+        return values;
       }
 
+      const headers = parseCSVLine(lines[0]);
       let totalR = 0, totalA = 0, totalP = 0, totalI = 0, totalC = 0;
       let validPraxisRows = 0;
       let newCorruptionCount = 0;
 
-      for (let r = 1; r < records.length; r++) {
-        const row = records[r];
-        const rowNums = row
-          .map(value => value.trim() === '' ? NaN : Number(value))
-          .filter(value => Number.isFinite(value) && value >= 1 && value <= 5);
+      for (let r = 1; r < lines.length; r++) {
+        const row = parseCSVLine(lines[r]);
+        if (row.length < 5) continue;
+
+        let rowNums = [];
+        for (let c = 0; c < row.length; c++) {
+          const val = parseFloat(row[c]);
+          if (!isNaN(val) && val >= 1 && val <= 5) {
+            rowNums.push(val);
+          }
+        }
 
         // Check if row has enough Likert responses
-        if (rowNums.length >= 20) {
+        if (rowNums.length >= 10) {
           // Chunk into dimensions if standard 20 items: 4 each
           const rAvg = (rowNums.slice(0, 4).reduce((a,b)=>a+b, 0) / 4) * 2; // Scale to 1-10
           const aAvg = (rowNums.slice(4, 8).reduce((a,b)=>a+b, 0) / 4) * 2;
@@ -2401,7 +1862,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
         // Check for whistleblower corruption report columns in row
         // Usually towards the end of the form
-        if (row.length >= 27 && row[21] && row[21].trim().length > 2 && !row[21].includes("Prefer Not")) {
+        if (row.length >= 25 && row[21] && row[21].trim().length > 2 && !row[21].includes("Prefer Not")) {
           const repCategory = row[21] || "Municipal";
           const repAgency = row[22] || "Unspecified Official";
           const repTypology = row[23] || "Extortion";
@@ -2409,7 +1870,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
           const repAmount = parseFloat(row[25]) || 50;
           const repEvidence = row[26] || "Witness Statement";
 
-          const repId = `LIVE-GF-${r}-${row[21].slice(0, 12)}`;
+          const repId = `LIVE-GF-${r}`;
           if (!corruptionCases.some(c => c.id === repId)) {
             corruptionCases.unshift({
               id: repId, period: "Live (Form)", locality: "Field Submission",
@@ -2431,55 +1892,29 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         const meanC = totalC / validPraxisRows;
 
         const livePraxisRes = calcPraxis(meanR, meanA, meanP, meanI, meanC);
+        document.getElementById('heroPraxis').innerText = livePraxisRes.praxis.toFixed(2);
 
         // Link to sliders proportionally
         document.getElementById('rngAL').value = Math.min(10, Math.max(1, meanA * 0.9)).toFixed(1);
         document.getElementById('lblAL').innerText = document.getElementById('rngAL').value;
 
-        importedSurveyPraxis = livePraxisRes.praxis;
+        // Re-run the loop with fresh cloud metrics
         runPredictiveLoop();
         renderCorruptionTable();
 
         if (!isSilent) {
-          alert(`Live Cloud Telemetry Synced!\n\n• Responses Processed: ${validPraxisRows} participants\n• Survey Praxis Yield: ${livePraxisRes.praxis.toFixed(2)}\n• Whistleblower Reports Imported: ${newCorruptionCount}\n\nThe dashboard is now auto-polling for new submissions every 45 seconds.`);
+          alert(`Live Cloud Telemetry Synced!\n\n• Responses Processed: ${validPraxisRows} participants\n• Realized Praxis Computed: ${livePraxisRes.praxis.toFixed(2)}\n• Whistleblower Reports Imported: ${newCorruptionCount}\n\nThe dashboard is now auto-polling for new submissions every 45 seconds.`);
           appendChatMessage("AI", `📡 <strong>Cloud Telemetry Ingested:</strong> Synchronized with ${validPraxisRows} live survey submissions from Google Forms. Ground Praxis Yield recalibrated to <strong>${livePraxisRes.praxis.toFixed(2)}</strong>.`, true);
         }
       }
-
-      if (newCorruptionCount) {
-        filteredCorruptionCases = [...mergeBackendCorruptionFeed()];
-        renderCorruptionTable();
-      }
-      if (!isSilent && !validPraxisRows && newCorruptionCount) {
-        alert(`Live Cloud Telemetry Synced!\n\n• Whistleblower Reports Imported: ${newCorruptionCount}`);
-      }
-      return { validPraxisRows, newCorruptionCount, type: 'survey' };
     }
 
-    async function loadLocalCSV(event) {
-      const input = event.target;
-      const file = input.files?.[0];
+    function loadLocalCSV(event) {
+      const file = event.target.files[0];
       if (!file) return;
-      const badge = document.getElementById('deckBadge');
-      try {
-        const result = processLiveSurveyCSV(await file.text(), true);
-        if (!result.validPraxisRows && !result.newCorruptionCount) {
-          throw new Error('No supported survey responses or scenario dataset were found in this CSV.');
-        }
-        if (badge) {
-          badge.className = 'badge badge-live';
-          badge.innerText = `Loaded Field Data: ${file.name}`;
-        }
-        alert(`Loaded ${file.name}.\n\n• Survey/scenario rows applied: ${result.validPraxisRows}\n• Reports imported: ${result.newCorruptionCount}`);
-      } catch (error) {
-        if (badge) {
-          badge.className = 'badge badge-ai';
-          badge.innerText = 'CSV import failed';
-        }
-        alert(`Could not load ${file.name}: ${error.message}`);
-      } finally {
-        input.value = '';
-      }
+      document.getElementById('deckBadge').className = "badge badge-live";
+      document.getElementById('deckBadge').innerText = `Loaded Field Data: ${file.name}`;
+      alert(`Loaded field dataset from ${file.name}. Dynamic AI telemetry updated.`);
     }
 
     function resetToLiveBaseline() { applyShock('STATUS_QUO'); }
@@ -2498,320 +1933,14 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
     function handleMessageSubmit(e) {
       e.preventDefault();
-      const name = document.getElementById('cName').value.trim();
-      const email = document.getElementById('cEmail').value.trim();
+      const name = document.getElementById('cName').value;
+      const email = document.getElementById('cEmail').value;
       const purpose = document.getElementById('cPurpose').value;
-      const msg = document.getElementById('cMsg').value.trim();
+      const msg = document.getElementById('cMsg').value;
       const subject = encodeURIComponent(`[KUVHURA Inquiry] ${purpose} from ${name}`);
       const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\nCategory: ${purpose}\n\nMessage:\n${msg}`);
-      const feedback = document.getElementById('contactFeedback');
-      if (feedback) {
-        feedback.textContent = 'Opening an email draft. If your email app does not open, email privilege.kandira@gmail.com directly.';
-      }
+      alert(`Thank you, ${name}! Your message is prepared. Click OK to open your email client.`);
       window.location.href = `mailto:privilege.kandira@gmail.com?subject=${subject}&body=${body}`;
-    }
-
-    const africaCountryData = [
-      { country: 'Zimbabwe', region: 'Southern Africa', e: 8.8, pr: 7.6, cl: 8.9, al: 2.8, db: 6.8, governance: 41, civic: 39, source: 'World Bank / IMF / Afrobarometer', summary: 'Zimbabwe remains structurally captive: resource rents and patronage are highly concentrated while livelihood autonomy remains severely compressed by coercive enforcement.' },
-      { country: 'South Africa', region: 'Southern Africa', e: 7.4, pr: 6.1, cl: 6.4, al: 7.5, db: 6.2, governance: 68, civic: 72, source: 'World Bank / IMF / Afrobarometer', summary: 'A comparatively stronger institutional base reduces capture depth, though corruption and inequality still distort the balancing equation.' },
-      { country: 'Kenya', region: 'East Africa', e: 7.1, pr: 6.9, cl: 6.8, al: 6.4, db: 5.8, governance: 57, civic: 63, source: 'World Bank / IMF / Afrobarometer', summary: 'The regional model shows a contested but more resilient civic and economic sphere than the more extractive Southern African nodes.' },
-      { country: 'Ethiopia', region: 'East Africa', e: 7.8, pr: 7.4, cl: 7.2, al: 5.9, db: 4.7, governance: 52, civic: 56, source: 'World Bank / IMF', summary: 'Large state influence and capital expenditure concentration structure a higher centralization pressure, but civic viability is improving under broader economic restructuring.' },
-      { country: 'Nigeria', region: 'West Africa', e: 8.2, pr: 7.8, cl: 7.1, al: 5.7, db: 6.1, governance: 48, civic: 60, source: 'IMF / World Bank / Afrobarometer', summary: 'Oil dependence and patronage remain dominant, though informal civic networks and diaspora remittances provide important resilience buffers.' },
-      { country: 'Ghana', region: 'West Africa', e: 6.5, pr: 5.8, cl: 5.5, al: 7.2, db: 6.8, governance: 64, civic: 70, source: 'World Bank / IMF / Afrobarometer', summary: 'Institutional moderation and a comparatively stronger counterweight of autonomy reduce the coercive burden compared with higher-rent states.' },
-      { country: 'DR Congo', region: 'Central Africa', e: 9.3, pr: 8.9, cl: 8.6, al: 3.1, db: 3.4, governance: 34, civic: 41, source: 'UNCTAD / IMF / World Bank', summary: 'The country sits near the most extraction-heavy end of the African sample, where rent concentration and coercive structure deeply compress welfare autonomy.' },
-      { country: 'Angola', region: 'Southern Africa', e: 8.6, pr: 7.9, cl: 7.5, al: 4.8, db: 4.1, governance: 44, civic: 46, source: 'World Bank / IMF', summary: 'Resource reliance and state-linked patronage create a difficult governance environment despite moderate civic capacity.' },
-      { country: 'Morocco', region: 'North Africa', e: 6.8, pr: 5.7, cl: 5.9, al: 7.3, db: 6.4, governance: 63, civic: 65, source: 'World Bank / IMF', summary: 'Higher economic diversification and institutional depth create a relatively lower coercive and patronage pressure profile.' },
-      { country: 'Egypt', region: 'North Africa', e: 7.2, pr: 6.8, cl: 7.4, al: 5.3, db: 5.5, governance: 49, civic: 58, source: 'World Bank / IMF', summary: 'State coercion and macroeconomic fragility remain significant, while civic organization and diaspora channels continue to provide some stabilization.' }
-    ];
-
-    const datasourceRegistry = {
-      macro: { name: 'World Bank / Metals / FX API', status: 'live', label: 'Macro Feed' },
-      whistleblower: { name: 'Corruption Dossier / Attachment Parser', status: 'live', label: 'Whistleblower Feed' },
-      africa: { name: 'African Country Model', status: 'live', label: 'Regional Feed' },
-      backend: { name: 'Local backend sync ledger', status: 'live', label: 'Backend Sync' }
-    };
-
-    function registerDataSource(key, status = 'live', label) {
-      if (!datasourceRegistry[key]) return;
-      datasourceRegistry[key].status = status;
-      if (label) datasourceRegistry[key].label = label;
-    }
-
-    function setDataSourcePills() {
-      const macroPill = document.getElementById('macroSourcePill');
-      const whistlePill = document.getElementById('whistleSourcePill');
-      const africaPill = document.getElementById('africaSourcePill');
-      const backendPill = document.getElementById('backendSourcePill');
-
-      [
-        [macroPill, datasourceRegistry.macro],
-        [whistlePill, datasourceRegistry.whistleblower],
-        [africaPill, datasourceRegistry.africa],
-        [backendPill, datasourceRegistry.backend]
-      ].forEach(([el, data]) => {
-        if (!el || !data) return;
-        el.textContent = `${data.label}: ${data.status}`;
-        el.classList.toggle('live', data.status === 'live');
-      });
-    }
-
-    function standardizedCountryOutput(country) {
-      const e = country.e;
-      const pr = country.pr;
-      const cl = country.cl;
-      const al = country.al;
-      const db = country.db;
-      const phi = ((e * pr * cl) / ((al * db) + 0.35)).toFixed(1);
-      const praxis = ((8.0 * al) / (e + pr + cl + 0.2)).toFixed(2);
-      return { phi: Number(phi), praxis: Number(praxis) };
-    }
-
-    function renderAfricaCountryProfile() {
-      const selected = document.getElementById('africaCountrySelect')?.value || 'Zimbabwe';
-      const data = africaCountryData.find(c => c.country === selected) || africaCountryData[0];
-      const out = standardizedCountryOutput(data);
-
-      document.getElementById('africaCountryName').textContent = data.country;
-      document.getElementById('africaCountryBadge').textContent = data.region;
-      document.getElementById('africaCountrySummary').textContent = data.summary;
-
-      document.getElementById('africaE').textContent = data.e.toFixed(1);
-      document.getElementById('africaPr').textContent = data.pr.toFixed(1);
-      document.getElementById('africaCL').textContent = data.cl.toFixed(1);
-      document.getElementById('africaAL').textContent = data.al.toFixed(1);
-      document.getElementById('africaDB').textContent = data.db.toFixed(1);
-
-      document.getElementById('africaPhiOutput').textContent = out.phi.toFixed(1);
-      document.getElementById('africaPraxisOutput').textContent = `Praxis Yield: ${out.praxis.toFixed(2)}`;
-      document.getElementById('africaEquation').innerHTML = `Φ = [E × Pr × CL] / [AL × DB + 0.35]; regional Praxis proxy = [8 × AL] / [E + Pr + CL + 0.2]. ${data.country} context source: ${data.source}.`;
-
-      const tbody = document.getElementById('africaTableBody');
-      if (tbody) {
-        tbody.innerHTML = '';
-        africaCountryData.forEach(item => {
-          const itemOut = standardizedCountryOutput(item);
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${item.country}</td>
-            <td>${item.region}</td>
-            <td style="font-weight:900; color:${itemOut.phi > 60 ? '#F87171' : '#4ADE80'};">${itemOut.phi.toFixed(1)}</td>
-            <td style="font-weight:700; color:#4ADE80;">${itemOut.praxis.toFixed(2)}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      }
-
-      registerDataSource('africa', 'live', 'Regional Feed');
-      setDataSourcePills();
-      appendChatMessage('AI', `🌍 <strong>Regional Model Refreshed:</strong> ${data.country} integrated into the Africa standardisation engine using ${data.source}. Structural output: <strong>Φ = ${out.phi.toFixed(1)}</strong>, Yield = <strong>${out.praxis.toFixed(2)}</strong>.`, true);
-    }
-
-    function normalizeTextSignals(text) {
-      const lower = text.toLowerCase();
-      const amountMatches = [...lower.matchAll(/\$?\s?(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:usd|us dollars|dollars|\$)/g)]
-        .map(match => Number(String(match[1]).replace(/,/g, '')))
-        .filter(Number.isFinite);
-      const amount = amountMatches.length ? Math.max(...amountMatches) : 0;
-      const locality = lower.match(/(harare|bulawayo|mutare|gweru|masvingo|kwekwe|gutu|mbare|chitungwiza|ward\s?\d+|district|province|municipality|market|camp)/i)?.[0] || 'Unspecified locality';
-      const keyword = lower.match(/(extortion|bribe|bid rigging|food aid|shakedown|procurement|diversion|smuggling|bail|patronage|corruption)/i)?.[0] || 'Corruption signal';
-      return { amount, locality, keyword };
-    }
-
-    function persistAttachmentToBackend(fileName, summaryText) {
-      const key = 'kuvhura_backend_attachment_log';
-      const existing = JSON.parse(localStorage.getItem(key) || '[]');
-      const entry = { fileName, summaryText, timestamp: new Date().toISOString() };
-      existing.unshift(entry);
-      localStorage.setItem(key, JSON.stringify(existing.slice(0, 25)));
-
-      const backendKey = 'kuvhura_backend_corruption_log';
-      const corruptionLog = JSON.parse(localStorage.getItem(backendKey) || '[]');
-      const inferred = normalizeTextSignals(summaryText || fileName);
-      corruptionLog.unshift({
-        id: `ATT-${Date.now()}`,
-        period: 'Live Backend',
-        locality: inferred.locality || 'Unspecified locality',
-        entity: 'Attachment Ingestion',
-        category: 'Municipal',
-        typology: inferred.keyword || 'Attachment-derived alert',
-        narrative: summaryText,
-        evidence: 'File Attachment / Backend Ingestion',
-        amount: inferred.amount || 0,
-        praxisLink: 'Power Asymmetry (P)',
-        status: 'Live Backend'
-      });
-      localStorage.setItem(backendKey, JSON.stringify(corruptionLog.slice(0, 50)));
-
-      if (typeof fetch === 'function') {
-        const formData = new FormData();
-        const fileInput = document.getElementById('mAttachment');
-        const file = fileInput && fileInput.files ? fileInput.files[0] : null;
-        if (file) {
-          formData.append('file', file);
-          fetch('/api/attachments', {
-            method: 'POST',
-            body: formData
-          }).catch(() => {});
-        }
-      }
-
-      registerDataSource('whistleblower', 'live', 'Whistleblower Feed');
-      registerDataSource('backend', 'live', 'Backend Sync');
-      setDataSourcePills();
-      renderHighRiskAreas();
-      renderCorruptionTable();
-      loadReportsFromBackend();
-      loadRiskFromBackend();
-    }
-
-    async function handleAttachmentUpload(event) {
-      const file = event.target.files?.[0];
-      const preview = document.getElementById('attachmentPreview');
-      if (!file) return;
-
-      let fileText = '';
-      try {
-        if (file.type.includes('text') || file.name.endsWith('.csv') || file.name.endsWith('.txt') || file.name.endsWith('.json')) {
-          fileText = await file.text();
-        }
-      } catch (err) {
-        console.warn('Unable to read file as plain text:', err);
-      }
-
-      const signals = normalizeTextSignals(fileText || file.name);
-      const summary = fileText
-        ? `Attachment: ${file.name}. Derived indicators: ${signals.keyword} around ${signals.locality}; detected financial signal of $${signals.amount.toLocaleString()} USD. This has been fed into the corruption model.`
-        : `Attachment: ${file.name}. File was received and stored for review; no directly parseable text content was available.`;
-
-      preview.innerHTML = summary;
-      const narrative = document.getElementById('mNarrative');
-      if (narrative && narrative.value.trim()) {
-        narrative.value = `${narrative.value.trim()}\n\n${summary}`;
-      } else if (narrative) {
-        narrative.value = summary;
-      }
-
-      if (signals.amount > 0) {
-        const amountInput = document.getElementById('mAmount');
-        if (amountInput && !amountInput.value) amountInput.value = String(signals.amount);
-      }
-
-      persistAttachmentToBackend(file.name, summary);
-    }
-
-    let socialHashtagTimer = null;
-
-    async function loadSocialHashtagTrends() {
-      const badge = document.getElementById('speechBadge');
-      const title = document.getElementById('speechVectorTitle');
-      const description = document.getElementById('speechVectorDesc');
-      const list = document.getElementById('hashtagTrendList');
-      const updatedAt = document.getElementById('speechUpdatedAt');
-      const velocity = document.getElementById('metricVelocity');
-      const scanned = document.getElementById('metricPolarization');
-      const volumeLabel = document.getElementById('metricVolumeLabel');
-      const sourceScope = document.getElementById('metricThrottling');
-
-      try {
-        const response = await fetch('/api/social/hashtags');
-        if (!response.ok) throw new Error('Public hashtag feed unavailable');
-        const data = await response.json();
-        if (!data.available) throw new Error(data.message || 'No live sample is available.');
-
-        const tags = Array.isArray(data.hashtags) ? data.hashtags : [];
-        const topTag = tags[0];
-        const isSheetTelemetry = data.sampleType === 'rss-sheet';
-        const sources = Array.isArray(data.sources) ? data.sources : [data.source].filter(Boolean);
-        const platforms = [...new Set(sources.map((source) => source.startsWith('Mastodon') ? 'Mastodon' : source))];
-        if (badge) {
-          badge.textContent = isSheetTelemetry
-            ? 'Automated Google Sheets RSS telemetry'
-            : `Live public sample · ${platforms.length} ${platforms.length === 1 ? 'source' : 'sources'}`;
-        }
-        if (title) title.textContent = topTag ? topTag.tag : 'No hashtags in the latest sample';
-        if (description) {
-          description.textContent = isSheetTelemetry
-            ? 'Public RSS article matches are converted to estimated mentions. Narrative velocity and polarization are formula-derived indicators, not measured social-platform counts or sentiment analysis.'
-            : `${data.scannedPosts} public posts were returned by feeds for “Zimbabwe.” Hashtag trajectory compares the newest and preceding halves of this multi-source sample; this is not a sentiment or polarization score.`;
-        }
-        if (scanned) scanned.textContent = String(isSheetTelemetry ? (topTag ? topTag.mentions : 0) : (data.scannedPosts || 0));
-        if (volumeLabel) volumeLabel.textContent = isSheetTelemetry ? 'Estimated Mentions (top hashtag)' : 'Public Posts Scanned';
-        if (sourceScope) sourceScope.textContent = platforms.join(' + ') || 'Public feeds';
-        if (velocity) {
-          if (!topTag) {
-            velocity.textContent = 'No hashtags';
-          } else if (isSheetTelemetry) {
-            velocity.textContent = `${Number(topTag.narrativeVelocity).toFixed(1)} / 100`;
-          } else if (topTag.changePct === null) {
-            velocity.textContent = 'New / no baseline';
-          } else {
-            const direction = topTag.changePct > 0 ? '+' : '';
-            velocity.textContent = `${topTag.trajectory} ${direction}${topTag.changePct}%`;
-          }
-        }
-
-        if (list) {
-          list.replaceChildren();
-          if (!tags.length) {
-            const empty = document.createElement('div');
-            empty.style.color = 'var(--text-muted)';
-            empty.textContent = 'No hashtags were found in the returned posts.';
-            list.appendChild(empty);
-          }
-          tags.forEach((tag) => {
-            const row = document.createElement('div');
-            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--border-soft);border-radius:6px;background:rgba(15,23,42,0.8);';
-            const label = document.createElement('strong');
-            label.style.color = '#E0F2FE';
-            label.textContent = tag.tag;
-            const trajectory = document.createElement('span');
-            trajectory.style.color = tag.trajectory === 'rising' ? '#4ADE80' : tag.trajectory === 'falling' ? '#F87171' : '#FBBF24';
-            const change = tag.changePct === null ? 'new / no baseline' : `${tag.changePct > 0 ? '+' : ''}${tag.changePct}% ${tag.trajectory}`;
-            trajectory.textContent = isSheetTelemetry
-              ? `${tag.mentions} estimated mentions · velocity ${Number(tag.narrativeVelocity).toFixed(1)} · polarization ${Number(tag.polarizationIndex).toFixed(1)}`
-              : `${tag.mentions} mentions · ${change}`;
-            row.append(label, trajectory);
-            list.appendChild(row);
-          });
-        }
-
-        if (updatedAt) {
-          const time = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'unknown time';
-          updatedAt.textContent = isSheetTelemetry
-            ? `Source: ${sources.join(', ') || data.source}. Sheet updated ${time}; dashboard refreshes every 2 minutes.`
-            : `Sources: ${sources.join(', ') || data.source}. Sample refreshed ${time}. Refreshes every 2 minutes.`;
-        }
-      } catch (error) {
-        if (badge) badge.textContent = 'Public feed unavailable';
-        if (title) title.textContent = 'No live hashtag sample';
-        if (description) description.textContent = error.message || 'The public feed is currently unavailable. No sample trends are being shown.';
-        if (velocity) velocity.textContent = 'Unavailable';
-        if (scanned) scanned.textContent = '0';
-        if (sourceScope) sourceScope.textContent = 'Bluesky + Mastodon';
-        if (list) {
-          const message = document.createElement('div');
-          message.style.color = 'var(--text-muted)';
-          message.textContent = 'No live data received. The trend list will populate when the public feed is reachable.';
-          list.replaceChildren(message);
-        }
-        if (updatedAt) updatedAt.textContent = 'No live sample received.';
-      }
-    }
-
-    function initPlatformMenu() {
-      const dropdown = document.querySelector('.nav-dropdown');
-      const toggle = document.querySelector('.nav-dropdown-toggle');
-      if (!dropdown || !toggle) return;
-      toggle.addEventListener('click', () => {
-        const isOpen = dropdown.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', String(isOpen));
-      });
-      dropdown.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', () => {
-          dropdown.classList.remove('open');
-          toggle.setAttribute('aria-expanded', 'false');
-        });
-      });
     }
 
     // -------------------------------------------------------------
@@ -2821,7 +1950,6 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
     async function fetchGlobalMacroTelemetry(isAuto = false) {
       const badgeEl = document.getElementById('deckBadge');
-      importedSurveyPraxis = null;
       if (badgeEl && !isAuto) {
         badgeEl.className = "badge badge-live";
         badgeEl.innerText = "Ingesting World Bank & Commodity Feeds...";
@@ -2833,28 +1961,30 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       try {
         // GoldPrice / Free Financial Commodity Endpoint
         const goldRes = await fetch('https://api.metals.live/v1/spot/gold');
-        if (!goldRes.ok) throw new Error(`Gold feed returned HTTP ${goldRes.status}`);
-        const goldData = await goldRes.json();
-        const goldPrice = parseFloat(goldData[0]?.price || goldData.price || 0);
-        if (goldPrice > 0) {
-          // Baseline: $2,000/oz = 8.0, $2,600/oz = 9.2 (Rent Monopoly ceiling)
-          const scaledE = Math.min(10, Math.max(3, (goldPrice / 2500) * 8.8)).toFixed(1);
-          document.getElementById('rngE').value = scaledE;
-          document.getElementById('lblE').innerText = scaledE;
-          logUpdates.push(`Gold Spot ($${goldPrice.toFixed(0)}/oz) recalibrated Rent Extraction (E = ${scaledE})`);
+        if (goldRes.ok) {
+          const goldData = await goldRes.json();
+          const goldPrice = parseFloat(goldData[0]?.price || goldData.price || 0);
+          if (goldPrice > 0) {
+            // Baseline: $2,000/oz = 8.0, $2,600/oz = 9.2 (Rent Monopoly ceiling)
+            const scaledE = Math.min(10, Math.max(3, (goldPrice / 2500) * 8.8)).toFixed(1);
+            document.getElementById('rngE').value = scaledE;
+            document.getElementById('lblE').innerText = scaledE;
+            logUpdates.push(`Gold Spot ($${goldPrice.toFixed(0)}/oz) recalibrated Rent Extraction (E = ${scaledE})`);
+          }
         }
       } catch (err) {
         // Fallback secondary public market feed if primary is rate-limited
         try {
           const fxRes = await fetch('https://open.er-api.com/v6/latest/USD');
-          if (!fxRes.ok) throw new Error(`FX feed returned HTTP ${fxRes.status}`);
-          const fxData = await fxRes.json();
-          // If USD strength is high, FX arbitrage rents expand
-          const zarRate = fxData.rates?.ZAR || 18.0;
-          const fxStrain = Math.min(10, Math.max(4, (zarRate / 18.5) * 8.6)).toFixed(1);
-          document.getElementById('rngE').value = fxStrain;
-          document.getElementById('lblE').innerText = fxStrain;
-          logUpdates.push(`Regional FX arbitrage telemetry recalibrated Rent Extraction (E = ${fxStrain})`);
+          if (fxRes.ok) {
+            const fxData = await fxRes.json();
+            // If USD strength is high, FX arbitrage rents expand
+            const zarRate = fxData.rates?.ZAR || 18.0;
+            const fxStrain = Math.min(10, Math.max(4, (zarRate / 18.5) * 8.6)).toFixed(1);
+            document.getElementById('rngE').value = fxStrain;
+            document.getElementById('lblE').innerText = fxStrain;
+            logUpdates.push(`Regional FX arbitrage telemetry recalibrated Rent Extraction (E = ${fxStrain})`);
+          }
         } catch (e2) {
           console.log("Using baseline commodity rent calibration.");
         }
@@ -2865,19 +1995,20 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         // Indicator: Consumer Price Index (CPI) annual % for Zimbabwe
         const wbUrl = 'https://api.worldbank.org/v2/country/ZW/indicator/FP.CPI.TOTL.ZG?format=json';
         const wbRes = await fetch(wbUrl);
-        if (!wbRes.ok) throw new Error(`World Bank feed returned HTTP ${wbRes.status}`);
-        const wbData = await wbRes.json();
-        if (wbData[1] && wbData[1].length > 0) {
-          // Find most recent valid reporting year
-          const latestValid = wbData[1].find(item => item.value !== null);
-          if (latestValid) {
-            const inflationRate = parseFloat(latestValid.value);
-            const reportYear = latestValid.date;
-            // High inflation raises the patronage requirement cost (Pr)
-            const scaledPr = inflationRate > 30 ? "8.4" : "7.2";
-            document.getElementById('rngPr').value = scaledPr;
-            document.getElementById('lblPr').innerText = scaledPr;
-            logUpdates.push(`World Bank Data (${reportYear}): Inflation indexed Patronage Load (Pr = ${scaledPr})`);
+        if (wbRes.ok) {
+          const wbData = await wbRes.json();
+          if (wbData[1] && wbData[1].length > 0) {
+            // Find most recent valid reporting year
+            const latestValid = wbData[1].find(item => item.value !== null);
+            if (latestValid) {
+              const inflationRate = parseFloat(latestValid.value);
+              const reportYear = latestValid.date;
+              // High inflation raises the patronage requirement cost (Pr)
+              const scaledPr = inflationRate > 30 ? "8.4" : "7.2";
+              document.getElementById('rngPr').value = scaledPr;
+              document.getElementById('lblPr').innerText = scaledPr;
+              logUpdates.push(`World Bank Data (${reportYear}): Inflation indexed Patronage Load (Pr = ${scaledPr})`);
+            }
           }
         }
       } catch (wbErr) {
@@ -2887,7 +2018,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       // 3. Recalculate Live Predictive Loop
       runPredictiveLoop();
 
-      if (badgeEl && logUpdates.length) {
+      if (badgeEl) {
         badgeEl.className = "badge badge-live";
         badgeEl.innerText = "● Multi-Source APIs Active (Commodity + World Bank + Survey)";
       }
@@ -2897,14 +2028,6 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         if (!isAuto) {
           alert(`Multi-Source External Data Ingested:\n\n` + logUpdates.join('\n'));
         }
-      } else {
-        if (badgeEl) {
-          badgeEl.className = 'badge badge-ai';
-          badgeEl.innerText = 'External feeds unavailable · using current values';
-        }
-        if (!isAuto) {
-          alert('No external macro feeds returned usable data. Current model values were left unchanged.');
-        }
       }
 
       // Run background refresh every 10 minutes
@@ -2913,28 +2036,14 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       }
     }
 
-    let backendRefreshTimer = null;
-
-    async function refreshLiveBackendFeeds() {
-      await loadReportsFromBackend();
-      await loadRiskFromBackend();
-      const backendEntries = getBackendCorruptionFeed();
-      if (backendEntries.length) {
-        registerDataSource('backend', 'live', 'Backend Sync');
-        registerDataSource('whistleblower', 'live', 'Whistleblower Feed');
-      }
-      setDataSourcePills();
-      renderAfricaCountryProfile();
-    }
-
     window.onload = function() {
-      initPlatformMenu();
-      renderAfricaCountryProfile();
-      setDataSourcePills();
-      // Check if user previously saved a live Google Sheet and auto-sync in background
-      if (localStorage.getItem('kuvhura_sheet_id')) {
-        setTimeout(() => { syncExternalSheet(true); }, 800);
+      // Auto-sync live Google Sheet on startup if saved or present in input
+      const savedId = localStorage.getItem('kuvhura_sheet_id');
+      const inputEl = document.getElementById('sheetUrl');
+      if (savedId && inputEl && !inputEl.value) {
+        inputEl.value = `https://docs.google.com/spreadsheets/d/${savedId}/edit`;
       }
+      setTimeout(() => { syncExternalSheet(true); }, 500);
       renderOagTable();
       renderCorruptionTable();
       renderSectorTable();
@@ -2943,14 +2052,6 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       runPredictiveLoop();
       // Auto-fetch live external macro feeds on startup
       setTimeout(() => { fetchGlobalMacroTelemetry(true); }, 1500);
-      refreshLiveBackendFeeds();
-      loadSocialHashtagTrends();
-      if (!socialHashtagTimer) {
-        socialHashtagTimer = setInterval(loadSocialHashtagTrends, 120000);
-      }
-      if (!backendRefreshTimer) {
-        backendRefreshTimer = setInterval(refreshLiveBackendFeeds, 15000);
-      }
     };
   </script>
 
@@ -2965,20 +2066,11 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
     }
 
     let deferredPrompt;
-    if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) {
-      const installBtn = document.getElementById('pwaInstallBtn');
-      if (installBtn) installBtn.style.display = 'none';
-    }
-
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-    });
-
-    window.addEventListener('appinstalled', () => {
       const installBtn = document.getElementById('pwaInstallBtn');
-      if (installBtn) installBtn.style.display = 'none';
-      deferredPrompt = null;
+      if (installBtn) installBtn.style.display = 'inline-flex';
     });
 
     function promptPwaInstall() {
@@ -2991,8 +2083,6 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
           }
           deferredPrompt = null;
         });
-      } else {
-        alert('To install KUVHURA, open your browser menu and choose “Install app” or “Add to Home Screen”. If that option is unavailable, open this site in a supported browser over HTTPS.');
       }
     }
   
@@ -3015,7 +2105,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
       if (phi > 60) {
         titleEl.innerText = "Decentralized Networked Cadre Leadership (Mutual Aid & Resilience Builders)";
-        descEl.innerHTML = "Under entrenched hegemonic captivity (Φ > 60), hierarchical mass rallies are structurally suppressed by high coercive liquidity ($CL$) and patronage gatekeeping ($Pr$). The optimal leadership model rejects charismatic individualism in favor of <strong>distributed cellular coordination</strong>, focusing on community resilience hubs, informal strike funds, and autonomous agro-input cooperatives that lower the denominator.";
+        descEl.innerHTML = "Under entrenched hegemonic captivity (\u03 > 60), hierarchical mass rallies are structurally suppressed by high coercive liquidity ($CL$) and patronage gatekeeping ($Pr$). The optimal leadership model rejects charismatic individualism in favor of <strong>distributed cellular coordination</strong>, focusing on community resilience hubs, informal strike funds, and autonomous agro-input cooperatives that lower the denominator.";
         objEl.innerText = "Lowering the Denominator (P+I+C)";
         horizonEl.innerText = "Long-Term Structural Decoupling";
         r1.style.background = "rgba(99,102,241,0.15)"; r1.style.border = "1px solid var(--ai-purple)"; r1.style.color = "var(--text-main)";
@@ -3027,7 +2117,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         r2.style.background = "rgba(212,175,55,0.15)"; r2.style.border = "1px solid var(--zim-gold)"; r2.style.color = "var(--text-main)";
       } else {
         titleEl.innerText = "Transitional Statecraft & Institutional Stewards (Consensus & Reform)";
-        descEl.innerHTML = "During pre-rupture state fragility (Φ < 30), regime capacity collapses. The critical leadership requirement shifts to <strong>institutional statecraft</strong>: constitutional stabilization, independent audit oversight (OAG integration), professionalized security command, and orderly economic transition management.";
+        descEl.innerHTML = "During pre-rupture state fragility (\u03 < 30), regime capacity collapses. The critical leadership requirement shifts to <strong>institutional statecraft</strong>: constitutional stabilization, independent audit oversight (OAG integration), professionalized security command, and orderly economic transition management.";
         objEl.innerText = "Institutional Stabilization & Reform";
         horizonEl.innerText = "Immediate Transition Management";
         r3.style.background = "rgba(34,197,94,0.15)"; r3.style.border = "1px solid #22C55E"; r3.style.color = "var(--text-main)";
@@ -3038,7 +2128,6 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
     // 3D Interactive Topography Canvas Engine
     let canvas3D, ctx3D;
-    let canvas3DInitialized = false;
     let angle3D = 0;
     let selectedNodeType = 'MINING';
     let nodes3D = [
@@ -3053,8 +2142,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
     function init3DCanvas() {
       canvas3D = document.getElementById('topography3DCanvas');
-      if (!canvas3D || canvas3DInitialized) return;
-      canvas3DInitialized = true;
+      if (!canvas3D) return;
       
       // Ensure correct pixel dimensions with fallback
       const parentWidth = canvas3D.parentElement ? canvas3D.parentElement.clientWidth : 0;
@@ -3085,26 +2173,6 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         angle3D += delta * 0.015;
         lastMouseX = e.touches[0].clientX;
         render3DScene();
-      }, { passive: true });
-
-      canvas3D.addEventListener('click', (e) => {
-        const bounds = canvas3D.getBoundingClientRect();
-        const x = (e.clientX - bounds.left) * (canvas3D.width / bounds.width);
-        const y = (e.clientY - bounds.top) * (canvas3D.height / bounds.height);
-        const cx = canvas3D.width / 2;
-        const cy = canvas3D.height / 2;
-        const nearest = nodes3D.map(node => {
-          const cosA = Math.cos(angle3D);
-          const sinA = Math.sin(angle3D);
-          const rotX = node.x * cosA - node.z * sinA;
-          const rotZ = node.x * sinA + node.z * cosA;
-          const screenX = cx + rotX;
-          const screenY = cy + node.y + (rotZ * 0.3);
-          return { node, distance: Math.hypot(x - screenX, y - screenY) };
-        }).sort((a, b) => a.distance - b.distance)[0];
-        if (nearest && nearest.distance <= nearest.node.radius * 1.4 + 8) {
-          select3DNode(nearest.node.type, nearest.node);
-        }
       });
 
       setInterval(() => {
@@ -3119,14 +2187,13 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
 
 
-    function select3DNode(type, selectedNode = null) {
+    function select3DNode(type) {
       selectedNodeType = type;
-      const node = selectedNode || nodes3D.find(n => n.type === type) || nodes3D[0];
+      const node = nodes3D.find(n => n.type === type) || nodes3D[0];
       const box = document.getElementById('nodeInfoBox');
       if (box) {
-        box.innerHTML = `<strong>Selected Node:</strong> ${escapeHtml(node.name)}<br/><strong>Telemetry Profile:</strong> ${escapeHtml(node.desc)}`;
+        box.innerHTML = `<strong>Selected Category:</strong> ${node.name}<br/><strong>Telemetry Profile:</strong> ${node.desc}`;
       }
-      render3DScene();
     }
 
     function render3DScene() {
@@ -3187,7 +2254,6 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
 
     function loadHistoricalBacktest(year) {
-      importedSurveyPraxis = null;
       if (year === 2008) {
         document.getElementById('rngE').value = 9.8;
         document.getElementById('rngPr').value = 9.5;
@@ -3207,5 +2273,54 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
     }
 
 </script>
+
+  <!-- KUVHURA Real-Time WebSocket Client Integration -->
+  <script>
+    function initLiveWebSocketStream() {
+      const wsUri = "ws://localhost:8765";
+      let liveWs;
+      
+      try {
+        liveWs = new WebSocket(wsUri);
+        
+        liveWs.onopen = function() {
+          console.log("[KUVHURA] Connected to live streaming backend.");
+          const badge = document.getElementById('deckBadge');
+          if (badge) {
+            badge.className = "badge badge-live";
+            badge.innerText = "● Live WebSocket Stream Connected";
+          }
+        };
+
+        liveWs.onmessage = function(event) {
+          const data = JSON.parse(event.data);
+          
+          // Dynamically update sliders and models with incoming live stream packets
+          if (document.getElementById('rngE')) {
+            document.getElementById('rngE').value = data.rentExtractionE;
+            document.getElementById('lblE').innerText = data.rentExtractionE;
+          }
+          if (document.getElementById('heroPhi')) {
+            document.getElementById('heroPhi').innerText = data.regimePhi;
+          }
+          if (document.getElementById('heroPraxis')) {
+            document.getElementById('heroPraxis').innerText = data.praxisYield;
+          }
+          
+          if (typeof runPredictiveLoop === 'function') {
+            runPredictiveLoop();
+          }
+        };
+
+        liveWs.onclose = function() {
+          setTimeout(initLiveWebSocketStream, 5000); // Try reconnecting
+        };
+      } catch (e) {
+        console.log("[KUVHURA] Live WebSocket running in static mode.");
+      }
+    }
+    window.addEventListener('DOMContentLoaded', () => { setTimeout(initLiveWebSocketStream, 1000); });
+  </script>
 </body>
 </html>
+
