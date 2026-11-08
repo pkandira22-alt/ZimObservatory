@@ -15,12 +15,12 @@ Deploy as a **Web app**, executing as yourself, with access set to **Anyone**. C
 
 ## 2. Configure GitHub Actions
 
-In the repository's **Settings → Secrets and variables → Actions**, add:
+In the repository's **Settings → Secrets and variables → Actions**, configure:
 
-- `GOOGLE_SHEETS_WEB_APP_URL`: the deployed web app URL
-- `GOOGLE_SHEETS_WEB_APP_TOKEN`: the same token stored as `SYNC_TOKEN`
+- `PRIVILEGE`: the deployed web app URL
+- `KUVHURA`: the same token stored as `SYNC_TOKEN`
 
-The scheduled workflow is [`.github/workflows/telemetry_sync.yml`](./.github/workflows/telemetry_sync.yml). It runs every 30 minutes and can also be started with **Actions → KUVHURA Live Social Telemetry Sync → Run workflow**.
+The workflow maps these secrets to the publisher's `GOOGLE_SHEETS_WEB_APP_URL` and `GOOGLE_SHEETS_WEB_APP_TOKEN` environment variables. It uses only Python's standard library, so no dependency installation is needed. The scheduled workflow is [`.github/workflows/telemetry_sync.yml`](./.github/workflows/telemetry_sync.yml). It runs every 30 minutes and can also be started with **Actions → KUVHURA Live Social Telemetry Sync → Run workflow**.
 
 ## 3. Configure the KUVHURA backend
 
