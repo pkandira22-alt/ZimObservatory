@@ -561,6 +561,17 @@
         </div>
       </div>
 
+      <section id="forecastPanel" class="card-panel" style="margin: 18px 0; border-top: 3px solid var(--zim-gold);">
+        <div class="panel-hdr">
+          <span>Out-of-sample forecast evaluation</span>
+          <span id="forecastUpdated" style="font-size:10px; color:var(--text-muted); font-weight:400;">Waiting for historical data...</span>
+        </div>
+        <div id="forecastTargets" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:10px;"></div>
+        <p id="forecastMethodology" style="font-size:10.5px; line-height:1.5; color:var(--text-muted); margin:12px 0 0;">
+          Forecasts are not shown until the historical series and holdout evaluation load.
+        </p>
+      </section>
+
       <!-- DUAL HERO INDICATORS -->
       <div class="top-duo-grid">
         <!-- 1. REGIME DURABILITY INDEX -->
@@ -2297,11 +2308,11 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         liveWs = new WebSocket(getLiveWebSocketUrl());
 
         liveWs.onopen = function() {
-          console.log("[KUVHURA] Connected to live streaming backend.");
+          console.log("[KUVHURA] Connected to forecast service.");
           const badge = document.getElementById('deckBadge');
           if (badge) {
-            badge.className = "badge badge-live";
-            badge.innerText = "● Live WebSocket Stream Connected";
+            badge.className = "badge badge-ai";
+            badge.innerText = "Connected; loading forecast report...";
           }
         };
 
@@ -2314,19 +2325,8 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
             return;
           }
 
-          if (Number.isFinite(Number(data.rentExtractionE))) {
-            document.getElementById('rngE').value = data.rentExtractionE;
-          }
-
-          if (typeof runPredictiveLoop === 'function') {
-            runPredictiveLoop();
-          }
-
-          if (Number.isFinite(Number(data.regimePhi))) {
-            document.getElementById('heroPhi').innerText = data.regimePhi;
-          }
-          if (Number.isFinite(Number(data.praxisYield))) {
-            document.getElementById('heroPraxis').innerText = data.praxisYield;
+          if (data.type === 'forecast_report') {
+            renderForecastReport(data);
           }
         };
 
@@ -2347,6 +2347,80 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         setTimeout(initLiveWebSocketStream, 5000);
       }
     }
+
+    function renderForecastReport(report) {
+      const targetContainer = document.getElementById('forecastTargets');
+      const statusBadge = document.getElementById('deckBadge');
+      const updated = document.getElementById('forecastUpdated');
+      const methodology = document.getElementById('forecastMethodology');
+      targetContainer.replaceChildren();
+
+      const statusLabels = {
+        baseline_only: 'No skill over persistence — baseline only',
+        validated_candidate: 'Passed non-overlapping holdout comparison',
+        provisional_candidate: 'Positive rolling holdout — provisional',
+        stale_data: 'Stale data — forecast withheld',
+        insufficient_history: 'Insufficient history',
+        unavailable: 'Unavailable',
+        not_requested: 'Not requested'
+      };
+
+      for (const target of report.targets || []) {
+        const card = document.createElement('article');
+        card.style.cssText = 'background:#070B14;border:1px solid var(--border-panel);border-radius:8px;padding:12px;';
+
+        const title = document.createElement('strong');
+        title.textContent = target.label || target.id;
+        title.style.cssText = 'display:block;color:var(--text-primary);font-size:12px;margin-bottom:6px;';
+        card.append(title);
+
+        const status = document.createElement('div');
+        status.textContent = statusLabels[target.status] || target.status;
+        status.style.cssText = 'font-size:10px;color:var(--zim-gold);margin-bottom:8px;';
+        card.append(status);
+
+        if (target.forecast) {
+          const value = document.createElement('div');
+          value.textContent = `${target.forecast.period}: ${Number(target.forecast.value).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${target.unit || ''}`;
+          value.style.cssText = 'font-size:14px;font-weight:800;color:white;margin-bottom:6px;';
+          card.append(value);
+        }
+
+        if (target.backtest && Number.isFinite(target.backtest.holdoutMAE)) {
+          const score = document.createElement('div');
+          score.textContent = `Holdout MAE ${target.backtest.holdoutMAE.toFixed(2)} vs persistence ${target.backtest.naiveHoldoutMAE.toFixed(2)} (${target.backtest.holdoutForecasts} forecasts)`;
+          score.style.cssText = 'font-size:10px;color:var(--text-muted);line-height:1.5;';
+          card.append(score);
+        }
+
+        if (target.sourceUrl) {
+          const source = document.createElement('a');
+          source.href = target.sourceUrl;
+          source.target = '_blank';
+          source.rel = 'noopener noreferrer';
+          source.textContent = `Source: ${target.source || target.sourceUrl}`;
+          source.style.cssText = 'display:block;font-size:10px;color:#38BDF8;margin-top:8px;overflow-wrap:anywhere;';
+          card.append(source);
+        }
+
+        if (target.reason) {
+          const reason = document.createElement('div');
+          reason.textContent = target.reason;
+          reason.style.cssText = 'font-size:10px;color:var(--text-muted);line-height:1.5;margin-top:6px;';
+          card.append(reason);
+        }
+
+        targetContainer.append(card);
+      }
+
+      updated.textContent = `Data refreshed ${report.generatedAt || 'recently'} · ${report.horizon || ''}`;
+      methodology.textContent = report.methodology || '';
+      if (statusBadge) {
+        statusBadge.className = 'badge badge-live';
+        statusBadge.innerText = '● Forecast report loaded';
+      }
+    }
+
     window.addEventListener('DOMContentLoaded', () => { setTimeout(initLiveWebSocketStream, 1000); });
   </script>
 </body>

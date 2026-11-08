@@ -24,16 +24,26 @@ In the repository's **Settings → Secrets and variables → Actions**, configur
 
 The workflow maps these secrets to the publisher's `GOOGLE_SHEETS_WEB_APP_URL` and `GOOGLE_SHEETS_WEB_APP_TOKEN` environment variables. It uses only Python's standard library, so no dependency installation is needed. The scheduled workflow is [`.github/workflows/telemetry_sync.yml`](./.github/workflows/telemetry_sync.yml). It runs every 30 minutes and can also be started with **Actions → KUVHURA Live Social Telemetry Sync → Run workflow**.
 
-## 3. Run the local WebSocket stream
+## 3. Run and evaluate the forecasting model
 
-The WebSocket stream generates demo values; it does not publish to Google Sheets. Install its dependency and run the server from the repository root:
+The forecast report uses World Bank annual Zimbabwe GDP growth and inflation indicators and monthly Yahoo Finance gold futures history. It runs chronological rolling-origin validation, selects methods on earlier origins, and compares a later holdout with a last-observation benchmark. It does not treat the dashboard's Φ formula or media mentions as observed outcomes.
+
+Generate a one-time report from the repository root:
+
+```sh
+python forecasting_model.py
+```
+
+Run the dashboard forecast service:
 
 ```sh
 python -m pip install -r requirements.txt
 python stream_server.py
 ```
 
-Keep that terminal open. The server reports `connected clients: 0` until the dashboard connects. Open `index.html` from the same computer to connect to `ws://localhost:8765`. In GitHub Codespaces, forward port `8765` as **Public** or **Private** and open the dashboard in the browser; the page detects the forwarded Codespaces WebSocket hostname automatically. For other hosted setups, append `?ws=wss://YOUR-FORWARDED-WEBSOCKET-HOST` to the dashboard URL. Use `STREAM_HOST` and `STREAM_PORT` to change the server bind address or port.
+Keep that terminal open. The first historical data refresh can take up to 30 seconds; reports refresh every six hours. Open `index.html` from the same computer to connect to `ws://localhost:8765`. In GitHub Codespaces, forward port `8765` as **Public** or **Private** and open the dashboard in the browser; the page detects the forwarded Codespaces WebSocket hostname automatically. For other hosted setups, append `?ws=wss://YOUR-FORWARDED-WEBSOCKET-HOST` to the dashboard URL. Use `STREAM_HOST` and `STREAM_PORT` to change the server bind address or port.
+
+Forecasts are not automatically considered validated: the dashboard withholds stale inflation data, reports GDP as a persistence baseline when alternatives fail to beat it, and labels the gold trend provisional because its 12-month holdout origins overlap. Protest forecasts require a dated event dataset; Φ requires historical inputs and a measured outcome. No custom target was requested.
 
 ## 4. Configure the KUVHURA backend
 
