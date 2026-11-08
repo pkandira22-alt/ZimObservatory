@@ -1,0 +1,8 @@
+{
+  "name": "KUVHURA Observatory",
+  "description": "Zimbabwe political economy, state captivity, and civic resistance observatory.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
