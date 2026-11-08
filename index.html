@@ -966,11 +966,11 @@
           </p>
           <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
             <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px; border-radius: 6px; text-align: center;">
-              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Top Hashtag Trajectory</div>
+              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Narrative Velocity / Trajectory</div>
               <div id="metricVelocity" style="font-size: 14px; font-weight: 900; color: #38BDF8;">Awaiting sample</div>
             </div>
             <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px; border-radius: 6px; text-align: center;">
-              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Public Posts Scanned</div>
+              <div id="metricVolumeLabel" style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Public Posts Scanned</div>
               <div id="metricPolarization" style="font-size: 14px; font-weight: 900; color: #F87171;">0</div>
             </div>
             <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px; border-radius: 6px; text-align: center;">
@@ -2552,6 +2552,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       const updatedAt = document.getElementById('speechUpdatedAt');
       const velocity = document.getElementById('metricVelocity');
       const scanned = document.getElementById('metricPolarization');
+      const volumeLabel = document.getElementById('metricVolumeLabel');
       const sourceScope = document.getElementById('metricThrottling');
 
       try {
@@ -2562,18 +2563,28 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
         const tags = Array.isArray(data.hashtags) ? data.hashtags : [];
         const topTag = tags[0];
+        const isSheetTelemetry = data.sampleType === 'rss-sheet';
         const sources = Array.isArray(data.sources) ? data.sources : [data.source].filter(Boolean);
         const platforms = [...new Set(sources.map((source) => source.startsWith('Mastodon') ? 'Mastodon' : source))];
-        if (badge) badge.textContent = `Live public sample · ${platforms.length} ${platforms.length === 1 ? 'source' : 'sources'}`;
+        if (badge) {
+          badge.textContent = isSheetTelemetry
+            ? 'Automated Google Sheets RSS telemetry'
+            : `Live public sample · ${platforms.length} ${platforms.length === 1 ? 'source' : 'sources'}`;
+        }
         if (title) title.textContent = topTag ? topTag.tag : 'No hashtags in the latest sample';
         if (description) {
-          description.textContent = `${data.scannedPosts} public posts were returned by feeds for “Zimbabwe.” Hashtag trajectory compares the newest and preceding halves of this multi-source sample; this is not a sentiment or polarization score.`;
+          description.textContent = isSheetTelemetry
+            ? 'Public RSS article matches are converted to estimated mentions. Narrative velocity and polarization are formula-derived indicators, not measured social-platform counts or sentiment analysis.'
+            : `${data.scannedPosts} public posts were returned by feeds for “Zimbabwe.” Hashtag trajectory compares the newest and preceding halves of this multi-source sample; this is not a sentiment or polarization score.`;
         }
-        if (scanned) scanned.textContent = String(data.scannedPosts || 0);
+        if (scanned) scanned.textContent = String(isSheetTelemetry ? (topTag ? topTag.mentions : 0) : (data.scannedPosts || 0));
+        if (volumeLabel) volumeLabel.textContent = isSheetTelemetry ? 'Estimated Mentions (top hashtag)' : 'Public Posts Scanned';
         if (sourceScope) sourceScope.textContent = platforms.join(' + ') || 'Public feeds';
         if (velocity) {
           if (!topTag) {
             velocity.textContent = 'No hashtags';
+          } else if (isSheetTelemetry) {
+            velocity.textContent = `${Number(topTag.narrativeVelocity).toFixed(1)} / 100`;
           } else if (topTag.changePct === null) {
             velocity.textContent = 'New / no baseline';
           } else {
@@ -2599,7 +2610,9 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
             const trajectory = document.createElement('span');
             trajectory.style.color = tag.trajectory === 'rising' ? '#4ADE80' : tag.trajectory === 'falling' ? '#F87171' : '#FBBF24';
             const change = tag.changePct === null ? 'new / no baseline' : `${tag.changePct > 0 ? '+' : ''}${tag.changePct}% ${tag.trajectory}`;
-            trajectory.textContent = `${tag.mentions} mentions · ${change}`;
+            trajectory.textContent = isSheetTelemetry
+              ? `${tag.mentions} estimated mentions · velocity ${Number(tag.narrativeVelocity).toFixed(1)} · polarization ${Number(tag.polarizationIndex).toFixed(1)}`
+              : `${tag.mentions} mentions · ${change}`;
             row.append(label, trajectory);
             list.appendChild(row);
           });
@@ -2607,7 +2620,9 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
         if (updatedAt) {
           const time = data.updatedAt ? new Date(data.updatedAt).toLocaleString() : 'unknown time';
-          updatedAt.textContent = `Sources: ${sources.join(', ') || data.source}. Sample refreshed ${time}. Refreshes every 2 minutes.`;
+          updatedAt.textContent = isSheetTelemetry
+            ? `Source: ${sources.join(', ') || data.source}. Sheet updated ${time}; dashboard refreshes every 2 minutes.`
+            : `Sources: ${sources.join(', ') || data.source}. Sample refreshed ${time}. Refreshes every 2 minutes.`;
         }
       } catch (error) {
         if (badge) badge.textContent = 'Public feed unavailable';

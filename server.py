@@ -4,10 +4,12 @@ import logging
 import os
 import re
 import sqlite3
+from http.client import HTTPException
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from io import BytesIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from threading import Lock
@@ -219,6 +221,27 @@ def fetch_social_hashtag_trends():
         if SOCIAL_CACHE["payload"] and SOCIAL_CACHE["expires_at"] > now.timestamp():
             return SOCIAL_CACHE["payload"]
 
+    web_app_url = os.environ.get("GOOGLE_SHEETS_WEB_APP_URL")
+    if web_app_url:
+        try:
+            result = fetch_sheet_social_hashtag_trends(web_app_url)
+        except (HTTPException, OSError, URLError, ValueError) as exc:
+            LOGGER.warning("Google Sheets social telemetry failed: %s", exc)
+            result = {
+                "available": False,
+                "source": "Google Sheets RSS bridge",
+                "sources": ["Google Sheets RSS bridge"],
+                "sampleType": "rss-sheet",
+                "updatedAt": now.isoformat(timespec="seconds"),
+                "scannedPosts": 0,
+                "hashtags": [],
+                "message": f"Google Sheets telemetry is unavailable: {exc}",
+            }
+        with SOCIAL_CACHE_LOCK:
+            SOCIAL_CACHE["payload"] = result
+            SOCIAL_CACHE["expires_at"] = now.timestamp() + (120 if result["available"] else 30)
+        return result
+
     fetched_posts = []
     failed_sources = []
     with ThreadPoolExecutor(max_workers=len(SOCIAL_FEEDS)) as executor:
@@ -314,6 +337,57 @@ def fetch_social_hashtag_trends():
         SOCIAL_CACHE["payload"] = result
         SOCIAL_CACHE["expires_at"] = now.timestamp() + (120 if result["available"] else 30)
     return result
+
+
+def fetch_sheet_social_hashtag_trends(web_app_url):
+    request = Request(
+        web_app_url,
+        headers={"Accept": "application/json", "User-Agent": "KUVHURA-Observatory/1.0"},
+    )
+    with urlopen(request, timeout=10) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+
+    if not isinstance(payload, dict) or not isinstance(payload.get("rows"), list):
+        raise ValueError("Google Apps Script returned an invalid telemetry response")
+
+    trends = []
+    for row in payload["rows"]:
+        if not isinstance(row, list) or len(row) < 5:
+            raise ValueError("Google Sheets contains a malformed telemetry row")
+        timestamp, hashtag, mentions, velocity, polarization = row[:5]
+        if not isinstance(hashtag, str) or not hashtag.strip():
+            raise ValueError("Google Sheets contains a telemetry row without a hashtag")
+        try:
+            mentions = int(float(mentions))
+            velocity = float(velocity)
+            polarization = float(polarization)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("Google Sheets contains non-numeric telemetry metrics") from exc
+
+        trends.append({
+            "tag": hashtag.strip(),
+            "mentions": mentions,
+            "latestMentions": mentions,
+            "earlierMentions": 0,
+            "changePct": None,
+            "trajectory": "estimated",
+            "narrativeVelocity": velocity,
+            "polarizationIndex": polarization,
+            "timestamp": timestamp,
+        })
+
+    trends.sort(key=lambda item: item["mentions"], reverse=True)
+    updated_at = payload.get("updatedAt") or (trends[0]["timestamp"] if trends else None)
+    return {
+        "available": bool(trends),
+        "source": "Google Sheets RSS bridge",
+        "sources": ["Google Sheets RSS bridge"],
+        "sampleType": "rss-sheet",
+        "updatedAt": updated_at,
+        "scannedPosts": 0,
+        "hashtags": trends[:8],
+        "message": None if trends else "The SocialTelemetry sheet does not contain a telemetry sample yet.",
+    }
 
 
 def respond_json(handler, status, payload):
