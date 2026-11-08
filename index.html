@@ -12,8 +12,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="KUVHURA">
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -427,8 +427,10 @@
       border: 1px solid var(--ai-purple);
       cursor: pointer;
       transition: all 0.15s;
+      font-family: inherit;
     }
     .ai-pill:hover { background: var(--ai-purple); color: white; }
+    .ai-pill:focus-visible { outline: 2px solid white; outline-offset: 2px; }
 
     .ai-chat-box {
       flex: 1;
@@ -559,7 +561,7 @@
       <a href="#corruption">Whistleblower Dossier</a>
       <a href="#oag">OAG Audit Series</a>
       <a href="#contact" class="nav-btn">Connect / Collaborate</a>
-      <button id="pwaInstallBtn" class="btn btn-green" style="display:none; font-size:11px; padding:6px 12px;" onclick="promptPwaInstall()">📲 Install App</button>
+      <button id="pwaInstallBtn" class="btn btn-green" style="font-size:11px; padding:6px 12px;" onclick="promptPwaInstall()">📲 Install App</button>
     </div>
   </nav>
 
@@ -699,7 +701,7 @@
                 <span id="lblE" style="color:#F87171;">8.8</span>
               </div>
               <div class="sr-desc">Central Bank arbitrage, artisanal gold cartels, lithium concessions</div>
-              <input type="range" id="rngE" min="1" max="10" step="0.1" value="8.8" oninput="runPredictiveLoop()">
+              <input type="range" id="rngE" min="1" max="10" step="0.1" value="8.8" oninput="updateScenarioFromSliders()">
             </div>
 
             <div class="slider-row">
@@ -708,7 +710,7 @@
                 <span id="lblPr" style="color:var(--zim-gold);">7.6</span>
               </div>
               <div class="sr-desc">Pfumvudza inputs, traditional chief incentives, civil service USD allowances</div>
-              <input type="range" id="rngPr" min="1" max="10" step="0.1" value="7.6" oninput="runPredictiveLoop()">
+              <input type="range" id="rngPr" min="1" max="10" step="0.1" value="7.6" oninput="updateScenarioFromSliders()">
             </div>
 
             <div class="slider-row">
@@ -717,7 +719,7 @@
                 <span id="lblCL" style="color:#F87171;">8.9</span>
               </div>
               <div class="sr-desc">Fuel, vehicles, paramilitary deployments, judicial/bail detention costs</div>
-              <input type="range" id="rngCL" min="1" max="10" step="0.1" value="8.9" oninput="runPredictiveLoop()">
+              <input type="range" id="rngCL" min="1" max="10" step="0.1" value="8.9" oninput="updateScenarioFromSliders()">
             </div>
 
             <div class="slider-row">
@@ -726,7 +728,7 @@
                 <span id="lblAL" style="color:#4ADE80;">2.8</span>
               </div>
               <div class="sr-desc">Survival independent of council stands, state licenses, or food aid</div>
-              <input type="range" id="rngAL" min="1" max="10" step="0.1" value="2.8" oninput="runPredictiveLoop()">
+              <input type="range" id="rngAL" min="1" max="10" step="0.1" value="2.8" oninput="updateScenarioFromSliders()">
             </div>
 
             <div class="slider-row">
@@ -735,7 +737,7 @@
                 <span id="lblDB" style="color:#38BDF8;">6.8</span>
               </div>
               <div class="sr-desc">Informal cash remittances (Mukuru, Western Union, cross-border haulers)</div>
-              <input type="range" id="rngDB" min="1" max="10" step="0.1" value="6.8" oninput="runPredictiveLoop()">
+              <input type="range" id="rngDB" min="1" max="10" step="0.1" value="6.8" oninput="updateScenarioFromSliders()">
             </div>
           </div>
         </div>
@@ -807,7 +809,7 @@
             <span class="badge badge-ai" id="aiModeBadge">Empirical Reasoning Engine</span>
           </div>
           <div style="margin-bottom: 8px;">
-            <input type="password" id="geminiApiKey" placeholder="🔑 Paste Gemini API Key here for cloud LLM..." style="font-size:10.5px; padding:6px 10px; background:#070B14; border:1.5px solid var(--ai-purple); color:white; width:100%; border-radius:6px;" oninput="if(this.value.trim().length > 10) { document.getElementById('aiModeBadge').innerText='Gemini Cloud LLM Connected'; document.getElementById('aiModeBadge').className='badge badge-live'; }" />
+            <input type="password" id="geminiApiKey" placeholder="🔑 Paste Gemini API Key here for cloud LLM..." style="font-size:10.5px; padding:6px 10px; background:#070B14; border:1.5px solid var(--ai-purple); color:white; width:100%; border-radius:6px;" oninput="updateGeminiKeyStatus(this)" autocomplete="off" />
           </div>
 
           <!-- SITREP Feed -->
@@ -823,11 +825,11 @@
 
           <!-- Prompts -->
           <div class="ai-prompts-bar">
-            <div class="ai-pill" onclick="askAIPrompt('SOLUTIONS')">🎯 What Should Be Done?</div>
-            <div class="ai-pill" onclick="askAIPrompt('CHOKE_POINT')">🔍 Primary Choke Point?</div>
-            <div class="ai-pill" onclick="askAIPrompt('RURAL_CAPTIVITY')">🌾 Why Rural Inaction?</div>
-            <div class="ai-pill" onclick="askAIPrompt('DIASPORA_PARADOX')">💸 Diaspora Paradox?</div>
-            <div class="ai-pill" onclick="askAIPrompt('TRIGGER_RUPTURE')">💥 How to Break Deadlock?</div>
+            <button type="button" class="ai-pill" onclick="askAIPrompt('SOLUTIONS')">🎯 What Should Be Done?</button>
+            <button type="button" class="ai-pill" onclick="askAIPrompt('CHOKE_POINT')">🔍 Primary Choke Point?</button>
+            <button type="button" class="ai-pill" onclick="askAIPrompt('RURAL_CAPTIVITY')">🌾 Why Rural Inaction?</button>
+            <button type="button" class="ai-pill" onclick="askAIPrompt('DIASPORA_PARADOX')">💸 Diaspora Paradox?</button>
+            <button type="button" class="ai-pill" onclick="askAIPrompt('TRIGGER_RUPTURE')">💥 How to Break Deadlock?</button>
           </div>
 
           <!-- Chat Conversation Log -->
@@ -936,7 +938,7 @@
 
         <div style="background: #070B14; border: 1px solid var(--border-panel); border-radius: 10px; padding: 10px; text-align: center; position: relative;">
           <!-- Interactive 3D Canvas -->
-          <canvas id="topography3DCanvas" width="340" height="220" style="width: 100%; height: 220px; border-radius: 6px; background: radial-gradient(circle at center, #0F172A 0%, #070B14 100%); cursor: grab;"></canvas>
+          <canvas id="topography3DCanvas" width="340" height="220" aria-label="Interactive map of resource extraction nodes. Click a node to inspect it and drag to rotate." style="width: 100%; height: 220px; border-radius: 6px; background: radial-gradient(circle at center, #0F172A 0%, #070B14 100%); cursor: grab; touch-action: none;"></canvas>
           <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">
             Click & drag to rotate 3D extraction topography. Click nodes to inspect.
           </div>
@@ -1406,7 +1408,8 @@
               <label style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Message / Inquiry *</label>
               <textarea id="cMsg" rows="3" required placeholder="Describe your inquiry or project scope..." style="margin-top:3px;"></textarea>
             </div>
-            <button type="submit" class="btn btn-gold" style="width:100%; justify-content:center;">Send Message to Privilege</button>
+            <button type="submit" class="btn btn-gold" style="width:100%; justify-content:center;">Open Email Draft</button>
+            <p id="contactFeedback" aria-live="polite" style="font-size:11px; color:var(--text-muted); margin-top:8px;">Your email app will open with a draft; this site does not send email directly.</p>
           </form>
         </div>
 
@@ -1449,14 +1452,14 @@
   </div>
 
   <!-- REPORT CORRUPTION MODAL POPUP -->
-  <div id="corModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(7,11,20,0.85); z-index:9999; justify-content:center; align-items:center;">
+  <div id="corModal" role="dialog" aria-modal="true" aria-labelledby="corModalTitle" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(7,11,20,0.85); z-index:9999; justify-content:center; align-items:center;">
     <div style="background:#0F172A; border:1px solid var(--border-panel); border-radius:12px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto; padding:24px; border-top:5px solid var(--zim-red);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border-soft); padding-bottom:8px;">
-        <h3 style="font-size:15px; font-weight:800; color:#F87171;">🚨 Anonymous Empirical Corruption Reporting Dossier</h3>
-        <span style="font-size:22px; font-weight:bold; cursor:pointer; color:var(--text-muted);" onclick="closeReportModal()">&times;</span>
+        <h3 id="corModalTitle" style="font-size:15px; font-weight:800; color:#F87171;">🚨 Community Incident Reporting Dossier</h3>
+        <button type="button" class="btn btn-outline" aria-label="Close report form" onclick="closeReportModal()">&times;</button>
       </div>
       <p style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
-        All submissions are client-side encrypted and mapped directly into the Realized Praxis Denominator ($P+I+C$) and Regime Durability Index.
+        Reports are not encrypted by this page. Depending on the hosting environment, they may be sent to the observatory backend or saved only in this browser. Do not include names or details that could identify or endanger anyone.
       </p>
 
       <form id="corForm" onsubmit="submitCorruptionReport(event)">
@@ -1535,6 +1538,7 @@
     ];
 
     let chartInstance = null;
+    let importedSurveyPraxis = null;
 
     function calcDurability(e, pr, cl, al, db) {
       const num = e * pr * cl;
@@ -1546,6 +1550,16 @@
       const num = r * a;
       const den = p + i + c;
       return { num, den, praxis: den > 0 ? (num / den) : 0 };
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char]);
     }
 
     function runPredictiveLoop() {
@@ -1579,7 +1593,8 @@
       const coupledC = Math.min(10, cl * 0.98);
 
       const pRes = calcPraxis(coupledR, coupledA, coupledP, coupledI, coupledC);
-      document.getElementById('heroPraxis').innerText = pRes.praxis.toFixed(2);
+      const displayedPraxis = importedSurveyPraxis === null ? pRes.praxis : importedSurveyPraxis;
+      document.getElementById('heroPraxis').innerText = displayedPraxis.toFixed(2);
 
       const phiStatus = document.getElementById('heroPhiStatus');
       const phiDesc = document.getElementById('phiDesc');
@@ -1598,9 +1613,26 @@
         phiDesc.innerText = "Livelihood autonomy has outpaced patronage budgets. High probability of spontaneous non-compliance.";
       }
 
-      updateTrendChart(res.phi, pRes.praxis);
+      updateTrendChart(res.phi, displayedPraxis);
       updateLeadershipMatrix(res.phi);
-      generateAutonomousAISitrep(e, pr, cl, al, db, res.phi, pRes.praxis);
+      generateAutonomousAISitrep(e, pr, cl, al, db, res.phi, displayedPraxis);
+    }
+
+    function updateScenarioFromSliders() {
+      importedSurveyPraxis = null;
+      runPredictiveLoop();
+    }
+
+    function updateGeminiKeyStatus(input) {
+      const badge = document.getElementById('aiModeBadge');
+      if (!badge) return;
+      if (input.value.trim().length > 10) {
+        badge.innerText = 'Gemini key entered · not verified';
+        badge.className = 'badge badge-ai';
+      } else {
+        badge.innerText = 'Empirical Reasoning Engine';
+        badge.className = 'badge badge-ai';
+      }
     }
 
     function generateAutonomousAISitrep(e, pr, cl, al, db, phi, praxis) {
@@ -1620,7 +1652,8 @@
       const box = document.getElementById('aiChatBox');
       const msg = document.createElement('div');
       msg.className = `chat-msg ${isAi ? 'msg-ai' : 'msg-user'}`;
-      msg.innerHTML = isAi ? `<strong>KUVHURA AI:</strong> ${text}` : text;
+      if (isAi) msg.innerHTML = `<strong>KUVHURA AI:</strong> ${text}`;
+      else msg.textContent = text;
       box.appendChild(msg);
       box.scrollTop = box.scrollHeight;
     }
@@ -1652,9 +1685,19 @@
         try {
           const answer = await queryGeminiCloud(q, apiKey);
           const lastMsg = document.getElementById('aiChatBox').lastChild;
-          lastMsg.innerHTML = `<strong>KUVHURA AI (Cloud):</strong> ${answer}`;
+          lastMsg.innerHTML = `<strong>KUVHURA AI (Cloud):</strong> ${escapeHtml(answer).replace(/\n/g, '<br>')}`;
+          const badge = document.getElementById('aiModeBadge');
+          if (badge) {
+            badge.innerText = 'Gemini Cloud active';
+            badge.className = 'badge badge-live';
+          }
         } catch (err) {
-          appendChatMessage("AI", `Cloud API Error: ${err.message}. Falling back to offline empirical reasoning engine.`, true);
+          const badge = document.getElementById('aiModeBadge');
+          if (badge) {
+            badge.innerText = 'Offline mode · Gemini unavailable';
+            badge.className = 'badge badge-ai';
+          }
+          appendChatMessage("AI", `Cloud API Error: ${escapeHtml(err.message)}. Falling back to offline empirical reasoning engine.`, true);
           answerOfflineInference(q);
         }
       } else {
@@ -1745,16 +1788,19 @@ The regime holds an Asymmetric Advantage of <strong>${( (e*pr*cl)/((al*db)+0.1) 
       const systemPrompt = `You are the lead political economy researcher and strategist for KUVHURA (The Zimbabwe Political Economy & Civic Resistance Observatory).
 Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10, Phi=${phi}, Praxis=${praxis}. Provide rigorous, actionable answers.`;
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
       const payload = { contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nUser Question: ${prompt}` }] }] };
 
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error("Gemini API error");
       const data = await res.json();
-      return data.candidates[0].content.parts[0].text;
+      if (!res.ok) throw new Error(data.error?.message || `Gemini API returned HTTP ${res.status}`);
+      const answer = data.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
+      if (!answer) throw new Error('Gemini returned no answer for this request.');
+      return answer;
     }
 
     function applyShock(type) {
+      importedSurveyPraxis = null;
       if (type === 'MUTAPA_EXEMPTION') {
         document.getElementById('rngE').value = 9.8; document.getElementById('rngPr').value = 8.5; document.getElementById('rngCL').value = 9.2;
         appendChatMessage('AI', '🏛️ <strong>Mutapa/OAG Exemption Applied:</strong> Parastatals exempted from public procurement oversight. Elite Rent Extraction (E) elevated to <strong>9.8</strong>; Power Asymmetry pushed to <strong>9.6</strong>.', true);
@@ -1798,6 +1844,10 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
     }
 
     function initChart() {
+      if (typeof Chart === 'undefined') {
+        console.warn('Chart.js is unavailable; the live calculations remain usable without the chart.');
+        return;
+      }
       const ctx = document.getElementById('durabilityChart').getContext('2d');
       chartInstance = new Chart(ctx, {
         type: 'line',
@@ -1848,7 +1898,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         const backendData = await res.json();
         if (Array.isArray(backendData) && backendData.length) {
           corruptionCases = backendData;
-          filteredCorruptionCases = [...backendData];
+          filteredCorruptionCases = getVisibleCorruptionCases();
           renderCorruptionTable();
           return;
         }
@@ -1961,7 +2011,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
           <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 10px; border-radius:8px; background:rgba(15,23,42,0.8); border:1px solid ${color};">
             <div>
               <div style="font-size:11px; color:${color}; font-weight:800; text-transform:uppercase;">${riskLabel}</div>
-              <div style="font-size:12px; color:white; font-weight:700;">${locality}</div>
+              <div style="font-size:12px; color:white; font-weight:700;">${escapeHtml(locality)}</div>
             </div>
             <div style="font-size:12px; color:#F8FAFC; font-weight:900;">$${Math.round(score).toLocaleString()}</div>
           </div>
@@ -1976,25 +2026,27 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
     function renderCorruptionTable() {
       const tbody = document.getElementById('corruptionTableBody');
       if (!tbody) return;
-      const sourceFeed = mergeBackendCorruptionFeed();
-      const activeCases = filteredCorruptionCases.length ? filteredCorruptionCases : sourceFeed;
+      const activeCases = filteredCorruptionCases;
       tbody.innerHTML = '';
       let totalVal = 0;
+      if (!activeCases.length) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-muted);">No reports match the selected filters.</td></tr>';
+      }
       activeCases.forEach(c => {
         totalVal += Number(c.amount) || 0;
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${c.id}</strong></td>
-          <td>${c.period}</td>
-          <td>${c.locality}</td>
-          <td><strong>${c.entity}</strong></td>
-          <td><span style="font-size:9.5px; padding:2px 6px; border-radius:4px; background:rgba(212,175,55,0.2); color:var(--zim-gold);">${c.category}</span></td>
-          <td style="color:#F87171; font-weight:700;">${c.typology}</td>
-          <td style="font-size:10.5px; max-width:240px;">${c.narrative}</td>
-          <td style="font-size:10px; color:var(--text-muted);">${c.evidence}</td>
+          <td><strong>${escapeHtml(c.id)}</strong></td>
+          <td>${escapeHtml(c.period)}</td>
+          <td>${escapeHtml(c.locality)}</td>
+          <td><strong>${escapeHtml(c.entity)}</strong></td>
+          <td><span style="font-size:9.5px; padding:2px 6px; border-radius:4px; background:rgba(212,175,55,0.2); color:var(--zim-gold);">${escapeHtml(c.category)}</span></td>
+          <td style="color:#F87171; font-weight:700;">${escapeHtml(c.typology)}</td>
+          <td style="font-size:10.5px; max-width:240px;">${escapeHtml(c.narrative)}</td>
+          <td style="font-size:10px; color:var(--text-muted);">${escapeHtml(c.evidence)}</td>
           <td style="font-weight:900; text-align:right; color:#F87171;">$${(Number(c.amount) || 0).toLocaleString()}</td>
-          <td><span style="color:#4ADE80; font-weight:700;">${c.praxisLink}</span></td>
-          <td><span style="font-size:9.5px; padding:2px 6px; border-radius:10px; background:rgba(34,197,94,0.15); color:#4ADE80;">${c.status}</span></td>
+          <td><span style="color:#4ADE80; font-weight:700;">${escapeHtml(c.praxisLink)}</span></td>
+          <td><span style="font-size:9.5px; padding:2px 6px; border-radius:10px; background:rgba(34,197,94,0.15); color:#4ADE80;">${escapeHtml(c.status)}</span></td>
         `;
         tbody.appendChild(tr);
       });
@@ -2003,30 +2055,51 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       renderHighRiskAreas();
     }
 
+    function getVisibleCorruptionCases() {
+      const query = document.getElementById('corSearch')?.value.trim().toLowerCase() || '';
+      return mergeBackendCorruptionFeed().filter(c => {
+        const categoryMatches = activeCorCategory === 'ALL' || c.category === activeCorCategory;
+        const searchable = [c.id, c.period, c.locality, c.entity, c.narrative, c.typology]
+          .map(value => String(value || '').toLowerCase());
+        return categoryMatches && searchable.some(value => value.includes(query));
+      });
+    }
+
     function filterCorruptionCategory(cat, ev) {
       activeCorCategory = cat;
       document.querySelectorAll('#corruption .filter-btn').forEach(b => b.classList.remove('active'));
       if (ev) ev.target.classList.add('active');
-      const sourceFeed = mergeBackendCorruptionFeed();
-      filteredCorruptionCases = (cat === 'ALL') ? [...sourceFeed] : sourceFeed.filter(c => c.category === cat);
+      filteredCorruptionCases = getVisibleCorruptionCases();
       renderCorruptionTable();
     }
 
     function searchCorruptionTable() {
-      const q = document.getElementById('corSearch').value.toLowerCase();
-      const sourceFeed = mergeBackendCorruptionFeed();
-      filteredCorruptionCases = sourceFeed.filter(c => {
-        const matchCat = activeCorCategory === 'ALL' || c.category === activeCorCategory;
-        const matchText = c.locality.toLowerCase().includes(q) || c.entity.toLowerCase().includes(q) || c.narrative.toLowerCase().includes(q) || c.typology.toLowerCase().includes(q);
-        return matchCat && matchText;
-      });
+      filteredCorruptionCases = getVisibleCorruptionCases();
       renderCorruptionTable();
     }
 
-    function openReportModal() { document.getElementById('corModal').style.display = 'flex'; }
-    function closeReportModal() { document.getElementById('corModal').style.display = 'none'; }
+    let reportModalReturnFocus = null;
+    function openReportModal() {
+      const modal = document.getElementById('corModal');
+      reportModalReturnFocus = document.activeElement;
+      modal.style.display = 'flex';
+      document.getElementById('mLocality').focus();
+    }
+    function closeReportModal() {
+      document.getElementById('corModal').style.display = 'none';
+      if (reportModalReturnFocus?.focus) reportModalReturnFocus.focus();
+    }
 
-    function submitCorruptionReport(e) {
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && document.getElementById('corModal').style.display === 'flex') {
+        closeReportModal();
+      }
+    });
+    document.getElementById('corModal').addEventListener('click', event => {
+      if (event.target === event.currentTarget) closeReportModal();
+    });
+
+    async function submitCorruptionReport(e) {
       e.preventDefault();
       const loc = document.getElementById('mLocality').value.trim();
       const cat = document.getElementById('mCategory').value;
@@ -2041,50 +2114,64 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       else if (cat === 'Police' || cat === 'Judicial' || typ.toLowerCase().includes("bail")) paramLink = "Social Control (C)";
       else if (cat === 'Syndicate') paramLink = "Rent Extraction (E)";
 
-      const newId = `COR-REP-${String(corruptionCases.length + 1).padStart(3, '0')}`;
+      const newId = `COR-REP-${Date.now()}`;
       const newRecord = {
         id: newId, period: "Live (2026)", locality: loc, entity: ent, category: cat,
         typology: typ, narrative: nar, evidence: evi, amount: amt, praxisLink: paramLink, status: "Submitted"
       };
-      corruptionCases.unshift(newRecord);
 
       const backendKey = 'kuvhura_backend_corruption_log';
-      const backendEntries = JSON.parse(localStorage.getItem(backendKey) || '[]');
-      backendEntries.unshift({
-        id: newId,
-        period: newRecord.period,
-        locality: loc,
-        entity: ent,
-        category: cat,
-        typology: typ,
-        narrative: nar,
-        evidence: evi,
-        amount: amt,
-        praxisLink: paramLink,
-        status: 'Submitted'
-      });
-      localStorage.setItem(backendKey, JSON.stringify(backendEntries.slice(0, 50)));
+      let localSaved = false;
+      let backendSaved = false;
+      let localError = null;
+      let backendError = null;
 
-      if (typeof fetch === 'function') {
-        fetch('/api/reports', {
+      try {
+        const backendEntries = JSON.parse(localStorage.getItem(backendKey) || '[]');
+        if (!Array.isArray(backendEntries)) throw new Error('Stored report data is invalid.');
+        backendEntries.unshift(newRecord);
+        localStorage.setItem(backendKey, JSON.stringify(backendEntries.slice(0, 50)));
+        localSaved = true;
+      } catch (error) {
+        localError = error;
+        console.warn('Could not save report in this browser:', error);
+      }
+
+      try {
+        const response = await fetch('/api/reports', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newRecord)
-        }).catch(() => {});
+        });
+        if (!response.ok) throw new Error(`Backend returned HTTP ${response.status}`);
+        backendSaved = true;
+      } catch (error) {
+        backendError = error;
+        console.warn('Could not submit report to backend:', error);
       }
 
+      if (!localSaved && !backendSaved) {
+        alert(`The report could not be saved.\n\nBrowser storage: ${localError?.message || 'unavailable'}\nBackend: ${backendError?.message || 'unavailable'}`);
+        return;
+      }
+
+      corruptionCases.unshift(newRecord);
       registerDataSource('whistleblower', 'live', 'Whistleblower Feed');
       registerDataSource('backend', 'live', 'Backend Sync');
       setDataSourcePills();
 
-      filteredCorruptionCases = [...mergeBackendCorruptionFeed()];
+      filteredCorruptionCases = getVisibleCorruptionCases();
       renderCorruptionTable();
       closeReportModal();
       document.getElementById('corForm').reset();
-      alert(`Report ${newId} logged successfully! Incident mapped into parameter: ${paramLink}.`);
-      appendChatMessage("AI", `🚨 <strong>New Whistleblower Incident Documented:</strong> [${newId}] ${typ} in ${loc} by ${ent}. Extorted: $${amt} USD. Parameter <strong>${paramLink}</strong> inflated.`, true);
-      loadReportsFromBackend();
-      loadRiskFromBackend();
+      alert(backendSaved
+        ? `Report ${newId} submitted to the observatory backend${localSaved ? ' and saved in this browser' : ''}. Incident mapped to ${paramLink}.`
+        : `Report ${newId} saved only in this browser. It will not be available on other devices because the observatory backend is unavailable. Incident mapped to ${paramLink}.`);
+      appendChatMessage("AI", `🚨 <strong>New Whistleblower Incident Documented:</strong> [${escapeHtml(newId)}] ${escapeHtml(typ)} in ${escapeHtml(loc)} by ${escapeHtml(ent)}. Extorted: $${amt} USD. Parameter <strong>${escapeHtml(paramLink)}</strong> inflated.`, true);
+      if (backendSaved) {
+        await loadReportsFromBackend();
+        await loadRiskFromBackend();
+      }
     }
 
     function exportCorruptionCSV() {
@@ -2188,7 +2275,10 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
           throw new Error(`HTTP ${response.status}: Sheet is private. Ensure Google Sheet sharing is set to 'Anyone with the link can view'.`);
         }
         const csvText = await response.text();
-        processLiveSurveyCSV(csvText, isAuto);
+        const importResult = processLiveSurveyCSV(csvText, isAuto);
+        if (!importResult.validPraxisRows && !importResult.newCorruptionCount) {
+          throw new Error("The sheet did not contain supported survey responses or corruption reports.");
+        }
 
         if (badgeEl) {
           badgeEl.className = "badge badge-live";
@@ -2213,49 +2303,87 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       }
     }
 
-    function processLiveSurveyCSV(csvText, isSilent = false) {
-      const lines = csvText.trim().split(/\r?\n/);
-      if (lines.length < 2) return;
+    function parseCSVRecords(csvText) {
+      const records = [];
+      let row = [];
+      let field = '';
+      let inQuotes = false;
 
-      // Simple CSV parser supporting quoted strings
-      function parseCSVLine(line) {
-        let values = [];
-        let cur = '';
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-          if (char === '"' && (i === 0 || line[i-1] !== '\\')) {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            values.push(cur.trim().replace(/^"|"$/g, ''));
-            cur = '';
+      for (let i = 0; i < csvText.length; i++) {
+        const char = csvText[i];
+        if (char === '"') {
+          if (inQuotes && csvText[i + 1] === '"') {
+            field += '"';
+            i++;
           } else {
-            cur += char;
+            inQuotes = !inQuotes;
           }
+        } else if (char === ',' && !inQuotes) {
+          row.push(field.trim());
+          field = '';
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+          if (char === '\r' && csvText[i + 1] === '\n') i++;
+          row.push(field.trim());
+          if (row.some(value => value !== '')) records.push(row);
+          row = [];
+          field = '';
+        } else {
+          field += char;
         }
-        values.push(cur.trim().replace(/^"|"$/g, ''));
-        return values;
       }
 
-      const headers = parseCSVLine(lines[0]);
+      if (inQuotes) throw new Error('CSV contains an unclosed quoted field.');
+      row.push(field.trim());
+      if (row.some(value => value !== '')) records.push(row);
+      return records;
+    }
+
+    function processLiveSurveyCSV(csvText, isSilent = false) {
+      const records = parseCSVRecords(csvText);
+      if (records.length < 2) return { validPraxisRows: 0, newCorruptionCount: 0 };
+
+      const headers = records[0].map(header => header.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      const datasetFields = [
+        ['e', 'rngE', ['rentextractione', 'e']],
+        ['pr', 'rngPr', ['patronagepr', 'pr']],
+        ['cl', 'rngCL', ['coercioncl', 'cl']],
+        ['al', 'rngAL', ['autonomyal', 'al']],
+        ['db', 'rngDB', ['diasporadb', 'db']]
+      ];
+      const datasetColumns = datasetFields.map(([, , names]) => headers.findIndex(header => names.includes(header)));
+
+      if (datasetColumns.every(index => index >= 0)) {
+        const totals = [0, 0, 0, 0, 0];
+        let validRows = 0;
+        records.slice(1).forEach(row => {
+          const values = datasetColumns.map(index => Number(row[index]));
+          if (values.every(value => Number.isFinite(value) && value >= 1 && value <= 10)) {
+            values.forEach((value, index) => { totals[index] += value; });
+            validRows++;
+          }
+        });
+        if (validRows) {
+          datasetFields.forEach(([, elementId], index) => {
+            document.getElementById(elementId).value = (totals[index] / validRows).toFixed(1);
+          });
+          importedSurveyPraxis = null;
+          runPredictiveLoop();
+          return { validPraxisRows: validRows, newCorruptionCount: 0, type: 'scenario' };
+        }
+      }
+
       let totalR = 0, totalA = 0, totalP = 0, totalI = 0, totalC = 0;
       let validPraxisRows = 0;
       let newCorruptionCount = 0;
 
-      for (let r = 1; r < lines.length; r++) {
-        const row = parseCSVLine(lines[r]);
-        if (row.length < 5) continue;
-
-        let rowNums = [];
-        for (let c = 0; c < row.length; c++) {
-          const val = parseFloat(row[c]);
-          if (!isNaN(val) && val >= 1 && val <= 5) {
-            rowNums.push(val);
-          }
-        }
+      for (let r = 1; r < records.length; r++) {
+        const row = records[r];
+        const rowNums = row
+          .map(value => value.trim() === '' ? NaN : Number(value))
+          .filter(value => Number.isFinite(value) && value >= 1 && value <= 5);
 
         // Check if row has enough Likert responses
-        if (rowNums.length >= 10) {
+        if (rowNums.length >= 20) {
           // Chunk into dimensions if standard 20 items: 4 each
           const rAvg = (rowNums.slice(0, 4).reduce((a,b)=>a+b, 0) / 4) * 2; // Scale to 1-10
           const aAvg = (rowNums.slice(4, 8).reduce((a,b)=>a+b, 0) / 4) * 2;
@@ -2273,7 +2401,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
         // Check for whistleblower corruption report columns in row
         // Usually towards the end of the form
-        if (row.length >= 25 && row[21] && row[21].trim().length > 2 && !row[21].includes("Prefer Not")) {
+        if (row.length >= 27 && row[21] && row[21].trim().length > 2 && !row[21].includes("Prefer Not")) {
           const repCategory = row[21] || "Municipal";
           const repAgency = row[22] || "Unspecified Official";
           const repTypology = row[23] || "Extortion";
@@ -2281,7 +2409,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
           const repAmount = parseFloat(row[25]) || 50;
           const repEvidence = row[26] || "Witness Statement";
 
-          const repId = `LIVE-GF-${r}`;
+          const repId = `LIVE-GF-${r}-${row[21].slice(0, 12)}`;
           if (!corruptionCases.some(c => c.id === repId)) {
             corruptionCases.unshift({
               id: repId, period: "Live (Form)", locality: "Field Submission",
@@ -2303,29 +2431,55 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         const meanC = totalC / validPraxisRows;
 
         const livePraxisRes = calcPraxis(meanR, meanA, meanP, meanI, meanC);
-        document.getElementById('heroPraxis').innerText = livePraxisRes.praxis.toFixed(2);
 
         // Link to sliders proportionally
         document.getElementById('rngAL').value = Math.min(10, Math.max(1, meanA * 0.9)).toFixed(1);
         document.getElementById('lblAL').innerText = document.getElementById('rngAL').value;
 
-        // Re-run the loop with fresh cloud metrics
+        importedSurveyPraxis = livePraxisRes.praxis;
         runPredictiveLoop();
         renderCorruptionTable();
 
         if (!isSilent) {
-          alert(`Live Cloud Telemetry Synced!\n\n• Responses Processed: ${validPraxisRows} participants\n• Realized Praxis Computed: ${livePraxisRes.praxis.toFixed(2)}\n• Whistleblower Reports Imported: ${newCorruptionCount}\n\nThe dashboard is now auto-polling for new submissions every 45 seconds.`);
+          alert(`Live Cloud Telemetry Synced!\n\n• Responses Processed: ${validPraxisRows} participants\n• Survey Praxis Yield: ${livePraxisRes.praxis.toFixed(2)}\n• Whistleblower Reports Imported: ${newCorruptionCount}\n\nThe dashboard is now auto-polling for new submissions every 45 seconds.`);
           appendChatMessage("AI", `📡 <strong>Cloud Telemetry Ingested:</strong> Synchronized with ${validPraxisRows} live survey submissions from Google Forms. Ground Praxis Yield recalibrated to <strong>${livePraxisRes.praxis.toFixed(2)}</strong>.`, true);
         }
       }
+
+      if (newCorruptionCount) {
+        filteredCorruptionCases = [...mergeBackendCorruptionFeed()];
+        renderCorruptionTable();
+      }
+      if (!isSilent && !validPraxisRows && newCorruptionCount) {
+        alert(`Live Cloud Telemetry Synced!\n\n• Whistleblower Reports Imported: ${newCorruptionCount}`);
+      }
+      return { validPraxisRows, newCorruptionCount, type: 'survey' };
     }
 
-    function loadLocalCSV(event) {
-      const file = event.target.files[0];
+    async function loadLocalCSV(event) {
+      const input = event.target;
+      const file = input.files?.[0];
       if (!file) return;
-      document.getElementById('deckBadge').className = "badge badge-live";
-      document.getElementById('deckBadge').innerText = `Loaded Field Data: ${file.name}`;
-      alert(`Loaded field dataset from ${file.name}. Dynamic AI telemetry updated.`);
+      const badge = document.getElementById('deckBadge');
+      try {
+        const result = processLiveSurveyCSV(await file.text(), true);
+        if (!result.validPraxisRows && !result.newCorruptionCount) {
+          throw new Error('No supported survey responses or scenario dataset were found in this CSV.');
+        }
+        if (badge) {
+          badge.className = 'badge badge-live';
+          badge.innerText = `Loaded Field Data: ${file.name}`;
+        }
+        alert(`Loaded ${file.name}.\n\n• Survey/scenario rows applied: ${result.validPraxisRows}\n• Reports imported: ${result.newCorruptionCount}`);
+      } catch (error) {
+        if (badge) {
+          badge.className = 'badge badge-ai';
+          badge.innerText = 'CSV import failed';
+        }
+        alert(`Could not load ${file.name}: ${error.message}`);
+      } finally {
+        input.value = '';
+      }
     }
 
     function resetToLiveBaseline() { applyShock('STATUS_QUO'); }
@@ -2344,13 +2498,16 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
     function handleMessageSubmit(e) {
       e.preventDefault();
-      const name = document.getElementById('cName').value;
-      const email = document.getElementById('cEmail').value;
+      const name = document.getElementById('cName').value.trim();
+      const email = document.getElementById('cEmail').value.trim();
       const purpose = document.getElementById('cPurpose').value;
-      const msg = document.getElementById('cMsg').value;
+      const msg = document.getElementById('cMsg').value.trim();
       const subject = encodeURIComponent(`[KUVHURA Inquiry] ${purpose} from ${name}`);
       const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\nCategory: ${purpose}\n\nMessage:\n${msg}`);
-      alert(`Thank you, ${name}! Your message is prepared. Click OK to open your email client.`);
+      const feedback = document.getElementById('contactFeedback');
+      if (feedback) {
+        feedback.textContent = 'Opening an email draft. If your email app does not open, email privilege.kandira@gmail.com directly.';
+      }
       window.location.href = `mailto:privilege.kandira@gmail.com?subject=${subject}&body=${body}`;
     }
 
@@ -2664,6 +2821,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
     async function fetchGlobalMacroTelemetry(isAuto = false) {
       const badgeEl = document.getElementById('deckBadge');
+      importedSurveyPraxis = null;
       if (badgeEl && !isAuto) {
         badgeEl.className = "badge badge-live";
         badgeEl.innerText = "Ingesting World Bank & Commodity Feeds...";
@@ -2675,30 +2833,28 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       try {
         // GoldPrice / Free Financial Commodity Endpoint
         const goldRes = await fetch('https://api.metals.live/v1/spot/gold');
-        if (goldRes.ok) {
-          const goldData = await goldRes.json();
-          const goldPrice = parseFloat(goldData[0]?.price || goldData.price || 0);
-          if (goldPrice > 0) {
-            // Baseline: $2,000/oz = 8.0, $2,600/oz = 9.2 (Rent Monopoly ceiling)
-            const scaledE = Math.min(10, Math.max(3, (goldPrice / 2500) * 8.8)).toFixed(1);
-            document.getElementById('rngE').value = scaledE;
-            document.getElementById('lblE').innerText = scaledE;
-            logUpdates.push(`Gold Spot ($${goldPrice.toFixed(0)}/oz) recalibrated Rent Extraction (E = ${scaledE})`);
-          }
+        if (!goldRes.ok) throw new Error(`Gold feed returned HTTP ${goldRes.status}`);
+        const goldData = await goldRes.json();
+        const goldPrice = parseFloat(goldData[0]?.price || goldData.price || 0);
+        if (goldPrice > 0) {
+          // Baseline: $2,000/oz = 8.0, $2,600/oz = 9.2 (Rent Monopoly ceiling)
+          const scaledE = Math.min(10, Math.max(3, (goldPrice / 2500) * 8.8)).toFixed(1);
+          document.getElementById('rngE').value = scaledE;
+          document.getElementById('lblE').innerText = scaledE;
+          logUpdates.push(`Gold Spot ($${goldPrice.toFixed(0)}/oz) recalibrated Rent Extraction (E = ${scaledE})`);
         }
       } catch (err) {
         // Fallback secondary public market feed if primary is rate-limited
         try {
           const fxRes = await fetch('https://open.er-api.com/v6/latest/USD');
-          if (fxRes.ok) {
-            const fxData = await fxRes.json();
-            // If USD strength is high, FX arbitrage rents expand
-            const zarRate = fxData.rates?.ZAR || 18.0;
-            const fxStrain = Math.min(10, Math.max(4, (zarRate / 18.5) * 8.6)).toFixed(1);
-            document.getElementById('rngE').value = fxStrain;
-            document.getElementById('lblE').innerText = fxStrain;
-            logUpdates.push(`Regional FX arbitrage telemetry recalibrated Rent Extraction (E = ${fxStrain})`);
-          }
+          if (!fxRes.ok) throw new Error(`FX feed returned HTTP ${fxRes.status}`);
+          const fxData = await fxRes.json();
+          // If USD strength is high, FX arbitrage rents expand
+          const zarRate = fxData.rates?.ZAR || 18.0;
+          const fxStrain = Math.min(10, Math.max(4, (zarRate / 18.5) * 8.6)).toFixed(1);
+          document.getElementById('rngE').value = fxStrain;
+          document.getElementById('lblE').innerText = fxStrain;
+          logUpdates.push(`Regional FX arbitrage telemetry recalibrated Rent Extraction (E = ${fxStrain})`);
         } catch (e2) {
           console.log("Using baseline commodity rent calibration.");
         }
@@ -2709,20 +2865,19 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         // Indicator: Consumer Price Index (CPI) annual % for Zimbabwe
         const wbUrl = 'https://api.worldbank.org/v2/country/ZW/indicator/FP.CPI.TOTL.ZG?format=json';
         const wbRes = await fetch(wbUrl);
-        if (wbRes.ok) {
-          const wbData = await wbRes.json();
-          if (wbData[1] && wbData[1].length > 0) {
-            // Find most recent valid reporting year
-            const latestValid = wbData[1].find(item => item.value !== null);
-            if (latestValid) {
-              const inflationRate = parseFloat(latestValid.value);
-              const reportYear = latestValid.date;
-              // High inflation raises the patronage requirement cost (Pr)
-              const scaledPr = inflationRate > 30 ? "8.4" : "7.2";
-              document.getElementById('rngPr').value = scaledPr;
-              document.getElementById('lblPr').innerText = scaledPr;
-              logUpdates.push(`World Bank Data (${reportYear}): Inflation indexed Patronage Load (Pr = ${scaledPr})`);
-            }
+        if (!wbRes.ok) throw new Error(`World Bank feed returned HTTP ${wbRes.status}`);
+        const wbData = await wbRes.json();
+        if (wbData[1] && wbData[1].length > 0) {
+          // Find most recent valid reporting year
+          const latestValid = wbData[1].find(item => item.value !== null);
+          if (latestValid) {
+            const inflationRate = parseFloat(latestValid.value);
+            const reportYear = latestValid.date;
+            // High inflation raises the patronage requirement cost (Pr)
+            const scaledPr = inflationRate > 30 ? "8.4" : "7.2";
+            document.getElementById('rngPr').value = scaledPr;
+            document.getElementById('lblPr').innerText = scaledPr;
+            logUpdates.push(`World Bank Data (${reportYear}): Inflation indexed Patronage Load (Pr = ${scaledPr})`);
           }
         }
       } catch (wbErr) {
@@ -2732,7 +2887,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
       // 3. Recalculate Live Predictive Loop
       runPredictiveLoop();
 
-      if (badgeEl) {
+      if (badgeEl && logUpdates.length) {
         badgeEl.className = "badge badge-live";
         badgeEl.innerText = "● Multi-Source APIs Active (Commodity + World Bank + Survey)";
       }
@@ -2741,6 +2896,14 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         appendChatMessage("AI", `🌐 <strong>External Macro Feeds Ingested:</strong><br/>• ` + logUpdates.join('<br/>• '), true);
         if (!isAuto) {
           alert(`Multi-Source External Data Ingested:\n\n` + logUpdates.join('\n'));
+        }
+      } else {
+        if (badgeEl) {
+          badgeEl.className = 'badge badge-ai';
+          badgeEl.innerText = 'External feeds unavailable · using current values';
+        }
+        if (!isAuto) {
+          alert('No external macro feeds returned usable data. Current model values were left unchanged.');
         }
       }
 
@@ -2802,11 +2965,20 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
     }
 
     let deferredPrompt;
+    if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) {
+      const installBtn = document.getElementById('pwaInstallBtn');
+      if (installBtn) installBtn.style.display = 'none';
+    }
+
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
+    });
+
+    window.addEventListener('appinstalled', () => {
       const installBtn = document.getElementById('pwaInstallBtn');
-      if (installBtn) installBtn.style.display = 'inline-flex';
+      if (installBtn) installBtn.style.display = 'none';
+      deferredPrompt = null;
     });
 
     function promptPwaInstall() {
@@ -2819,6 +2991,8 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
           }
           deferredPrompt = null;
         });
+      } else {
+        alert('To install KUVHURA, open your browser menu and choose “Install app” or “Add to Home Screen”. If that option is unavailable, open this site in a supported browser over HTTPS.');
       }
     }
   
@@ -2864,6 +3038,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
     // 3D Interactive Topography Canvas Engine
     let canvas3D, ctx3D;
+    let canvas3DInitialized = false;
     let angle3D = 0;
     let selectedNodeType = 'MINING';
     let nodes3D = [
@@ -2878,7 +3053,8 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
     function init3DCanvas() {
       canvas3D = document.getElementById('topography3DCanvas');
-      if (!canvas3D) return;
+      if (!canvas3D || canvas3DInitialized) return;
+      canvas3DInitialized = true;
       
       // Ensure correct pixel dimensions with fallback
       const parentWidth = canvas3D.parentElement ? canvas3D.parentElement.clientWidth : 0;
@@ -2909,6 +3085,26 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
         angle3D += delta * 0.015;
         lastMouseX = e.touches[0].clientX;
         render3DScene();
+      }, { passive: true });
+
+      canvas3D.addEventListener('click', (e) => {
+        const bounds = canvas3D.getBoundingClientRect();
+        const x = (e.clientX - bounds.left) * (canvas3D.width / bounds.width);
+        const y = (e.clientY - bounds.top) * (canvas3D.height / bounds.height);
+        const cx = canvas3D.width / 2;
+        const cy = canvas3D.height / 2;
+        const nearest = nodes3D.map(node => {
+          const cosA = Math.cos(angle3D);
+          const sinA = Math.sin(angle3D);
+          const rotX = node.x * cosA - node.z * sinA;
+          const rotZ = node.x * sinA + node.z * cosA;
+          const screenX = cx + rotX;
+          const screenY = cy + node.y + (rotZ * 0.3);
+          return { node, distance: Math.hypot(x - screenX, y - screenY) };
+        }).sort((a, b) => a.distance - b.distance)[0];
+        if (nearest && nearest.distance <= nearest.node.radius * 1.4 + 8) {
+          select3DNode(nearest.node.type, nearest.node);
+        }
       });
 
       setInterval(() => {
@@ -2923,13 +3119,14 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
 
 
-    function select3DNode(type) {
+    function select3DNode(type, selectedNode = null) {
       selectedNodeType = type;
-      const node = nodes3D.find(n => n.type === type) || nodes3D[0];
+      const node = selectedNode || nodes3D.find(n => n.type === type) || nodes3D[0];
       const box = document.getElementById('nodeInfoBox');
       if (box) {
-        box.innerHTML = `<strong>Selected Category:</strong> ${node.name}<br/><strong>Telemetry Profile:</strong> ${node.desc}`;
+        box.innerHTML = `<strong>Selected Node:</strong> ${escapeHtml(node.name)}<br/><strong>Telemetry Profile:</strong> ${escapeHtml(node.desc)}`;
       }
+      render3DScene();
     }
 
     function render3DScene() {
@@ -2990,6 +3187,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
 
     function loadHistoricalBacktest(year) {
+      importedSurveyPraxis = null;
       if (year === 2008) {
         document.getElementById('rngE').value = 9.8;
         document.getElementById('rngPr').value = 9.5;

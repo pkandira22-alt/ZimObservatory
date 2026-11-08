@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "KUVHURA Observatory",
+  "short_name": "KUVHURA",
+  "description": "Political economy and civic resilience observatory for Zimbabwe.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#070B14",
+  "theme_color": "#072B13",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
