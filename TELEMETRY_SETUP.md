@@ -50,3 +50,27 @@ Forecasts are not automatically considered validated: the dashboard withholds st
 Set `GOOGLE_SHEETS_WEB_APP_URL` in the environment of the Node.js backend (`server.js`), using the same deployed URL. Restart the backend after setting it. The dashboard's social telemetry panel then loads from the sheet automatically; no sheet ID or link needs to be entered in the dashboard.
 
 For local development, set the variable in the shell before starting the server. Without it, the dashboard keeps using its existing direct Bluesky and Mastodon feeds.
+
+## 5. Stream reported extraction quantities to the map and model
+
+The repository does not currently contain a structured, dated mine-output feed. Its mining map pins are approximate location references, its mining-related social telemetry counts article mentions, and the gold forecast is a market price series; none of those is an extraction quantity. The map therefore starts empty rather than presenting estimates as live production. I checked the [ZIMSTAT mining search](https://zimstat.co.zw/?s=mining) and [MMCZ news](https://www.mmcz.co.zw/news): the public pages provide statistical releases and sector updates, but no machine-readable, mine-level live extraction feed was available. ZIMSTAT's Business Tendency Survey describes quarterly mining capacity-utilization and confidence indicators, not physical quantities. Use ZIMSTAT or Minerals Marketing Corporation publications, or company production reports, only at the cadence and detail actually published by those sources.
+
+To publish a source-attributed report, set `EXTRACTION_INGEST_TOKEN` in the Node.js backend environment and restart the server. A trusted reporter sends each new report to `POST /api/extraction-reports` with an `Authorization: Bearer <token>` header and JSON shaped like:
+
+```json
+{
+  "id": "source-report-id",
+  "siteId": "great-dyke",
+  "resource": "gold",
+  "quantity": 123.4,
+  "unit": "kg",
+  "period": "2026-Q3",
+  "reportedAt": "2026-10-15T00:00:00Z",
+  "source": "Publisher and report title",
+  "sourceUrl": "https://publisher.example/report"
+}
+```
+
+Use only `great-dyke` or `marange` for the currently mapped mining locations; reports for other locations are rejected until the map has a verified location reference. `quantity` and `unit` must reflect the cited source exactly. The API validates the source URL and attribution, then sends accepted reports over `GET /api/extraction-reports/stream` (Server-Sent Events). The map updates its markers and report list, while the Gemini prompt receives the latest reports with an instruction to treat them as unverified reported data. The offline assistant can also display those reports when asked about extraction. No values are synthesized when the feed is empty.
+
+The current Node service keeps extraction reports in memory (up to 500 records), so they are lost when it restarts. The reporter must retain its source data and replay it after restart, or a persistent store should be configured before production use. A live display reflects when a report is ingested; it does not mean the underlying mine output is measured continuously.

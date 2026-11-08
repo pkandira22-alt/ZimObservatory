@@ -149,6 +149,73 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
+const extractionSites = new Map([
+  ['great-dyke', 'Great Dyke corridor near Kwekwe, Midlands'],
+  ['marange', 'Marange / Chiadzwa area, Manicaland']
+]);
+const extractionReports = [];
+const extractionClients = new Set();
+const MAX_EXTRACTION_REPORTS = 500;
+
+function broadcastExtractionReport(report) {
+  const message = `event: report\ndata: ${JSON.stringify(report)}\n\n`;
+  for (const client of extractionClients) {
+    client.write(message);
+  }
+}
+
+function parseExtractionReport(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { error: 'A report object is required' };
+  }
+
+  const siteId = typeof payload.siteId === 'string' ? payload.siteId.trim() : '';
+  const resource = typeof payload.resource === 'string' ? payload.resource.trim() : '';
+  const unit = typeof payload.unit === 'string' ? payload.unit.trim() : '';
+  const period = typeof payload.period === 'string' ? payload.period.trim() : '';
+  const source = typeof payload.source === 'string' ? payload.source.trim() : '';
+  const sourceUrl = typeof payload.sourceUrl === 'string' ? payload.sourceUrl.trim() : '';
+  const quantity = Number(payload.quantity);
+  const reportedAt = payload.reportedAt ? new Date(payload.reportedAt) : null;
+  let parsedSourceUrl;
+
+  if (!extractionSites.has(siteId)) return { error: 'siteId must match a supported mining map location' };
+  if (!resource || resource.length > 80) return { error: 'resource is required and must be at most 80 characters' };
+  if (payload.quantity === null || payload.quantity === '' || !Number.isFinite(quantity) || quantity < 0) {
+    return { error: 'quantity must be a non-negative number' };
+  }
+  if (!unit || unit.length > 32) return { error: 'unit is required and must be at most 32 characters' };
+  if (!period || period.length > 80) return { error: 'period is required and must be at most 80 characters' };
+  if (!source || source.length > 160) return { error: 'source is required and must be at most 160 characters' };
+  try {
+    parsedSourceUrl = new URL(sourceUrl);
+  } catch {
+    return { error: 'sourceUrl must be an HTTP(S) URL' };
+  }
+  if (!['http:', 'https:'].includes(parsedSourceUrl.protocol)) {
+    return { error: 'sourceUrl must be an HTTP(S) URL' };
+  }
+  if (!reportedAt || Number.isNaN(reportedAt.getTime())) return { error: 'reportedAt must be a valid date' };
+
+  return {
+    report: {
+      id: typeof payload.id === 'string' && payload.id.trim()
+        ? payload.id.trim().slice(0, 120)
+        : `EX-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      siteId,
+      site: extractionSites.get(siteId),
+      resource,
+      quantity,
+      unit,
+      period,
+      source,
+      sourceUrl: parsedSourceUrl.href,
+      reportedAt: reportedAt.toISOString(),
+      receivedAt: new Date().toISOString()
+    }
+  };
+}
+
 // Social Feeds Cache
 let socialCache = {
   expiresAt: 0,
@@ -391,6 +458,56 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/reports', (req, res) => {
   res.json(reports);
+});
+
+app.get('/api/extraction-reports', (req, res) => {
+  res.json({
+    available: extractionReports.length > 0,
+    reports: extractionReports.slice(0, 100),
+    updatedAt: extractionReports[0]?.receivedAt || null
+  });
+});
+
+app.get('/api/extraction-reports/stream', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  res.flushHeaders();
+  res.write(`event: snapshot\ndata: ${JSON.stringify({
+    reports: extractionReports.slice(0, 100),
+    updatedAt: extractionReports[0]?.receivedAt || null
+  })}\n\n`);
+  extractionClients.add(res);
+
+  const heartbeat = setInterval(() => res.write(': keep-alive\n\n'), 25000);
+  res.on('close', () => {
+    clearInterval(heartbeat);
+    extractionClients.delete(res);
+  });
+});
+
+app.post('/api/extraction-reports', (req, res) => {
+  const expectedToken = process.env.EXTRACTION_INGEST_TOKEN;
+  if (!expectedToken) {
+    return res.status(503).json({ error: 'Extraction ingestion is not configured' });
+  }
+  if (req.get('authorization') !== `Bearer ${expectedToken}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const result = parseExtractionReport(req.body);
+  if (result.error) return res.status(400).json({ error: result.error });
+  if (extractionReports.some(report => report.id === result.report.id)) {
+    return res.status(409).json({ error: 'A report with this id has already been received' });
+  }
+
+  extractionReports.unshift(result.report);
+  extractionReports.length = Math.min(extractionReports.length, MAX_EXTRACTION_REPORTS);
+  broadcastExtractionReport(result.report);
+  res.status(201).json({ message: 'Extraction report accepted', report: result.report });
 });
 
 app.post('/api/reports', (req, res) => {
