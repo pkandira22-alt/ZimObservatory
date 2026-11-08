@@ -471,6 +471,16 @@
     @media (max-width: 850px) { .about-grid { grid-template-columns: 1fr; } }
     .about-narrative p { font-size: 14.5px; color: #CBD5E1; margin-bottom: 14px; line-height: 1.7; }
     .about-narrative strong { color: white; }
+    .research-pillar {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-panel);
+      padding: 14px;
+      border-radius: 8px;
+    }
+    .research-pillar p { font-size: 12px; color: var(--text-muted); margin-top: 5px; }
+    .research-pillar h3 { font-size: 10px; color: var(--zim-gold); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 10px; }
+    .research-pillar ul { padding-left: 17px; color: #CBD5E1; font-size: 11px; line-height: 1.6; margin-top: 3px; }
+    .pillar-live-status { color: var(--zim-green-light) !important; font-size: 10px !important; margin-top: 9px !important; }
 
     /* Contact Grid */
     .contact-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 30px; }
@@ -1191,21 +1201,41 @@
           </p>
         </div>
 
-        <div>
-          <div style="display:flex; flex-direction:column; gap:10px;">
-            <div style="background:var(--bg-surface); border:1px solid var(--border-panel); padding:14px; border-radius:8px;">
-              <strong style="color:var(--zim-gold);">📊 Quantitative Political Economy</strong>
-              <p style="font-size:12px; color:var(--text-muted); margin-top:2px;">Empirical modeling of rent distribution, parastatal capture, and macro-financial flows.</p>
-            </div>
-            <div style="background:var(--bg-surface); border:1px solid var(--border-panel); padding:14px; border-radius:8px;">
-              <strong style="color:var(--zim-gold);">⚖️ Institutional Auditing & Impunity</strong>
-              <p style="font-size:12px; color:var(--text-muted); margin-top:2px;">Forensic analysis of Auditor-General reports, procurement exemptions, and administrative extortion.</p>
-            </div>
-            <div style="background:var(--bg-surface); border:1px solid var(--border-panel); padding:14px; border-radius:8px;">
-              <strong style="color:var(--zim-gold);">🌍 Civic Agency & Resistance Dynamics</strong>
-              <p style="font-size:12px; color:var(--text-muted); margin-top:2px;">Formalizing Freirean praxis and structural friction (P+I+C) into predictive behavioral metrics.</p>
-            </div>
-          </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <article class="research-pillar">
+            <strong style="color:var(--zim-gold);">📊 Quantitative Political Economy</strong>
+            <p>Trace how rents move through resource sectors, public enterprises, and the wider economy—and test how those flows relate to household and macroeconomic outcomes.</p>
+            <h3>Research focus</h3>
+            <ul>
+              <li>Resource rents, ownership and distribution across sectors</li>
+              <li>Parastatal transfers, public balance sheets and fiscal exposure</li>
+              <li>Exchange-rate, price and external-finance transmission</li>
+            </ul>
+            <h3>Live indicators</h3>
+            <p id="pillarEconomyLive" class="pillar-live-status" aria-live="polite">Waiting for the forecast stream.</p>
+          </article>
+          <article class="research-pillar">
+            <strong style="color:var(--zim-gold);">⚖️ Institutional Auditing &amp; Impunity</strong>
+            <p>Compare documented audit findings with public spending and procurement decisions to examine where controls fail and whether remedial action follows.</p>
+            <h3>Research focus</h3>
+            <ul>
+              <li>Auditor-General findings, repeat observations and follow-up</li>
+              <li>Procurement exemptions, direct awards and contract disclosure</li>
+              <li>Administrative extortion as a documented service-delivery risk</li>
+            </ul>
+            <p id="pillarAuditLive" class="pillar-live-status" aria-live="polite">No structured audit or procurement feed is connected.</p>
+          </article>
+          <article class="research-pillar">
+            <strong style="color:var(--zim-gold);">🌍 Civic Agency &amp; Resistance Dynamics</strong>
+            <p>Operationalize Freirean reflection and action alongside structural friction (P+I+C) to study when civic awareness can translate into collective agency.</p>
+            <h3>Research focus</h3>
+            <ul>
+              <li>Praxis measures linking reflection, organization and action</li>
+              <li>Power asymmetry, social influence and coercive constraints</li>
+              <li>Time-stamped event and survey outcomes for evaluation</li>
+            </ul>
+            <p id="pillarCivicLive" class="pillar-live-status" aria-live="polite">Waiting for the forecast stream.</p>
+          </article>
         </div>
       </div>
     </section>
@@ -2379,7 +2409,7 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
           const badge = document.getElementById('deckBadge');
           if (badge) {
             badge.className = "badge badge-ai";
-            badge.innerText = "Connected; loading forecast report...";
+            badge.innerText = "Live stream connected; loading report...";
           }
         };
 
@@ -2482,9 +2512,37 @@ Telemetry Context: E=${e}/10, Pr=${pr}/10, CL=${cl}/10, AL=${al}/10, DB=${db}/10
 
       updated.textContent = `Data refreshed ${report.generatedAt || 'recently'} · ${report.horizon || ''}`;
       methodology.textContent = report.methodology || '';
+      renderResearchPillarUpdates(report);
       if (statusBadge) {
         statusBadge.className = 'badge badge-live';
-        statusBadge.innerText = '● Forecast report loaded';
+        statusBadge.innerText = '● Live forecast report received';
+      }
+    }
+
+    function renderResearchPillarUpdates(report) {
+      const targets = Object.fromEntries((report.targets || []).map(target => [target.id, target]));
+      const statusLabels = {
+        baseline_only: 'baseline only',
+        validated_candidate: 'validated candidate',
+        provisional_candidate: 'provisional',
+        stale_data: 'stale data',
+        insufficient_history: 'insufficient history',
+        unavailable: 'unavailable',
+        not_requested: 'not requested'
+      };
+      const describe = id => {
+        const target = targets[id];
+        return `${id}: ${statusLabels[target?.status] || 'not reported'}`;
+      };
+
+      const economyStatus = document.getElementById('pillarEconomyLive');
+      if (economyStatus) {
+        economyStatus.textContent = `Live forecast status — ${['gdp', 'inflation', 'gold'].map(describe).join(' · ')}`;
+      }
+
+      const civicStatus = document.getElementById('pillarCivicLive');
+      if (civicStatus) {
+        civicStatus.textContent = `Live forecast status — ${describe('protests')} · ${describe('phi')}`;
       }
     }
 
