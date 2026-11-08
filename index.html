@@ -135,6 +135,31 @@
       background: rgba(212, 175, 55, 0.12);
       color: var(--zim-gold);
     }
+    .nav-dropdown-heading {
+      display: block;
+      padding: 9px 10px 4px;
+      color: var(--zim-gold);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .nav-dropdown-menu a.nav-dropdown-equation {
+      padding-top: 6px;
+      white-space: normal;
+    }
+    .nav-dropdown-equation strong,
+    .nav-dropdown-equation span {
+      display: block;
+    }
+    .nav-dropdown-equation span {
+      margin-top: 3px;
+      color: var(--text-muted);
+      font-family: "Courier New", monospace;
+      font-size: 10px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
     .nav-btn {
       background: var(--zim-gold);
       color: #070B14 !important;
@@ -564,7 +589,16 @@
           <a href="#leadershipMatrix">Leadership Matrix</a>
           <a href="#corruption">Whistleblower Dossier</a>
           <a href="#oag">OAG Audit Series</a>
+          <span class="nav-dropdown-heading">About &amp; core equations</span>
           <a href="#about">About Privilege</a>
+          <a class="nav-dropdown-equation" href="#heroPhiFormula">
+            <strong>Regime Durability Index (Φ)</strong>
+            <span>Φ = [ Rent Extraction (E) × Targeted Patronage (Pr) × Coercive Liquidity (CL) ] ÷ [ Livelihood Autonomy (AL) × Diaspora Buffer (DB) ]</span>
+          </a>
+          <a class="nav-dropdown-equation" href="#heroPraxisFormula">
+            <strong>Realized Praxis Ratio (Yield)</strong>
+            <span>Yield = (Reflection [R] × Action [A]) ÷ (Power Asymmetry [P] + Social Influence [I] + Social Control [C])</span>
+          </a>
           <a href="#contact">Connect / Collaborate</a>
         </div>
       </div>
@@ -675,7 +709,7 @@
         <div class="hero-box hero-regime">
           <div class="hero-tag">Systemic Structural Anchor: Regime Durability Index (Φ)</div>
           <div class="hero-num" id="heroPhi">84.6</div>
-          <div class="hero-formula">Φ = [ Rent Extraction (E) × Targeted Patronage (Pr) × Coercive Liquidity (CL) ] ÷ [ Livelihood Autonomy (AL) × Diaspora Buffer (DB) ]</div>
+          <div class="hero-formula" id="heroPhiFormula">Φ = [ Rent Extraction (E) × Targeted Patronage (Pr) × Coercive Liquidity (CL) ] ÷ [ Livelihood Autonomy (AL) × Diaspora Buffer (DB) ]</div>
           <div class="hero-badge-wrap">
             <span class="hero-state state-hegemony" id="heroPhiStatus">ENTRENCHED CAPTIVE HEGEMONY</span>
             <span style="font-size:11px; opacity:0.85;" id="phiDesc">Elite rents comfortably exceed citizen decoupling capacity. High resilience against conventional electoral or street shocks.</span>
@@ -686,7 +720,7 @@
         <div class="hero-box hero-praxis">
           <div class="hero-tag">Ground Agency: Realized Praxis Ratio (Yield)</div>
           <div class="hero-num" id="heroPraxis">0.78</div>
-          <div class="hero-formula">Yield = (Reflection [R] × Action [A]) ÷ (Power Asymmetry [P] + Social Influence [I] + Social Control [C])</div>
+          <div class="hero-formula" id="heroPraxisFormula">Yield = (Reflection [R] × Action [A]) ÷ (Power Asymmetry [P] + Social Influence [I] + Social Control [C])</div>
           <div class="hero-badge-wrap">
             <span class="hero-state state-hegemony" id="heroPraxisStatus">CONTAINED VERBALISM (SURVIVAL DOMINANT)</span>
             <span style="font-size:11px; opacity:0.85;" id="praxisDesc">High structural literacy neutralized by massive livelihood and security friction.</span>
