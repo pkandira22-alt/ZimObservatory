@@ -144,6 +144,14 @@
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
+    .nav-dropdown-subsection {
+      margin-left: 8px;
+      padding-left: 8px;
+      border-left: 1px solid var(--border-panel);
+    }
+    .nav-dropdown-subsection .nav-dropdown-heading {
+      padding-top: 5px;
+    }
     .nav-dropdown-menu a.nav-dropdown-equation {
       padding-top: 6px;
       white-space: normal;
@@ -589,16 +597,19 @@
           <a href="#leadershipMatrix">Leadership Matrix</a>
           <a href="#corruption">Whistleblower Dossier</a>
           <a href="#oag">OAG Audit Series</a>
-          <span class="nav-dropdown-heading">About &amp; core equations</span>
+          <span class="nav-dropdown-heading">About</span>
           <a href="#about">About Privilege</a>
-          <a class="nav-dropdown-equation" href="#heroPhiFormula">
-            <strong>Regime Durability Index (Φ)</strong>
-            <span>Φ = [ Rent Extraction (E) × Targeted Patronage (Pr) × Coercive Liquidity (CL) ] ÷ [ Livelihood Autonomy (AL) × Diaspora Buffer (DB) ]</span>
-          </a>
-          <a class="nav-dropdown-equation" href="#heroPraxisFormula">
-            <strong>Realized Praxis Ratio (Yield)</strong>
-            <span>Yield = (Reflection [R] × Action [A]) ÷ (Power Asymmetry [P] + Social Influence [I] + Social Control [C])</span>
-          </a>
+          <div class="nav-dropdown-subsection">
+            <span class="nav-dropdown-heading">Formula and Equation</span>
+            <a class="nav-dropdown-equation" href="#heroPhiFormula">
+              <strong>Regime Durability Index (Φ)</strong>
+              <span>Φ = [ Rent Extraction (E) × Targeted Patronage (Pr) × Coercive Liquidity (CL) ] ÷ [ Livelihood Autonomy (AL) × Diaspora Buffer (DB) ]</span>
+            </a>
+            <a class="nav-dropdown-equation" href="#heroPraxisFormula">
+              <strong>Realized Praxis Ratio (Yield)</strong>
+              <span>Yield = (Reflection [R] × Action [A]) ÷ (Power Asymmetry [P] + Social Influence [I] + Social Control [C])</span>
+            </a>
+          </div>
           <a href="#contact">Connect / Collaborate</a>
         </div>
       </div>
