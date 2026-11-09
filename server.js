@@ -305,69 +305,158 @@ let socialCache = {
   expiresAt: 0,
   payload: null
 };
+const socialSourceCache = new Map();
 
 const SOCIAL_FEEDS = [
   {
     name: "Bluesky",
+    platform: "Bluesky",
+    type: "bluesky",
     url: "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=Zimbabwe&sort=latest&limit=100"
   },
+  ...[
+    "mastodon.social",
+    "mastodon.online",
+    "mas.to"
+  ].map(instance => ({
+    name: `Mastodon (${instance})`,
+    platform: "Mastodon",
+    type: "mastodon",
+    url: `https://${instance}/api/v1/timelines/tag/Zimbabwe?limit=40`
+  })),
   {
-    name: "Mastodon (mastodon.social)",
-    url: "https://mastodon.social/api/v1/timelines/tag/Zimbabwe?limit=40"
+    name: "Reddit",
+    platform: "Reddit",
+    type: "reddit",
+    url: "https://www.reddit.com/search.json?q=Zimbabwe&sort=new&limit=100&type=link"
   },
-  {
-    name: "Mastodon (mastodon.online)",
-    url: "https://mastodon.online/api/v1/timelines/tag/Zimbabwe?limit=40"
-  },
-  {
-    name: "Mastodon (mas.to)",
-    url: "https://mas.to/api/v1/timelines/tag/Zimbabwe?limit=40"
-  }
+  ...(process.env.YOUTUBE_API_KEY ? [{
+    name: "YouTube",
+    platform: "YouTube",
+    type: "youtube"
+  }] : [])
 ];
-
 const HASHTAG_REGEX = /(?<![\w])#[\w][\w-]*/gi;
+const SOCIAL_CACHE_MS = 60 * 1000;
+const SOCIAL_SOURCE_CACHE_MS = {
+  default: 60 * 1000,
+  x: 5 * 60 * 1000,
+  youtube: 15 * 60 * 1000
+};
 
 async function fetchSocialSource(feed) {
+  const cacheTtl = SOCIAL_SOURCE_CACHE_MS[feed.type] || SOCIAL_SOURCE_CACHE_MS.default;
+  const cached = socialSourceCache.get(feed.name);
+  if (cached && cached.expiresAt > Date.now()) return cached.result;
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 7000);
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
   try {
-    const res = await fetch(feed.url, {
+    const url = feed.type === "x"
+      ? `https://api.x.com/2/tweets/search/recent?${new URLSearchParams({
+          query: "Zimbabwe has:hashtags -is:retweet",
+          max_results: "100",
+          "tweet.fields": "created_at,entities"
+        })}`
+      : feed.type === "youtube"
+        ? `https://www.googleapis.com/youtube/v3/search?${new URLSearchParams({
+            part: "snippet",
+            type: "video",
+            order: "date",
+            maxResults: "50",
+            q: "Zimbabwe",
+            key: process.env.YOUTUBE_API_KEY
+          })}`
+      : feed.url;
+    const headers = {
+      Accept: 'application/json',
+      'User-Agent': 'KUVHURA-Observatory/1.0'
+    };
+    if (feed.type === "x") headers.Authorization = `Bearer ${process.env.X_BEARER_TOKEN}`;
+    const res = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'KUVHURA-Observatory/1.0'
-      }
+      headers
     });
-    clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`Status ${res.status}`);
     const data = await res.json();
     const posts = [];
-    if (feed.name === 'Bluesky') {
+    if (feed.type === 'bluesky') {
       const items = Array.isArray(data.posts) ? data.posts : [];
       for (const item of items) {
         posts.push({
           text: item.record?.text || '',
           createdAt: item.record?.createdAt || '',
-          url: item.uri || ''
+          url: item.uri || '',
+          platform: feed.platform
         });
       }
-    } else {
+    } else if (feed.type === 'mastodon') {
       if (Array.isArray(data)) {
         for (const item of data) {
           const plainText = (item.content || '').replace(/<[^>]+>/g, ' ');
           posts.push({
             text: plainText,
             createdAt: item.created_at || '',
-            url: item.url || ''
+            url: item.url || '',
+            platform: feed.platform
           });
         }
       }
+    } else if (feed.type === 'reddit') {
+      for (const child of data.data?.children || []) {
+        const item = child.data;
+        if (!item) continue;
+        posts.push({
+          text: `${item.title || ''} ${item.selftext || ''}`,
+          createdAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : '',
+          url: item.permalink ? `https://www.reddit.com${item.permalink}` : '',
+          platform: feed.platform
+        });
+      }
+    } else if (feed.type === 'x') {
+      for (const item of data.data || []) {
+        posts.push({
+          text: item.text || '',
+          createdAt: item.created_at || '',
+          url: `https://x.com/i/status/${item.id}`,
+          platform: feed.platform
+        });
+      }
+    } else if (feed.type === 'youtube') {
+      for (const item of data.items || []) {
+        const snippet = item.snippet || {};
+        posts.push({
+          text: `${snippet.title || ''} ${snippet.description || ''}`,
+          createdAt: snippet.publishedAt || '',
+          url: item.id?.videoId ? `https://www.youtube.com/watch?v=${encodeURIComponent(item.id.videoId)}` : '',
+          platform: feed.platform
+        });
+      }
     }
-    return { name: feed.name, posts };
+    const result = {
+      name: feed.name,
+      platform: feed.platform,
+      posts,
+      updatedAt: new Date().toISOString(),
+      refreshIntervalSeconds: cacheTtl / 1000
+    };
+    socialSourceCache.set(feed.name, { expiresAt: Date.now() + cacheTtl, result });
+    return result;
   } catch (err) {
-    clearTimeout(timeoutId);
     console.warn(`Feed ${feed.name} failed:`, err.message);
-    return { name: feed.name, posts: [], failed: true };
+    const result = {
+      name: feed.name,
+      platform: feed.platform,
+      posts: [],
+      failed: true,
+      error: err.message,
+      updatedAt: new Date().toISOString(),
+      refreshIntervalSeconds: cacheTtl / 1000
+    };
+    socialSourceCache.set(feed.name, { expiresAt: Date.now() + cacheTtl, result });
+    return result;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -377,162 +466,87 @@ async function getSocialHashtagTrends() {
     return socialCache.payload;
   }
 
-  const webAppUrl = process.env.GOOGLE_SHEETS_WEB_APP_URL;
-  if (webAppUrl) {
-    try {
-      const res = await fetch(webAppUrl, {
-        headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' }
-      });
-      if (res.ok) {
-        const payload = await res.json();
-        if (payload && Array.isArray(payload.rows)) {
-          const trends = payload.rows.map(row => {
-            const [timestamp, hashtag, mentions, velocity, polarization] = row;
-            return {
-              tag: String(hashtag).trim(),
-              mentions: Number(mentions) || 0,
-              latestMentions: Number(mentions) || 0,
-              earlierMentions: 0,
-              changePct: null,
-              trajectory: 'estimated',
-              narrativeVelocity: Number(velocity) || 50,
-              polarizationIndex: Number(polarization) || 5.0,
-              timestamp
-            };
-          }).sort((a, b) => b.mentions - a.mentions);
-
-          const result = {
-            available: trends.length > 0,
-            source: 'Google Sheets RSS bridge',
-            sources: ['Google Sheets RSS bridge'],
-            sampleType: 'rss-sheet',
-            updatedAt: payload.updatedAt || new Date().toISOString(),
-            scannedPosts: 0,
-            hashtags: trends.slice(0, 8),
-            message: trends.length ? null : 'The SocialTelemetry sheet does not contain a telemetry sample yet.'
-          };
-
-          socialCache = { expiresAt: now + 120000, payload: result };
-          return result;
-        }
-      }
-    } catch (err) {
-      console.warn('Google Sheets telemetry error:', err.message);
-    }
+  const feeds = [...SOCIAL_FEEDS];
+  if (process.env.X_BEARER_TOKEN) {
+    feeds.push({ name: "X", platform: "X", type: "x" });
   }
 
-  // Multi-feed live fetch
-  const results = await Promise.all(SOCIAL_FEEDS.map(f => fetchSocialSource(f)));
-  const failedSources = results.filter(r => r.failed).map(r => r.name);
-  const successfulFeeds = results.filter(r => !r.failed && r.posts.length > 0);
-
+  const results = await Promise.all(feeds.map(fetchSocialSource));
   const seen = new Set();
-  const parsedPosts = [];
-  for (const feed of successfulFeeds) {
-    for (const p of feed.posts) {
-      const id = p.url || (p.text + p.createdAt);
+  const posts = [];
+  for (const feed of results) {
+    for (const post of feed.posts) {
+      const id = post.url || `${post.platform}:${post.text}:${post.createdAt}`;
       if (seen.has(id)) continue;
       seen.add(id);
-      parsedPosts.push({
-        text: p.text,
-        created: p.createdAt ? new Date(p.createdAt) : new Date(),
-        source: feed.name
-      });
+      const createdAt = post.createdAt ? new Date(post.createdAt) : null;
+      if (!createdAt || Number.isNaN(createdAt.getTime())) continue;
+      posts.push({ ...post, createdAt });
     }
   }
 
-  if (parsedPosts.length > 0) {
-    parsedPosts.sort((a, b) => b.created - a.created);
-    const splitAt = Math.ceil(parsedPosts.length / 2);
-    const latestSample = parsedPosts.slice(0, splitAt);
-    const earlierSample = parsedPosts.slice(splitAt);
-
-    const tagCounts = new Map();
-    const countTags = (sample, field) => {
-      for (const post of sample) {
-        const matches = post.text.match(HASHTAG_REGEX) || [];
-        for (const tag of matches) {
-          const key = tag.toLowerCase();
-          if (!tagCounts.has(key)) {
-            tagCounts.set(key, { tag, latestMentions: 0, earlierMentions: 0 });
-          }
-          tagCounts.get(key)[field]++;
-        }
+  const tagCounts = new Map();
+  for (const post of posts) {
+    for (const match of new Set(post.text.match(HASHTAG_REGEX) || [])) {
+      const key = match.toLowerCase();
+      if (!tagCounts.has(key)) {
+        tagCounts.set(key, { tag: match, mentions: 0, platforms: {} });
       }
-    };
-
-    countTags(latestSample, 'latestMentions');
-    countTags(earlierSample, 'earlierMentions');
-
-    const trends = [];
-    for (const item of tagCounts.values()) {
-      const latestCount = item.latestMentions;
-      const earlierCount = item.earlierMentions;
-      let trajectory = 'steady';
-      let changePct = null;
-      if (earlierCount === 0) {
-        trajectory = latestCount ? 'new' : 'no baseline';
-      } else {
-        const latestRate = latestCount / Math.max(1, latestSample.length);
-        const earlierRate = earlierCount / Math.max(1, earlierSample.length);
-        changePct = Math.round(((latestRate - earlierRate) / earlierRate) * 100);
-        trajectory = changePct >= 20 ? 'rising' : changePct <= -20 ? 'falling' : 'steady';
-      }
-      trends.push({
-        tag: item.tag,
-        mentions: latestCount + earlierCount,
-        latestMentions: latestCount,
-        earlierMentions: earlierCount,
-        changePct,
-        trajectory
-      });
+      const entry = tagCounts.get(key);
+      entry.mentions++;
+      entry.platforms[post.platform] = (entry.platforms[post.platform] || 0) + 1;
     }
-
-    trends.sort((a, b) => (b.latestMentions - a.latestMentions) || (b.mentions - a.mentions));
-
-    const sources = [...new Set(parsedPosts.map(p => p.source))];
-    const payload = {
-      available: true,
-      source: sources.join(' + ') || 'Bluesky and Mastodon public feeds',
-      sources,
-      failedSources,
-      query: 'Zimbabwe',
-      updatedAt: new Date().toISOString(),
-      scannedPosts: parsedPosts.length,
-      latestSamplePosts: latestSample.length,
-      earlierSamplePosts: earlierSample.length,
-      hashtags: trends.slice(0, 8)
-    };
-
-    socialCache = { expiresAt: now + 120000, payload };
-    return payload;
   }
 
-  // Reliable offline/fallback sample when public feeds are unreachable
-  const fallbackTrends = [
-    { tag: "#ZimResources", mentions: 184, latestMentions: 112, earlierMentions: 72, changePct: 55, trajectory: "rising" },
-    { tag: "#MutapaLeads", mentions: 145, latestMentions: 88, earlierMentions: 57, changePct: 54, trajectory: "rising" },
-    { tag: "#OAGAudit", mentions: 132, latestMentions: 74, earlierMentions: 58, changePct: 27, trajectory: "rising" },
-    { tag: "#EconomicAutonomy", mentions: 118, latestMentions: 60, earlierMentions: 58, changePct: 3, trajectory: "steady" },
-    { tag: "#Zimbabwe", mentions: 98, latestMentions: 48, earlierMentions: 50, changePct: -4, trajectory: "steady" },
-    { tag: "#ChitepoIdeology", mentions: 76, latestMentions: 34, earlierMentions: 42, changePct: -19, trajectory: "falling" }
-  ];
+  const hashtags = [...tagCounts.values()]
+    .sort((a, b) => b.mentions - a.mentions || a.tag.localeCompare(b.tag))
+    .slice(0, 20);
+  const successfulSources = results.filter(result => !result.failed);
+  const sampledPlatforms = [...new Set(successfulSources.map(result => result.platform))];
+  const sourceStatuses = results.map(result => ({
+    name: result.name,
+    platform: result.platform,
+    status: result.failed ? "unavailable" : "connected",
+    posts: result.posts.length,
+    updatedAt: result.updatedAt,
+    refreshIntervalSeconds: result.refreshIntervalSeconds,
+    ...(result.failed ? { message: result.error } : {})
+  }));
+  if (!process.env.X_BEARER_TOKEN) {
+    sourceStatuses.push({
+      name: "X",
+      platform: "X",
+      status: "not_configured",
+      posts: 0,
+      message: "Set X_BEARER_TOKEN with X API recent-search access to include X posts."
+    });
+  }
+  if (!process.env.YOUTUBE_API_KEY) {
+    sourceStatuses.push({
+      name: "YouTube",
+      platform: "YouTube",
+      status: "not_configured",
+      posts: 0,
+      message: "Set YOUTUBE_API_KEY with YouTube Data API v3 access to include recent videos."
+    });
+  }
 
-  const fallbackPayload = {
-    available: true,
-    source: 'KUVHURA Telemetry Engine (Synthesized Fallback)',
-    sources: ['KUVHURA Telemetry'],
-    failedSources,
-    query: 'Zimbabwe',
+  const payload = {
+    available: sampledPlatforms.length > 0,
+    scope: "Recent public posts matching Zimbabwe; not platform-wide or global trending rankings.",
     updatedAt: new Date().toISOString(),
-    scannedPosts: 124,
-    latestSamplePosts: 62,
-    earlierSamplePosts: 62,
-    hashtags: fallbackTrends
+    refreshIntervalSeconds: SOCIAL_CACHE_MS / 1000,
+    query: "Zimbabwe",
+    scannedPosts: posts.length,
+    sampledPlatforms,
+    sources: sourceStatuses,
+    hashtags,
+    message: sampledPlatforms.length
+      ? hashtags.length ? null : "Connected sources returned no hashtags in the sampled posts."
+      : "No public social feeds are currently reachable."
   };
-
-  socialCache = { expiresAt: now + 60000, payload: fallbackPayload };
-  return fallbackPayload;
+  socialCache = { expiresAt: now + SOCIAL_CACHE_MS, payload };
+  return payload;
 }
 
 // Routes

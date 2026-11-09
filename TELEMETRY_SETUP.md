@@ -1,6 +1,6 @@
-# Automated social telemetry setup
+# Social and news telemetry setup
 
-The workflow reads Google News RSS results for Zimbabwe-related queries every 30 minutes and writes an estimated topic sample to the `SocialTelemetry` tab. Each mention is a matching article, not a social post. Narrative velocity is an index adding 10 points per matching article published in the last 24 hours (capped at 100); polarization is a lexical proxy based on contested-language terms (0–10). Neither is a measured social-media count, sentiment, or validated polarization measure. The publisher uses only Python's standard library.
+The scheduled `SocialTelemetry` workflow reads Google News RSS, not social platforms. Its article mentions and estimated topic scores are separate from the dashboard's public social hashtag tracker; news articles are never counted as social posts.
 
 ## 1. Deploy the Google Apps Script bridge
 
@@ -66,9 +66,15 @@ These are source leads, not preloaded observations. For any imported data, retai
 
 ## 4. Configure the KUVHURA backend
 
-Set `GOOGLE_SHEETS_WEB_APP_URL` in the environment of the Node.js backend (`server.js`), using the same deployed URL. Restart the backend after setting it. The dashboard's social telemetry panel then loads from the sheet automatically; no sheet ID or link needs to be entered in the dashboard.
+The dashboard's live public hashtag tracker polls the Node.js backend every 60 seconds. It samples recent Zimbabwe-matching public posts from Bluesky, three Mastodon instances and Reddit, counts hashtags in that sample, and reports the status and sample size of each feed. Optional X searches are cached for five minutes and YouTube searches for 15 minutes to respect provider rate limits and quota. It does not claim to measure platform-wide or global trends. If all feeds fail, the panel reports that fact instead of showing synthetic fallback values.
 
-For local development, copy `.env.example` to `.env` and set the variable there, or set it in the shell before starting the server. `npm run dev` and `npm start` load `.env` automatically. Without it, the dashboard keeps using its existing direct Bluesky and Mastodon feeds.
+To add optional platform feeds, set `X_BEARER_TOKEN` to an authorized X API bearer token with recent-search access and/or `YOUTUBE_API_KEY` to a YouTube Data API v3 key in the Node.js backend environment. Keep both values private; `npm run dev` and `npm start` load values from `.env`. X search access and quotas depend on the X developer plan. YouTube contributes hashtags appearing in recent Zimbabwe-related video titles/descriptions, not a YouTube-wide hashtag trend ranking; its search endpoint has a substantially higher quota cost than ordinary API reads.
+
+On Render, add these as environment variables to the `zimobservatory-backend` service, not the forecast service. After saving the variables, redeploy or restart the backend to load them.
+
+Instagram/Facebook and Threads graph access is permission-scoped; TikTok research APIs are restricted; and WhatsApp has no public hashtag search endpoint. They are not included without a suitable authorized data provider. Counts across sources are sample counts, not comparable audience reach, validated sentiment, or population-wide opinion. Public API delays, quotas and outages can reduce coverage.
+
+`GOOGLE_SHEETS_WEB_APP_URL` and `GOOGLE_SHEETS_WEB_APP_TOKEN` are used by the separate GitHub Actions news-to-Sheets publisher, not by the live social tracker.
 
 ### Configure the AI copilot
 
