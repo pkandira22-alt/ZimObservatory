@@ -379,6 +379,7 @@
     }
     .spatial-map-layout { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 20px; align-items: start; }
     .foreign-policy-layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; align-items: center; }
+    .historical-trajectory-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     #zimbabweMap { width: 100%; height: 390px; border: 1px solid var(--border-panel); border-radius: 8px; background: #0B1422; }
     .spatial-filter { padding: 7px 10px; font-size: 11px; }
     .spatial-filter[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 1px; }
@@ -402,6 +403,7 @@
     @media (max-width: 850px) {
       .spatial-map-layout { grid-template-columns: 1fr; }
       .foreign-policy-layout { grid-template-columns: 1fr; }
+      .historical-trajectory-layout { grid-template-columns: 1fr; }
       #zimbabweMap { height: 340px; }
     }
 
@@ -603,6 +605,7 @@
           <a href="#home">Overview / Introduction</a>
           <a href="#observatory">Live Observatory &amp; Tools</a>
           <a href="#advancedModulesPanel">Institutional Modules</a>
+          <a href="#historicalTrajectoryModule">Historical Arc &amp; Mathematical Framework</a>
           <a href="#foreignPolicyModule">Foreign Policy &amp; Diplomacy</a>
           <a href="#spatialMapPanel">Zimbabwe Spatial Map</a>
           <a href="#socialSpeechTracker">Narrative Telemetry</a>
@@ -1027,6 +1030,60 @@
           </p>
           <button class="btn btn-purple" style="font-size:10.5px; padding:5px 10px;" onclick="loadHistoricalBacktest(2008)">Load 2008 Crisis Baseline</button>
           <button class="btn btn-green" style="font-size:10.5px; padding:5px 10px;" onclick="loadHistoricalBacktest(2019)">Load 2019 Protests Baseline</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORICAL ARC, TRAJECTORY & FORMULA VALIDATION MODULE -->
+    <div class="card-panel" id="historicalTrajectoryModule" style="margin-bottom: 24px; border-top: 4px solid var(--zim-gold);">
+      <div class="panel-hdr">
+        <span style="color: var(--zim-gold); display: flex; align-items: center; gap: 8px;">
+          📜 ZIMBABWE HISTORICAL ARC, TRAJECTORY &amp; MATHEMATICAL FRAMEWORK
+        </span>
+        <span style="font-size:10px; color:var(--text-muted);">Empirical Foundation</span>
+      </div>
+
+      <div class="historical-trajectory-layout">
+        <div>
+          <div style="font-size: 11.5px; font-weight: 800; color: #F87171; text-transform: uppercase; margin-bottom: 8px;">
+            1. Historical Arc &amp; Future Trajectory
+          </div>
+          <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6; display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: #070B14; padding: 10px; border-radius: 6px; border: 1px solid var(--border-soft);">
+              <strong style="color: white;">Pre-Colonial &amp; Colonial (Pre-1980):</strong> Advanced indigenous trading civilizations (Great Zimbabwe); colonized as Southern Rhodesia; UDI in 1965; Second Chimurenga leading to independence in 1980 under ZANU-PF.
+            </div>
+            <div style="background: #070B14; padding: 10px; border-radius: 6px; border: 1px solid var(--border-soft);">
+              <strong style="color: white;">Early Independence &amp; Shocks (1980–1999):</strong> Initial social infrastructure gains followed by 1990s ESAP structural adjustment strain and rising labor resistance.
+            </div>
+            <div style="background: #070B14; padding: 10px; border-radius: 6px; border: 1px solid var(--border-soft);">
+              <strong style="color: white;">Land Reform &amp; Hyperinflation (2000–2008):</strong> Fast-Track Land Reform, international sanctions, 2008 hyperinflation crash, and the 2009 GNU.
+            </div>
+            <div style="background: #070B14; padding: 10px; border-radius: 6px; border: 1px solid var(--border-soft);">
+              <strong style="color: white;">Modern Era &amp; Trajectory (2017–Present):</strong> 2017 transition, ZiG currency experimentation, Mutapa Fund asset capture, high public debt, informality, and structured mineral rent dependency.
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 11.5px; font-weight: 800; color: #4ADE80; text-transform: uppercase; margin-bottom: 8px;">
+            2. Systemic Formulas &amp; Robustness Analysis
+          </div>
+          <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6; display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: #070B14; padding: 10px; border-radius: 6px; border: 1px solid var(--border-soft);">
+              <strong style="color: var(--zim-gold);">Regime Durability Index (Φ):</strong>
+              <div style="font-family: 'Courier New', monospace; color: #38BDF8; font-size: 11px; margin: 4px 0;">Φ = [E × Pr × CL] ÷ [AL × DB]</div>
+              Models state captivity as a hydraulic system. Robust due to multiplicative logic and denominator shock-absorbers (AL × DB).
+            </div>
+            <div style="background: #070B14; padding: 10px; border-radius: 6px; border: 1px solid var(--border-soft);">
+              <strong style="color: #4ADE80;">Realized Praxis Yield (Yield):</strong>
+              <div style="font-family: 'Courier New', monospace; color: #4ADE80; font-size: 11px; margin: 4px 0;">Yield = (R × A) ÷ (P + I + C)</div>
+              Resolves movement theory flaws by framing inaction as rational survival calculus under structural friction (P + I + C).
+            </div>
+            <div style="background: #070B14; padding: 10px; border-radius: 6px; border: 1px solid var(--border-soft);">
+              <strong style="color: #A5B4FC;">Core Anchors &amp; Blind Spots:</strong>
+              Incorporates the 2008 hyperinflation stress-test, the Diaspora Paradox (DB), OAG audit leakages, and recommends non-linear threshold curves for academic peer review.
+            </div>
+          </div>
         </div>
       </div>
     </div>
