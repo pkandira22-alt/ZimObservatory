@@ -20,6 +20,14 @@
             }
         },
         {
+            "name": "Run KUVHURA Forecast Stream",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "stream_server",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Attach to Chrome",
             "port": 9222,
             "request": "attach",
@@ -40,6 +48,16 @@
             "name": "Launch Chrome against localhost",
             "url": "http://localhost:3000",
             "webRoot": "${workspaceFolder}"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Run Observatory with Forecast Stream",
+            "configurations": [
+                "Run KUVHURA Observatory",
+                "Run KUVHURA Forecast Stream"
+            ],
+            "stopAll": true
         }
     ]
 }
