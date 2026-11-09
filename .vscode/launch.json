@@ -5,6 +5,21 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Run KUVHURA Observatory",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/server.js",
+            "cwd": "${workspaceFolder}",
+            "runtimeArgs": [
+                "--env-file-if-exists=${workspaceFolder}/.env"
+            ],
+            "serverReadyAction": {
+                "pattern": "KUVHURA Observatory running on http://0\\.0\\.0\\.0:(\\d+)",
+                "uriFormat": "http://localhost:%s",
+                "action": "openExternally"
+            }
+        },
+        {
             "name": "Attach to Chrome",
             "port": 9222,
             "request": "attach",
@@ -15,7 +30,7 @@
             "name": "Launch Chrome",
             "request": "launch",
             "type": "chrome",
-            "url": "http://localhost:8080",
+            "url": "http://localhost:3000",
             "webRoot": "${workspaceFolder}"
         },
 
@@ -23,7 +38,7 @@
             "type": "chrome",
             "request": "launch",
             "name": "Launch Chrome against localhost",
-            "url": "http://localhost:8080",
+            "url": "http://localhost:3000",
             "webRoot": "${workspaceFolder}"
         }
     ]

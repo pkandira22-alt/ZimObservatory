@@ -49,7 +49,13 @@ Forecasts are not automatically considered validated: the dashboard withholds st
 
 Set `GOOGLE_SHEETS_WEB_APP_URL` in the environment of the Node.js backend (`server.js`), using the same deployed URL. Restart the backend after setting it. The dashboard's social telemetry panel then loads from the sheet automatically; no sheet ID or link needs to be entered in the dashboard.
 
-For local development, set the variable in the shell before starting the server. Without it, the dashboard keeps using its existing direct Bluesky and Mastodon feeds.
+For local development, copy `.env.example` to `.env` and set the variable there, or set it in the shell before starting the server. `npm run dev` and `npm start` load `.env` automatically. Without it, the dashboard keeps using its existing direct Bluesky and Mastodon feeds.
+
+### Configure the AI copilot
+
+The copilot's cloud responses require a Gemini API key on the Node.js backend. Copy `.env.example` to `.env`, set `GEMINI_API_KEY` to your key, and start the app with `npm run dev`. Keep `.env` private; it is ignored by Git. The VS Code **Run KUVHURA Observatory** launch configuration starts the same backend and opens the dashboard at `http://localhost:3000`.
+
+Without a key, the dashboard still offers its empirical offline reasoning engine. If it says **AI service status unavailable**, make sure the backend is running and open the dashboard from its port 3000 URL rather than opening `index.html` directly or using a separate static server. The key is never sent to the browser.
 
 ## 5. Stream reported extraction quantities to the map and model
 
