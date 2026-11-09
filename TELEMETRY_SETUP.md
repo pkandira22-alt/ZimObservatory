@@ -26,7 +26,7 @@ The workflow maps these secrets to the publisher's `GOOGLE_SHEETS_WEB_APP_URL` a
 
 ## 3. Run and evaluate the forecasting model
 
-The forecast report uses World Bank annual Zimbabwe GDP growth and inflation indicators and monthly Yahoo Finance gold futures history. It runs chronological rolling-origin validation, selects methods on earlier origins, and compares a later holdout with a last-observation benchmark. It does not treat the dashboard's Φ formula or media mentions as observed outcomes.
+The forecast report uses World Bank annual Zimbabwe GDP growth, ZIMSTAT's monthly weighted CPI inflation series, and monthly Yahoo Finance gold futures history. It runs chronological rolling-origin validation, selects methods on earlier origins, and compares a later holdout with a last-observation benchmark. If Yahoo's primary chart host is rate-limited, the service retries through its alternate chart host. It does not treat the dashboard's Φ formula or media mentions as observed outcomes.
 
 Generate a one-time report from the repository root:
 
@@ -45,7 +45,7 @@ Keep that terminal open. In VS Code, you can instead select **Run Observatory wi
 
 The forecast server answers HTTP checks at `/health` and `/` (including `HEAD` probes) while accepting WebSocket upgrades at `/`. The Render Blueprint in [`render.yaml`](./render.yaml) defines a separate Python service named `zimobservatory-forecast`, with `/health` as its health-check path. The GitHub Pages dashboard connects to `wss://zimobservatory.onrender.com/` by default; local development and Codespaces keep their existing WebSocket URLs. Render's injected `PORT` is used automatically.
 
-Forecasts are not automatically considered validated: the dashboard withholds stale inflation data, reports GDP as a persistence baseline when alternatives fail to beat it, and labels the gold trend provisional because its 12-month holdout origins overlap. Protest forecasts require a dated event dataset; Φ requires historical inputs and a measured outcome. Institutional audit and procurement indicators remain unconnected until a structured, dated source is configured. No custom target was requested.
+Forecasts are not automatically considered validated: GDP and inflation show a persistence baseline when tested alternatives fail to beat it; the inflation series is the recent monthly weighted CPI reported by ZIMSTAT. The gold trend is provisional because its 12-month holdout origins overlap. Protest forecasts require a dated event dataset; Φ requires historical inputs and a measured outcome. Institutional audit and procurement indicators remain unconnected until a structured, dated source is configured. No custom target was requested.
 
 ### Political economy time series
 
@@ -57,7 +57,7 @@ The time slider displays the selected series cumulatively through the chosen per
 
 | Candidate series | Public source | Coverage and limitation |
 |---|---|---|
-| Monthly inflation + parallel FX premium | [ZIMSTAT CPI releases](https://zimstat.co.zw/consumer-price-index/) provide monthly PDF/XLS releases; [RBZ exchange rates](https://www.rbz.co.zw/index.php/research/markets/exchange-rates) provide official-rate reference. | ZIMSTAT is not a historical API, and currency/weight/methodology changes need review. No matched, source-attributable historical parallel-market rate series was identified. World Bank CPI is an annual fallback, not monthly CPI. |
+| Monthly inflation + parallel FX premium | The dashboard reads ZIMSTAT's monthly weighted CPI workbook (the current index series starts in April 2024); [ZIMSTAT CPI releases](https://zimstat.co.zw/consumer-price-index/) publish the monthly PDF/XLS files. [RBZ exchange rates](https://www.rbz.co.zw/index.php/research/markets/exchange-rates) provide an official-rate reference. | Currency/weight/methodology changes need review. No matched, source-attributable historical parallel-market rate series was identified. World Bank CPI is annual and is not substituted for missing monthly data. |
 | Remittances + civil-service purchasing power | [World Bank personal remittances received API](https://api.worldbank.org/v2/country/ZW/indicator/BX.TRF.PWKR.CD.DT?format=json&per_page=200). | Annual current US$ observations include personal transfers and compensation of employees. No public machine-readable civil-service pay series by grade, currency, and period was identified. |
 | Auditor-General leakage | [Auditor-General document library](https://auditorgeneral.gov.zw/document-library/) and its [WordPress API](https://auditorgeneral.gov.zw/wp-json/wp/v2/pages/262). | The index links to reports rather than structured leakage values; the checked library listed reports for 2021–2025. Audit findings are not automatically proven losses. 2018–2030 is not a continuous observed series, and 2026–2030 cannot be filled with projections. |
 | Narrative velocity + throttling | [GDELT DOC API](https://api.gdeltproject.org/api/v2/doc/doc?query=Zimbabwe&mode=timelinevol&format=json) and [OONI Zimbabwe measurements](https://api.ooni.io/api/v1/measurements?probe_cc=ZW&limit=2). | GDELT volume is news coverage, not social-media activity. OONI provides individual network measurements; anomalies alone do not prove deliberate throttling or state attribution. No direct, continuous state-throttling series was identified. |
