@@ -378,6 +378,7 @@
       align-items: center;
     }
     .spatial-map-layout { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 20px; align-items: start; }
+    .foreign-policy-layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; align-items: center; }
     #zimbabweMap { width: 100%; height: 390px; border: 1px solid var(--border-panel); border-radius: 8px; background: #0B1422; }
     .spatial-filter { padding: 7px 10px; font-size: 11px; }
     .spatial-filter[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 1px; }
@@ -400,6 +401,7 @@
     .time-series-source a { color: #38BDF8; }
     @media (max-width: 850px) {
       .spatial-map-layout { grid-template-columns: 1fr; }
+      .foreign-policy-layout { grid-template-columns: 1fr; }
       #zimbabweMap { height: 340px; }
     }
 
@@ -601,6 +603,7 @@
           <a href="#home">Overview / Introduction</a>
           <a href="#observatory">Live Observatory &amp; Tools</a>
           <a href="#advancedModulesPanel">Institutional Modules</a>
+          <a href="#foreignPolicyModule">Foreign Policy &amp; Diplomacy</a>
           <a href="#spatialMapPanel">Zimbabwe Spatial Map</a>
           <a href="#socialSpeechTracker">Narrative Telemetry</a>
           <a href="#leadershipMatrix">Leadership Matrix</a>
@@ -1024,6 +1027,51 @@
           </p>
           <button class="btn btn-purple" style="font-size:10.5px; padding:5px 10px;" onclick="loadHistoricalBacktest(2008)">Load 2008 Crisis Baseline</button>
           <button class="btn btn-green" style="font-size:10.5px; padding:5px 10px;" onclick="loadHistoricalBacktest(2019)">Load 2019 Protests Baseline</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOREIGN POLICY & STRATEGIC ALIGNMENT MODULE -->
+    <div class="card-panel" id="foreignPolicyModule" style="margin-bottom: 24px; border-top: 4px solid #F59E0B;">
+      <div class="panel-hdr">
+        <span style="color: #FBBF24; display: flex; align-items: center; gap: 8px;">
+          🌐 FOREIGN POLICY POSITION &amp; STRATEGIC ECONOMIC DIPLOMACY
+        </span>
+        <span style="font-size:10px; color:var(--zim-gold);">Geopolitical Telemetry</span>
+      </div>
+
+      <div class="foreign-policy-layout">
+        <div>
+          <div style="font-size: 11px; text-transform: uppercase; font-weight: 800; color: var(--zim-gold); margin-bottom: 6px;">
+            Core Doctrine: Economic Diplomacy &amp; Multi-Alignment
+          </div>
+          <p style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-bottom: 12px;">
+            Zimbabwe’s foreign policy framework centers <strong>economic diplomacy</strong> over confrontation, prioritizing peaceful trade and structural re-engagement. This coexists with domestic resource frameworks and reserved investment sectors designed to protect local economic participation.
+          </p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px 12px; border-radius: 6px;">
+              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Primary Trade Axis</div>
+              <div style="font-size: 12px; font-weight: 800; color: #38BDF8;">SADC &amp; AfCFTA Integration</div>
+            </div>
+            <div style="background: #070B14; border: 1px solid var(--border-soft); padding: 8px 12px; border-radius: 6px;">
+              <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Resource Leverage</div>
+              <div style="font-size: 12px; font-weight: 800; color: var(--zim-gold);">Critical Minerals (Lithium/Platinum)</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background: #070B14; border: 1px solid var(--border-panel); border-radius: 10px; padding: 14px;">
+          <div style="font-size: 11px; font-weight: 800; color: #FBBF24; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #1E293B; padding-bottom: 4px;">
+            Strategic Re-Engagement Vectors
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
+            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid #F59E0B; padding: 6px 8px; border-radius: 6px;">
+              <strong>1. Multilateral Arrears Clearance:</strong> Structured dialogue platforms and debt resolution processes targeting external creditor arrears.
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-soft); padding: 6px 8px; border-radius: 6px; color: var(--text-muted);">
+              <strong>2. East-South Partnerships:</strong> Maintaining robust trade, investment, and infrastructure corridors with regional and global allies.
+            </div>
+          </div>
         </div>
       </div>
     </div>
