@@ -17,6 +17,7 @@ const MAX_ATTACHMENT_SIZE = 500 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_SIZE = process.env.MAX_TOTAL_ATTACHMENT_SIZE_BYTES
   ? Number(process.env.MAX_TOTAL_ATTACHMENT_SIZE_BYTES)
   : 5 * 1024 * 1024 * 1024;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINIKEY;
 const GEMINI_MODEL = 'gemini-3.8-flash';
 const MAX_GEMINI_CHAT_REQUESTS = 10;
 const GEMINI_CHAT_WINDOW_MS = 10 * 60 * 1000;
@@ -608,7 +609,7 @@ app.get('/api/social/hashtags', async (req, res) => {
 });
 
 app.get('/api/ai/status', (req, res) => {
-  res.json({ configured: Boolean(process.env.GEMINI_API_KEY) });
+  res.json({ configured: Boolean(GEMINI_API_KEY) });
 });
 
 app.post('/api/ai/query', async (req, res) => {
@@ -616,7 +617,7 @@ app.post('/api/ai/query', async (req, res) => {
   if (!prompt || prompt.length > 12000) {
     return res.status(400).json({ error: 'A prompt of 1–12,000 characters is required.' });
   }
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = GEMINI_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'Gemini is not configured on this app host.' });
 
   const now = Date.now();
@@ -731,7 +732,7 @@ app.post('/api/attachments/:id/analyze', async (req, res) => {
   if (req.body?.consent !== true) {
     return res.status(400).json({ error: 'Explicit consent is required before sending evidence to Gemini.' });
   }
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = GEMINI_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'Gemini is not configured on this app host.' });
 
   const attachment = attachments.find(item => item.id === req.params.id);

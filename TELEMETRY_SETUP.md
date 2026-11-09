@@ -53,7 +53,7 @@ For local development, copy `.env.example` to `.env` and set the variable there,
 
 ### Configure the AI copilot
 
-The copilot's cloud responses require a Gemini API key on the Node.js backend. Copy `.env.example` to `.env`, set `GEMINI_API_KEY` to your key, and start the app with `npm run dev`. Keep `.env` private; it is ignored by Git. The VS Code **Run KUVHURA Observatory** launch configuration starts the same backend and opens the dashboard at `http://localhost:3000`.
+The copilot's cloud responses require a Gemini API key on the Node.js backend. Copy `.env.example` to `.env`, set `GEMINI_API_KEY` to your key, and start the app with `npm run dev`. Keep `.env` private; it is ignored by Git. For GitHub Codespaces, a repository or Codespaces secret named `GEMINIKEY` is also accepted; the VS Code **Run KUVHURA Observatory** launch configuration maps it to `GEMINI_API_KEY`. The launch configuration starts the backend and opens the dashboard at `http://localhost:3000`.
 
 Without a key, the dashboard still offers its empirical offline reasoning engine. If it says **AI service status unavailable**, make sure the backend is running and open the dashboard from its port 3000 URL rather than opening `index.html` directly or using a separate static server. The key is never sent to the browser.
 
