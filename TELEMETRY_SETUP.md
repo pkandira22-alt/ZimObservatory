@@ -26,7 +26,7 @@ The workflow maps these secrets to the publisher's `GOOGLE_SHEETS_WEB_APP_URL` a
 
 ## 3. Run and evaluate the forecasting model
 
-The forecast report uses World Bank annual Zimbabwe GDP growth, ZIMSTAT's monthly weighted CPI inflation series, and monthly Yahoo Finance gold futures history. It runs chronological rolling-origin validation, selects methods on earlier origins, and compares a later holdout with a last-observation benchmark. If Yahoo's primary chart host is rate-limited, the service retries through its alternate chart host. It does not treat the dashboard's Φ formula or media mentions as observed outcomes.
+The forecast report uses World Bank annual Zimbabwe GDP growth, ZIMSTAT's monthly weighted CPI inflation series, and monthly Yahoo Finance gold futures history. It runs chronological rolling-origin validation, selects methods on earlier origins, and compares a later holdout with a last-observation benchmark. If both Yahoo chart hosts are rate-limited, the dashboard shows a current Gold API spot quote as context but explicitly withholds a gold forecast until historical data is available. It does not treat the dashboard's Φ formula or media mentions as observed outcomes.
 
 Generate a one-time report from the repository root:
 

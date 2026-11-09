@@ -72,6 +72,21 @@ class RollingBacktestTests(unittest.TestCase):
         self.assertIn("query2.finance.yahoo.com", request_json.call_args.args[0])
         rate_limited.close()
 
+    @patch("forecasting_model.fetch_gold_spot_quote")
+    @patch("forecasting_model.fetch_gold_monthly_series", side_effect=ValueError("HTTP 429"))
+    def test_gold_shows_live_spot_without_claiming_a_forecast(self, _fetch_history, fetch_quote):
+        fetch_quote.return_value = {
+            "price": 4100.0,
+            "updatedAt": "2026-11-09T20:00:00+00:00",
+        }
+
+        result = _forecast_gold_target()
+
+        self.assertEqual(result["status"], "insufficient_history")
+        self.assertEqual(result["latestObservation"]["value"], 4100.0)
+        self.assertNotIn("forecast", result)
+        self.assertIn("no historical series", result["reason"])
+
     @patch("forecasting_model._request_bytes", return_value=b"workbook")
     @patch("forecasting_model.xlrd.open_workbook")
     def test_zimstat_workbook_reader_extracts_dated_monthly_all_items_rates(

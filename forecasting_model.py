@@ -171,6 +171,18 @@ def fetch_gold_monthly_series():
     raise ValueError("Gold futures data unavailable from Yahoo Finance chart hosts: " + "; ".join(errors))
 
 
+def fetch_gold_spot_quote():
+    payload = _request_json("https://api.gold-api.com/price/XAU")
+    price = float(payload["price"])
+    updated_at = dt.datetime.fromisoformat(payload["updatedAt"].replace("Z", "+00:00"))
+    if not math.isfinite(price):
+        raise ValueError("Gold spot quote is not a finite number")
+    return {
+        "price": price,
+        "updatedAt": updated_at.isoformat(timespec="seconds"),
+    }
+
+
 def _predict(history, method, horizon=1):
     if method == "last_value":
         return history[-1]
@@ -368,7 +380,35 @@ def _forecast_inflation_target(now):
 
 
 def _forecast_gold_target():
-    observations = fetch_gold_monthly_series()
+    try:
+        observations = fetch_gold_monthly_series()
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as historical_error:
+        try:
+            quote = fetch_gold_spot_quote()
+        except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as quote_error:
+            raise ValueError(
+                f"Historical futures data unavailable ({historical_error}); "
+                f"live spot quote unavailable ({quote_error})"
+            ) from quote_error
+        return {
+            "id": "gold",
+            "label": "Gold spot price (live quote)",
+            "unit": "USD per troy ounce",
+            "source": "Gold API live spot quote",
+            "sourceUrl": "https://gold-api.com/assets/gold",
+            "observedThrough": quote["updatedAt"],
+            "latestObservation": {
+                "period": quote["updatedAt"],
+                "value": quote["price"],
+            },
+            "status": "insufficient_history",
+            "reason": (
+                f"Yahoo Finance historical data is unavailable ({historical_error}). "
+                "A current spot quote is shown, but no historical series is available "
+                "to backtest or produce a forecast."
+            ),
+        }
+
     dates, values = zip(*observations)
     backtest = _rolling_backtest(
         list(values),
