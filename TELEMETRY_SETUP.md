@@ -43,7 +43,7 @@ python stream_server.py
 
 Keep that terminal open. In VS Code, you can instead select **Run Observatory with Forecast Stream** in the Run and Debug panel; it starts both the dashboard and forecast service, and stops both when the compound session ends. The first historical data refresh can take up to 30 seconds; reports refresh every six hours and each completed report is pushed to connected dashboards over WebSocket. The research-pillar indicators show the latest forecast status, not continuously sampled economic observations. Open `index.html` from the same computer to connect to `ws://localhost:8765`. In GitHub Codespaces, forward port `8765` as **Public** or **Private** and open the dashboard in the browser; the page detects the forwarded Codespaces WebSocket hostname automatically. For other hosted setups, append `?ws=wss://YOUR-FORWARDED-WEBSOCKET-HOST` to the dashboard URL. Use `STREAM_HOST` and `STREAM_PORT` to change the server bind address or port; `PORT` takes precedence when supplied by a hosting provider such as Render.
 
-The forecast server answers HTTP checks at `/health` and `/` (including `HEAD` probes) while accepting WebSocket upgrades at `/`. For a separate Render Python service, use `/health` as its health-check path and connect the dashboard to `wss://YOUR-SERVICE.onrender.com/`. Render's injected `PORT` is used automatically. This is separate from the Node.js API service defined in [`render.yaml`](./render.yaml).
+The forecast server answers HTTP checks at `/health` and `/` (including `HEAD` probes) while accepting WebSocket upgrades at `/`. The Render Blueprint in [`render.yaml`](./render.yaml) defines a separate Python service named `zimobservatory-forecast`, with `/health` as its health-check path. The GitHub Pages dashboard connects to `wss://zimobservatory-forecast.onrender.com/` by default; local development and Codespaces keep their existing WebSocket URLs. Render's injected `PORT` is used automatically.
 
 Forecasts are not automatically considered validated: the dashboard withholds stale inflation data, reports GDP as a persistence baseline when alternatives fail to beat it, and labels the gold trend provisional because its 12-month holdout origins overlap. Protest forecasts require a dated event dataset; Φ requires historical inputs and a measured outcome. Institutional audit and procurement indicators remain unconnected until a structured, dated source is configured. No custom target was requested.
 
@@ -76,11 +76,11 @@ The copilot's cloud responses require a Gemini API key on the Node.js backend. C
 
 Without a key, the dashboard still offers its empirical offline reasoning engine. Cloud AI requires the Node.js backend: GitHub Pages and other static hosts cannot serve the `/api/ai/*` routes. For local use, start the backend and open its port 3000 URL rather than opening `index.html` directly or using a separate static server.
 
-To connect the GitHub Pages dashboard to Render:
+To deploy the GitHub Pages backend and forecast stream on Render:
 
-1. In Render, create a Blueprint from this repository using [`render.yaml`](./render.yaml). Set `GEMINI_API_KEY` when prompted; never put the key in the repository.
-2. The Blueprint allows browser requests only from `https://pkandira22-alt.github.io`. If Render assigns a different service URL than `https://zimobservatory-backend.onrender.com`, update `KUVHURA_API_BASE_URL` in [`api-config.js`](./api-config.js) to the assigned HTTPS origin and redeploy the Pages site.
-3. Wait for the Render service health check at `/api/health` to pass, then reload the dashboard. Render's free service may take a short time to wake up after inactivity.
+1. In Render, create a Blueprint from this repository using [`render.yaml`](./render.yaml), or sync the existing Blueprint after these changes are pushed. This defines both the Node.js API and Python forecast WebSocket services. Set `GEMINI_API_KEY` if prompted; never put the key in the repository.
+2. Wait for both Render services to become healthy: `/api/health` for the backend and `/health` for the forecast service. The Pages dashboard uses the forecast service URL above. If Render assigns a different forecast URL, open the dashboard with `?ws=wss://YOUR-FORECAST-SERVICE.onrender.com/`. If the backend URL differs from `https://zimobservatory-backend.onrender.com`, update `KUVHURA_API_BASE_URL` in [`api-config.js`](./api-config.js) to the assigned HTTPS origin and redeploy the Pages site.
+3. Reload the dashboard. Render's free services may take a short time to wake after inactivity.
 
 The browser configuration contains only the public backend URL. The Gemini key remains on the backend and is never sent to the browser.
 
