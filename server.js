@@ -21,6 +21,11 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINIKEY;
 const GEMINI_MODEL = 'gemini-3.8-flash';
 const MAX_GEMINI_CHAT_REQUESTS = 10;
 const GEMINI_CHAT_WINDOW_MS = 10 * 60 * 1000;
+const allowedDashboardOrigins = new Set(
+  (process.env.ALLOWED_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean)
+);
+const AI_STATUS_CACHE_MS = 30000;
+let aiStatusCache = { checkedAt: 0, result: null };
 if (!Number.isSafeInteger(MAX_TOTAL_ATTACHMENT_SIZE) || MAX_TOTAL_ATTACHMENT_SIZE <= 0) {
   throw new Error('MAX_TOTAL_ATTACHMENT_SIZE_BYTES must be a positive safe integer.');
 }
@@ -28,6 +33,20 @@ mkdirSync(PRIVATE_UPLOAD_DIR, { recursive: true });
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  if (!origin || !allowedDashboardOrigins.has(origin)) return next();
+
+  res.set({
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '600',
+    Vary: 'Origin'
+  });
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 // In-memory reports store
 const initialReports = [
@@ -608,8 +627,33 @@ app.get('/api/social/hashtags', async (req, res) => {
   }
 });
 
-app.get('/api/ai/status', (req, res) => {
-  res.json({ configured: Boolean(GEMINI_API_KEY) });
+app.get('/api/ai/status', async (req, res) => {
+  if (!GEMINI_API_KEY) return res.json({ configured: false, available: false });
+  if (aiStatusCache.result && Date.now() - aiStatusCache.checkedAt < AI_STATUS_CACHE_MS) {
+    return res.json(aiStatusCache.result);
+  }
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`, {
+      headers: { 'x-goog-api-key': GEMINI_API_KEY },
+      signal: AbortSignal.timeout(8000)
+    });
+    const result = response.ok
+      ? { configured: true, available: true }
+      : {
+          configured: true,
+          available: false,
+          error: `Gemini rejected the model availability check (HTTP ${response.status}).`
+        };
+    if (!response.ok) console.error('Gemini status check failed:', response.status);
+    aiStatusCache = { checkedAt: Date.now(), result };
+    res.status(response.ok ? 200 : 502).json(result);
+  } catch (error) {
+    console.error('Gemini status check failed:', error);
+    const result = { configured: true, available: false, error: 'Gemini could not be reached from the backend.' };
+    aiStatusCache = { checkedAt: Date.now(), result };
+    res.status(502).json(result);
+  }
 });
 
 app.post('/api/ai/query', async (req, res) => {

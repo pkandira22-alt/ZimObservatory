@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: zimobservatory-backend
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: https://pkandira22-alt.github.io
+      - key: GEMINI_API_KEY
+        sync: false

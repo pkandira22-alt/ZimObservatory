@@ -45,6 +45,23 @@ Keep that terminal open. The first historical data refresh can take up to 30 sec
 
 Forecasts are not automatically considered validated: the dashboard withholds stale inflation data, reports GDP as a persistence baseline when alternatives fail to beat it, and labels the gold trend provisional because its 12-month holdout origins overlap. Protest forecasts require a dated event dataset; Φ requires historical inputs and a measured outcome. Institutional audit and procurement indicators remain unconnected until a structured, dated source is configured. No custom target was requested.
 
+### Political economy time series
+
+The dashboard time-series panel offers four series aligned to Φ or Realized Praxis drivers. Download its CSV template and import observations with columns `series,period,metric,value,unit,source,source_url`. Accepted periods are annual (`YYYY`), quarterly (`YYYY-Q1`), monthly (`YYYY-MM`), weekly (`YYYY-W01`), or daily (`YYYY-MM-DD`). Every observation needs an HTTP(S) source URL. Future-dated values are rejected, so 2030 remains a horizon rather than a reported observation.
+
+The time slider displays the selected series cumulatively through the chosen period. Imported values are stored only in the current browser and are not uploaded or shared. The panel starts empty: it does not synthesize missing FX, payroll, OAG, narrative, or throttling data, and its driver series are not historical Φ/Praxis scores.
+
+#### Source availability
+
+| Candidate series | Public source | Coverage and limitation |
+|---|---|---|
+| Monthly inflation + parallel FX premium | [ZIMSTAT CPI releases](https://zimstat.co.zw/consumer-price-index/) provide monthly PDF/XLS releases; [RBZ exchange rates](https://www.rbz.co.zw/index.php/research/markets/exchange-rates) provide official-rate reference. | ZIMSTAT is not a historical API, and currency/weight/methodology changes need review. No matched, source-attributable historical parallel-market rate series was identified. World Bank CPI is an annual fallback, not monthly CPI. |
+| Remittances + civil-service purchasing power | [World Bank personal remittances received API](https://api.worldbank.org/v2/country/ZW/indicator/BX.TRF.PWKR.CD.DT?format=json&per_page=200). | Annual current US$ observations include personal transfers and compensation of employees. No public machine-readable civil-service pay series by grade, currency, and period was identified. |
+| Auditor-General leakage | [Auditor-General document library](https://auditorgeneral.gov.zw/document-library/) and its [WordPress API](https://auditorgeneral.gov.zw/wp-json/wp/v2/pages/262). | The index links to reports rather than structured leakage values; the checked library listed reports for 2021–2025. Audit findings are not automatically proven losses. 2018–2030 is not a continuous observed series, and 2026–2030 cannot be filled with projections. |
+| Narrative velocity + throttling | [GDELT DOC API](https://api.gdeltproject.org/api/v2/doc/doc?query=Zimbabwe&mode=timelinevol&format=json) and [OONI Zimbabwe measurements](https://api.ooni.io/api/v1/measurements?probe_cc=ZW&limit=2). | GDELT volume is news coverage, not social-media activity. OONI provides individual network measurements; anomalies alone do not prove deliberate throttling or state attribution. No direct, continuous state-throttling series was identified. |
+
+These are source leads, not preloaded observations. For any imported data, retain the source's dates, definitions, units, and caveats; only compare periods after checking comparability.
+
 ## 4. Configure the KUVHURA backend
 
 Set `GOOGLE_SHEETS_WEB_APP_URL` in the environment of the Node.js backend (`server.js`), using the same deployed URL. Restart the backend after setting it. The dashboard's social telemetry panel then loads from the sheet automatically; no sheet ID or link needs to be entered in the dashboard.
@@ -53,9 +70,17 @@ For local development, copy `.env.example` to `.env` and set the variable there,
 
 ### Configure the AI copilot
 
-The copilot's cloud responses require a Gemini API key on the Node.js backend. Copy `.env.example` to `.env`, set `GEMINI_API_KEY` to your key, and start the app with `npm run dev`. Keep `.env` private; it is ignored by Git. For GitHub Codespaces, a repository or Codespaces secret named `GEMINIKEY` is also accepted; the VS Code **Run KUVHURA Observatory** launch configuration maps it to `GEMINI_API_KEY`. The launch configuration starts the backend and opens the dashboard at `http://localhost:3000`.
+The copilot's cloud responses require a Gemini API key on the Node.js backend. Copy `.env.example` to `.env`, set `GEMINI_API_KEY` to your key, and start the app with `npm run dev`. Keep `.env` private; it is ignored by Git. The backend also accepts a `GEMINIKEY` environment variable. The VS Code **Run KUVHURA Observatory** launch configuration starts the backend and opens the dashboard at `http://localhost:3000`.
 
-Without a key, the dashboard still offers its empirical offline reasoning engine. If it says **AI service status unavailable**, make sure the backend is running and open the dashboard from its port 3000 URL rather than opening `index.html` directly or using a separate static server. The key is never sent to the browser.
+Without a key, the dashboard still offers its empirical offline reasoning engine. Cloud AI requires the Node.js backend: GitHub Pages and other static hosts cannot serve the `/api/ai/*` routes. For local use, start the backend and open its port 3000 URL rather than opening `index.html` directly or using a separate static server.
+
+To connect the GitHub Pages dashboard to Render:
+
+1. In Render, create a Blueprint from this repository using [`render.yaml`](./render.yaml). Set `GEMINI_API_KEY` when prompted; never put the key in the repository.
+2. The Blueprint allows browser requests only from `https://pkandira22-alt.github.io`. If Render assigns a different service URL than `https://zimobservatory-backend.onrender.com`, update `KUVHURA_API_BASE_URL` in [`api-config.js`](./api-config.js) to the assigned HTTPS origin and redeploy the Pages site.
+3. Wait for the Render service health check at `/api/health` to pass, then reload the dashboard. Render's free service may take a short time to wake up after inactivity.
+
+The browser configuration contains only the public backend URL. The Gemini key remains on the backend and is never sent to the browser.
 
 ## 5. Stream reported extraction quantities to the map and model
 
