@@ -67,6 +67,7 @@
     .card.core { border-top: 4px solid var(--gold); }
     .card.equilibrium { border-top: 4px solid #a78bfa; }
     .card.trends { border-top: 4px solid var(--blue); }
+    .card.orientation { border-top: 4px solid var(--green); }
 
     .card-heading {
       display: flex;
@@ -85,6 +86,7 @@
     .core .card-heading { color: var(--gold); }
     .equilibrium .card-heading { color: #c4b5fd; }
     .trends .card-heading { color: var(--blue); }
+    .orientation .card-heading { color: var(--green); }
 
     .heading-detail, .fine-print { color: var(--muted); font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; }
 
@@ -157,6 +159,9 @@
     .source { color: var(--muted); font-size: 10px; }
     .source[data-state="connected"] { color: var(--green); }
     .source[data-state="unavailable"] { color: #fca5a5; }
+    .orientation-scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .orientation-score { padding: 10px; border: 1px solid var(--panel); border-radius: 8px; color: var(--muted); font-size: 12px; }
+    .orientation-score strong { display: block; color: var(--text); }
 
     @media (max-width: 540px) {
       body { padding: 10px; }
@@ -228,12 +233,24 @@
       <div id="trendSources" class="source-list" aria-label="Telemetry source status"></div>
       <p id="trendScope" class="model-note">The feed samples recent public posts matching Zimbabwe. It is not a platform-wide or global ranking.</p>
     </section>
+
+    <section class="card orientation" aria-labelledby="orientation-heading">
+      <h2 class="card-heading" id="orientation-heading">
+        <span>Strategic Orientation</span>
+        <span class="heading-detail">Experimental heuristic · review required</span>
+      </h2>
+      <p id="orientationStatus" class="stream-status" data-state="connecting" role="status" aria-live="polite">Waiting for complete live orientation inputs.</p>
+      <div id="orientationResult" class="orientation-scores" aria-live="polite"></div>
+      <p class="model-note">No orientation is produced from social trends or static dashboard values. Inputs must be supplied as normalized 0–100 telemetry; scores are experimental, not validated recommendations.</p>
+    </section>
   </main>
 
   <script>
     const streamStatus = document.getElementById("streamStatus");
     const trendTags = document.getElementById("trendTags");
     const trendSources = document.getElementById("trendSources");
+    const orientationStatus = document.getElementById("orientationStatus");
+    const orientationResult = document.getElementById("orientationResult");
     let reconnectDelay = 2000;
     let reconnectTimer;
 
@@ -262,7 +279,39 @@
       streamStatus.dataset.state = state;
     }
 
+    function renderOrientation(orientation) {
+      orientationResult.replaceChildren();
+      if (!orientation || orientation.status === "awaiting_inputs") {
+        orientationStatus.textContent = orientation?.message || "Waiting for complete live orientation inputs.";
+        orientationStatus.dataset.state = "connecting";
+        return;
+      }
+      if (orientation.status !== "evaluated" || !orientation.scores) {
+        orientationStatus.textContent = orientation.message || "Orientation inputs are invalid; no selection was made.";
+        orientationStatus.dataset.state = "error";
+        return;
+      }
+
+      orientationStatus.textContent =
+        `${orientation.label}: index ${Number(orientation.orientationIndex).toFixed(1)} / 100 · ${orientation.message}`;
+      orientationStatus.dataset.state = "connected";
+      const labels = {
+        decentralized_mutual_aid: "Decentralized mutual aid",
+        structural_negotiation: "Structural negotiation",
+        defensive_consolidation: "Defensive consolidation"
+      };
+      for (const [key, score] of Object.entries(orientation.scores)) {
+        const item = document.createElement("div");
+        item.className = "orientation-score";
+        const label = document.createElement("strong");
+        label.textContent = labels[key] || key;
+        item.append(label, document.createTextNode(`${Number(score).toFixed(1)} / 100`));
+        orientationResult.append(item);
+      }
+    }
+
     function renderTelemetry(packet) {
+      renderOrientation(packet.orientation);
       const telemetry = packet.telemetry;
       if (packet.status === "error" || !telemetry) {
         setStatus(packet.message || "Telemetry is temporarily unavailable; reconnecting to updates.", "error");

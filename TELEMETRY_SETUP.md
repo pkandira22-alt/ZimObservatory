@@ -39,6 +39,14 @@ The HTTP server starts before fetching telemetry, so `/health` can answer while 
 
 The service responds to health checks at `/health` and `/` (including `HEAD` probes), and accepts WebSocket upgrades at `/`. The Render Blueprint in [`render.yaml`](./render.yaml) uses `python stream_server.py` as the Python service start command. Render's injected `PORT` is used automatically.
 
+### Prescriptive Strategic Orientation Engine
+
+The stream evaluates an orientation only when the backend snapshot includes an `orientationInputs` object containing all four finite numeric fields `regime_durability_index`, `realized_praxis_yield`, `parallel_fx_premium`, and `coercive_load`. Each field must already be normalized to 0–100; the engine does not infer, scale, or substitute missing measurements. The social hashtag endpoint currently does not supply these values, so the dashboard normally reports that it is awaiting inputs.
+
+The experimental `heuristic-v1` matrix emits scores from 0–100 for decentralized mutual aid, structural negotiation, and defensive consolidation. Its respective weights are: low Φ (0.20), Yield (0.30), Pr (0.25), and low CL (0.25); Φ (0.30), Yield (0.20), low Pr (0.20), and low CL (0.30); low Φ (0.25), low Yield (0.20), Pr (0.10), and CL (0.45). The highest score is selected, with ties resolved in the listed order. These uncalibrated assumptions are for prototyping and are not validated recommendations.
+
+Each polling cycle writes a structured orientation evaluation to the stream service's operational logs, including an abstention when inputs are missing or invalid. This log is not durable history. To enable evaluations, the telemetry producer must publish the four normalized values in `orientationInputs`; do not repurpose the dashboard's static summary figures or social counts as substitutes.
+
 ## 4. Configure the KUVHURA backend
 
 The Node.js backend samples recent Zimbabwe-matching public posts from Bluesky, three Mastodon instances and Reddit, counts hashtags in that sample, and reports the status and sample size of each feed. The Python WebSocket service broadcasts the backend snapshot to the dashboard. Optional X searches are cached for five minutes and YouTube searches for 15 minutes to respect provider rate limits and quota. The telemetry is not a platform-wide or global ranking. If feeds fail, the dashboard reports that instead of showing synthetic fallback values.

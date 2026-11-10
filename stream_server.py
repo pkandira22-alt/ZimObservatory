@@ -1,17 +1,20 @@
 import asyncio
 import json
+import logging
 import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
 from aiohttp import web
+from prescriptive_orientation import evaluate_orientation
 
 CONNECTED_CLIENTS = set()
 LATEST_TRENDS = None
 TREND_REFRESH_SECONDS = 60
 TREND_REQUEST_TIMEOUT_SECONDS = 15
 DEFAULT_API_BASE_URL = "https://zimobservatory-backend.onrender.com"
+logger = logging.getLogger("kuvhura.orientation")
 
 
 async def register(websocket):
@@ -47,11 +50,14 @@ def fetch_trending_telemetry():
     if not isinstance(payload, dict) or not isinstance(payload.get("hashtags"), list):
         raise ValueError("Social telemetry endpoint returned an unexpected response")
 
+    updated_at = payload.get("updatedAt") or datetime.now(timezone.utc).isoformat()
+    orientation = evaluate_orientation(payload)
     return {
         "type": "trending_telemetry",
         "status": "available" if payload.get("available") else "no_sources",
-        "updatedAt": payload.get("updatedAt") or datetime.now(timezone.utc).isoformat(),
+        "updatedAt": updated_at,
         "telemetry": payload,
+        "orientation": orientation,
         **({"message": payload["message"]} if payload.get("message") else {}),
     }
 
@@ -84,9 +90,11 @@ async def refresh_trending_telemetry():
                 "updatedAt": datetime.now(timezone.utc).isoformat(),
                 "message": f"Zimbabwe trending telemetry could not be loaded: {error}",
                 "telemetry": None,
+                "orientation": evaluate_orientation({}),
             }
             print(LATEST_TRENDS["message"])
 
+        logger.info("orientation_evaluation %s", json.dumps(LATEST_TRENDS["orientation"], separators=(",", ":")))
         await broadcast(LATEST_TRENDS)
         await asyncio.sleep(TREND_REFRESH_SECONDS)
 
@@ -118,6 +126,10 @@ def create_app():
 
 
 async def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     host = os.environ.get("STREAM_HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", os.environ.get("STREAM_PORT", "8765")))
     runner = web.AppRunner(create_app())
