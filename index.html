@@ -185,6 +185,11 @@
     .orientation-scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
     .orientation-score { padding: 10px; border: 1px solid var(--panel); border-radius: 8px; color: var(--muted); font-size: 12px; }
     .orientation-score strong { display: block; color: var(--text); }
+    .forecast-targets { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    .forecast-target { padding: 12px; border: 1px solid var(--panel); border-radius: 8px; background: #070b14; }
+    .forecast-target strong { display: block; margin-bottom: 5px; color: var(--text); }
+    .forecast-target p { margin: 4px 0 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+    .forecast-target .forecast-value { color: var(--green); font-size: 13px; font-weight: 700; }
     .classified-state { padding: 14px; border: 1px solid var(--panel); border-left: 4px solid var(--state-color, var(--panel)); border-radius: 8px; background: #070b14; }
     .classified-state strong { display: block; margin-bottom: 5px; color: var(--state-color, var(--text)); }
 
@@ -257,6 +262,15 @@
       <p class="model-note">Historical arcs include structural adjustment legacies, the 2008 hyperinflationary collapse, and modern digital informalization.</p>
     </section>
 
+    <section class="card trends" aria-labelledby="forecast-heading">
+      <h2 class="card-heading" id="forecast-heading">
+        <span>Political Economy Time Series &amp; Forecasts</span>
+        <span class="heading-detail">Out-of-sample holdout</span>
+      </h2>
+      <p id="forecastStatus" class="stream-status" role="status" aria-live="polite">The live stream currently publishes trend telemetry, not forecast reports. No forecast values are simulated.</p>
+      <div id="forecastTargets" class="forecast-targets" aria-live="polite"></div>
+    </section>
+
     <section class="card trends" aria-labelledby="trends-heading">
       <h2 class="card-heading" id="trends-heading">
         <span>Dynamic Zimbabwe Trend Discovery</span>
@@ -290,6 +304,8 @@
     const orientationResult = document.getElementById("orientationResult");
     const classificationStatus = document.getElementById("classificationStatus");
     const classificationResult = document.getElementById("classificationResult");
+    const forecastStatus = document.getElementById("forecastStatus");
+    const forecastTargets = document.getElementById("forecastTargets");
     let reconnectDelay = 2000;
     let reconnectTimer;
 
@@ -445,6 +461,49 @@
       }
     }
 
+    function renderForecastReport(report) {
+      if (!Array.isArray(report.targets)) {
+        forecastStatus.textContent = "The forecast report has an unexpected format.";
+        forecastStatus.dataset.state = "error";
+        return;
+      }
+
+      forecastTargets.replaceChildren();
+      for (const target of report.targets) {
+        if (!target || typeof target !== "object") continue;
+        const card = document.createElement("article");
+        card.className = "forecast-target";
+
+        const title = document.createElement("strong");
+        title.textContent = target.label || target.id || "Forecast target";
+        card.append(title);
+
+        const status = document.createElement("p");
+        status.textContent = target.status || "Status unavailable";
+        card.append(status);
+
+        if (target.forecast && typeof target.forecast.value === "number" && Number.isFinite(target.forecast.value)) {
+          const value = document.createElement("p");
+          value.className = "forecast-value";
+          value.textContent = `${target.forecast.period || "Forecast"}: ${target.forecast.value.toLocaleString()} ${target.unit || ""}`.trim();
+          card.append(value);
+        }
+
+        if (target.reason) {
+          const reason = document.createElement("p");
+          reason.textContent = target.reason;
+          card.append(reason);
+        }
+        forecastTargets.append(card);
+      }
+
+      const generatedAt = report.generatedAt
+        ? ` · generated ${new Date(report.generatedAt).toLocaleString()}`
+        : "";
+      forecastStatus.textContent = `Forecast report received${generatedAt}${report.horizon ? ` · ${report.horizon}` : ""}`;
+      forecastStatus.dataset.state = "connected";
+    }
+
     function connect() {
       let socket;
       try {
@@ -471,6 +530,7 @@
         }
 
         if (packet.type === "trending_telemetry") renderTelemetry(packet);
+        else if (packet.type === "forecast_report") renderForecastReport(packet);
         else if (packet.type === "stream_status") setStatus(packet.message || "Telemetry is loading…", "connecting");
       });
       socket.addEventListener("error", () => {

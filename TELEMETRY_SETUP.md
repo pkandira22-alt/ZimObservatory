@@ -37,6 +37,8 @@ python stream_server.py
 
 The HTTP server starts before fetching telemetry, so `/health` can answer while the Node.js backend or public feeds are waking up. The service sends a loading status immediately to new WebSocket clients, fetches the latest `/api/social/hashtags` snapshot in a worker thread, then broadcasts JSON updates every 60 seconds. Configure `KUVHURA_API_BASE_URL` if the Node.js backend is hosted at a different origin. Open `index.html` locally to connect to `ws://localhost:8765`. In GitHub Codespaces, forward port `8765` and open the dashboard; the page detects the forwarded hostname. For other hosted setups, use `?ws=wss://YOUR-STREAM-SERVICE.onrender.com/`. `PORT` takes precedence over `STREAM_PORT` when supplied by Render.
 
+The dashboard's Political Economy Time Series & Forecasts panel can render `forecast_report` packets when a stream provides them. This service currently publishes `trending_telemetry` packets only, so the panel does not show forecasts unless a forecast-producing service is connected; it does not substitute synthetic values.
+
 The service responds to health checks at `/health` and `/` (including `HEAD` probes), and accepts WebSocket upgrades at `/`. The Render Blueprint in [`render.yaml`](./render.yaml) uses `python stream_server.py` as the Python service start command. Render's injected `PORT` is used automatically.
 
 ### Prescriptive Strategic Orientation Engine
