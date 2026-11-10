@@ -63,6 +63,27 @@
     .brand-name { font-size: 16px; font-weight: 800; }
     .brand-description { color: var(--muted); font-size: 11px; }
 
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .live-indicator::before {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      content: "";
+    }
+
+    .live-indicator[data-state="connected"] { color: var(--green); }
+    .live-indicator[data-state="error"] { color: #fca5a5; }
+
     .card { padding: 18px; }
     .card.core { border-top: 4px solid var(--gold); }
     .card.equilibrium { border-top: 4px solid #a78bfa; }
@@ -185,13 +206,13 @@
         <div class="brand-name">Privilege Kandira</div>
         <div class="brand-description">Political Economy &amp; Resistance Observatory</div>
       </div>
-      <span class="fine-print">Zimbabwe · Public Observatory</span>
+      <span id="streamIndicator" class="live-indicator" data-state="connecting" role="status" aria-live="polite">STREAM CONNECTING</span>
     </header>
 
     <section class="card core" aria-labelledby="core-heading">
       <h1 class="card-heading" id="core-heading">
-        <span>KUVHURA Core Summary</span>
-        <span class="heading-detail">Dual Core Engine</span>
+        <span>KUVHURA Dual Core Engine</span>
+        <span class="heading-detail">Model summary indicators</span>
       </h1>
       <div class="metrics">
         <article class="metric">
@@ -209,7 +230,7 @@
     <section class="card equilibrium" aria-labelledby="equilibrium-heading">
       <h2 class="card-heading" id="equilibrium-heading">
         <span>Asymmetric Force Equilibrium</span>
-        <span class="heading-detail">Structural power model</span>
+        <span class="heading-detail">Dynamic fulcrum</span>
       </h2>
       <div class="force-model" role="img" aria-label="Conceptual comparison of regime pressure and citizen autonomy">
         <div class="force-side regime">
@@ -227,8 +248,8 @@
 
     <section class="card trends" aria-labelledby="trends-heading">
       <h2 class="card-heading" id="trends-heading">
-        <span>Zimbabwe Trending Telemetry</span>
-        <span class="heading-detail">Live backend stream</span>
+        <span>Dynamic Zimbabwe Trend Discovery</span>
+        <span class="heading-detail">Live public-feed sample</span>
       </h2>
       <p id="streamStatus" class="stream-status" data-state="connecting" role="status" aria-live="polite">Connecting to live telemetry…</p>
       <div id="trendTags" class="tag-list" aria-live="polite">
@@ -260,6 +281,7 @@
   </main>
 
   <script>
+    const streamIndicator = document.getElementById("streamIndicator");
     const streamStatus = document.getElementById("streamStatus");
     const trendTags = document.getElementById("trendTags");
     const trendSources = document.getElementById("trendSources");
@@ -293,6 +315,12 @@
     function setStatus(message, state) {
       streamStatus.textContent = message;
       streamStatus.dataset.state = state;
+      streamIndicator.dataset.state = state;
+      streamIndicator.textContent = state === "connected"
+        ? "LIVE STREAM ACTIVE"
+        : state === "error"
+          ? "STREAM UNAVAILABLE"
+          : "STREAM CONNECTING";
     }
 
     function renderOrientation(orientation) {
