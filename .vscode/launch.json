@@ -23,7 +23,7 @@
             "name": "Run KUVHURA Forecast Stream",
             "type": "debugpy",
             "request": "launch",
-            "module": "stream_server",
+            "program": "${workspaceFolder}/stream_server.py",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
         },
