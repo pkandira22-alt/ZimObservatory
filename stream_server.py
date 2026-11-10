@@ -7,7 +7,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 from aiohttp import web
-from prescriptive_orientation import evaluate_orientation
+from prescriptive_orientation import evaluate_orientation, evaluate_state_classification
 
 CONNECTED_CLIENTS = set()
 LATEST_TRENDS = None
@@ -52,12 +52,14 @@ def fetch_trending_telemetry():
 
     updated_at = payload.get("updatedAt") or datetime.now(timezone.utc).isoformat()
     orientation = evaluate_orientation(payload)
+    state_classification = evaluate_state_classification(payload.get("orientationInputs"))
     return {
         "type": "trending_telemetry",
         "status": "available" if payload.get("available") else "no_sources",
         "updatedAt": updated_at,
         "telemetry": payload,
         "orientation": orientation,
+        "stateClassification": state_classification,
         **({"message": payload["message"]} if payload.get("message") else {}),
     }
 
@@ -91,10 +93,17 @@ async def refresh_trending_telemetry():
                 "message": f"Zimbabwe trending telemetry could not be loaded: {error}",
                 "telemetry": None,
                 "orientation": evaluate_orientation({}),
+                "stateClassification": evaluate_state_classification(None),
             }
             print(LATEST_TRENDS["message"])
 
         logger.info("orientation_evaluation %s", json.dumps(LATEST_TRENDS["orientation"], separators=(",", ":")))
+        logger.info(
+            "state_classification %s",
+            json.dumps(LATEST_TRENDS["stateClassification"]["timelineLog"]
+                       if LATEST_TRENDS["stateClassification"]["status"] == "evaluated"
+                       else LATEST_TRENDS["stateClassification"], separators=(",", ":")),
+        )
         await broadcast(LATEST_TRENDS)
         await asyncio.sleep(TREND_REFRESH_SECONDS)
 

@@ -68,6 +68,7 @@
     .card.equilibrium { border-top: 4px solid #a78bfa; }
     .card.trends { border-top: 4px solid var(--blue); }
     .card.orientation { border-top: 4px solid var(--green); }
+    .card.classification { border-top: 4px solid #f87171; }
 
     .card-heading {
       display: flex;
@@ -87,6 +88,7 @@
     .equilibrium .card-heading { color: #c4b5fd; }
     .trends .card-heading { color: var(--blue); }
     .orientation .card-heading { color: var(--green); }
+    .classification .card-heading { color: #f87171; }
 
     .heading-detail, .fine-print { color: var(--muted); font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; }
 
@@ -162,6 +164,8 @@
     .orientation-scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
     .orientation-score { padding: 10px; border: 1px solid var(--panel); border-radius: 8px; color: var(--muted); font-size: 12px; }
     .orientation-score strong { display: block; color: var(--text); }
+    .classified-state { padding: 14px; border: 1px solid var(--panel); border-left: 4px solid var(--state-color, var(--panel)); border-radius: 8px; background: #070b14; }
+    .classified-state strong { display: block; margin-bottom: 5px; color: var(--state-color, var(--text)); }
 
     @media (max-width: 540px) {
       body { padding: 10px; }
@@ -243,6 +247,16 @@
       <div id="orientationResult" class="orientation-scores" aria-live="polite"></div>
       <p class="model-note">No orientation is produced from social trends or static dashboard values. Inputs must be supplied as normalized 0–100 telemetry; scores are experimental, not validated recommendations.</p>
     </section>
+
+    <section class="card classification" aria-labelledby="classification-heading">
+      <h2 class="card-heading" id="classification-heading">
+        <span>Structural State Classification</span>
+        <span class="heading-detail">Experimental Φ thresholds</span>
+      </h2>
+      <p id="classificationStatus" class="stream-status" data-state="connecting" role="status" aria-live="polite">Waiting for live Φ and coercive-load inputs.</p>
+      <div id="classificationResult" class="classified-state" hidden></div>
+      <p class="model-note">Classification uses Φ only (≥70 consolidated, ≥40 protracted, otherwise acute). Coercive load is validated and logged as context but does not change the classification. This experimental label is not a verified assessment.</p>
+    </section>
   </main>
 
   <script>
@@ -251,6 +265,8 @@
     const trendSources = document.getElementById("trendSources");
     const orientationStatus = document.getElementById("orientationStatus");
     const orientationResult = document.getElementById("orientationResult");
+    const classificationStatus = document.getElementById("classificationStatus");
+    const classificationResult = document.getElementById("classificationResult");
     let reconnectDelay = 2000;
     let reconnectTimer;
 
@@ -310,8 +326,45 @@
       }
     }
 
+    function renderClassification(classification) {
+      classificationResult.replaceChildren();
+      classificationResult.hidden = true;
+      if (!classification || classification.status === "awaiting_inputs") {
+        classificationStatus.textContent =
+          classification?.message || "Waiting for live Φ and coercive-load inputs.";
+        classificationStatus.dataset.state = "connecting";
+        return;
+      }
+      if (classification.status !== "evaluated") {
+        classificationStatus.textContent =
+          classification.message || "State inputs are invalid; no state was classified.";
+        classificationStatus.dataset.state = "error";
+        return;
+      }
+
+      classificationStatus.textContent =
+        `Φ ${Number(classification.phi).toFixed(1)} · coercive load ${Number(classification.coerciveLoad).toFixed(1)}`;
+      classificationStatus.dataset.state = "connected";
+      const stateColors = {
+        consolidated_captivity: "#f87171",
+        protracted_crisis: "#f59e0b",
+        acute_systemic_failure: "#ef4444"
+      };
+      classificationResult.style.setProperty(
+        "--state-color",
+        stateColors[classification.stateKey] || "#94a3b8"
+      );
+      const state = document.createElement("strong");
+      state.textContent = classification.state;
+      const prescription = document.createElement("span");
+      prescription.textContent = classification.prescription;
+      classificationResult.append(state, prescription);
+      classificationResult.hidden = false;
+    }
+
     function renderTelemetry(packet) {
       renderOrientation(packet.orientation);
+      renderClassification(packet.stateClassification);
       const telemetry = packet.telemetry;
       if (packet.status === "error" || !telemetry) {
         setStatus(packet.message || "Telemetry is temporarily unavailable; reconnecting to updates.", "error");

@@ -1,10 +1,44 @@
 import unittest
 from datetime import datetime, timezone
 
-from prescriptive_orientation import evaluate_orientation
+from prescriptive_orientation import evaluate_orientation, evaluate_state_classification
 
 
 class PrescriptiveOrientationTests(unittest.TestCase):
+    def test_state_classification_uses_phi_thresholds_and_includes_context(self):
+        cases = (
+            (70, "consolidated_captivity"),
+            (69.9, "protracted_crisis"),
+            (40, "protracted_crisis"),
+            (39.9, "acute_systemic_failure"),
+            (20, "acute_systemic_failure"),
+            (0, "acute_systemic_failure"),
+        )
+        for phi, expected in cases:
+            with self.subTest(phi=phi):
+                result = evaluate_state_classification({
+                    "regime_durability_index": phi,
+                    "coercive_load": 82.5,
+                })
+                self.assertEqual(result["status"], "evaluated")
+                self.assertEqual(result["stateKey"], expected)
+                self.assertEqual(result["coerciveLoad"], 82.5)
+                self.assertEqual(result["timelineLog"]["phi"], phi)
+                self.assertEqual(result["timelineLog"]["classifiedState"], result["state"])
+                self.assertEqual(result["timelineLog"]["recommendedOrientation"], result["prescription"])
+
+    def test_state_classification_abstains_on_missing_or_invalid_inputs(self):
+        missing = evaluate_state_classification({"regime_durability_index": 37.4})
+        invalid = evaluate_state_classification({
+            "regime_durability_index": 37.4,
+            "coercive_load": float("nan"),
+        })
+
+        self.assertEqual(missing["status"], "awaiting_inputs")
+        self.assertEqual(missing["missingInputs"], ["coercive_load"])
+        self.assertEqual(invalid["status"], "invalid_inputs")
+        self.assertEqual(invalid["invalidInputs"], ["coercive_load"])
+
     def test_selects_each_orientation_for_its_extreme_input_profile(self):
         cases = (
             (

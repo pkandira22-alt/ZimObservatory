@@ -17,6 +17,107 @@ ORIENTATIONS = {
     "defensive_consolidation": "Defensive consolidation",
 }
 
+STATE_THRESHOLDS = {
+    "consolidated_captivity": {
+        "name": "Consolidated Captivity State",
+        "color": "#f87171",
+        "threshold_phi": 70,
+        "prescription": (
+            "Prioritize institutional resilience, decentralized mutual aid, "
+            "and long-term shadow infrastructure mapping."
+        ),
+    },
+    "protracted_crisis": {
+        "name": "Protracted Crisis / Fragile State",
+        "color": "#f59e0b",
+        "threshold_phi": 40,
+        "prescription": (
+            "Leverage parallel market inefficiencies; optimize resource "
+            "distribution networks to mitigate local extraction shocks."
+        ),
+    },
+    "acute_systemic_failure": {
+        "name": "Acute Systemic Failure",
+        "color": "#ef4444",
+        "threshold_phi": 20,
+        "prescription": (
+            "Activate emergency civic defense postures; pivot immediately to "
+            "survival-driven coordination and sovereign alternative asset rails."
+        ),
+    },
+}
+
+
+def evaluate_state_classification(inputs, evaluated_at=None):
+    """Classify normalized Φ thresholds; CL is validated and retained as context."""
+    timestamp = evaluated_at or datetime.now(timezone.utc)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    evaluated_at_text = timestamp.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    required = ("regime_durability_index", "coercive_load")
+    if not isinstance(inputs, dict):
+        return {
+            "status": "awaiting_inputs",
+            "evaluatedAt": evaluated_at_text,
+            "missingInputs": list(required),
+            "message": "No live Φ and coercive-load inputs were provided; no state was classified.",
+        }
+
+    missing = [field for field in required if field not in inputs]
+    if missing:
+        return {
+            "status": "awaiting_inputs",
+            "evaluatedAt": evaluated_at_text,
+            "missingInputs": missing,
+            "message": "State classification inputs are incomplete; no state was classified.",
+        }
+
+    invalid = []
+    for field in required:
+        value = inputs[field]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            invalid.append(field)
+        elif not math.isfinite(value) or not 0 <= value <= 100:
+            invalid.append(field)
+    if invalid:
+        return {
+            "status": "invalid_inputs",
+            "evaluatedAt": evaluated_at_text,
+            "invalidInputs": invalid,
+            "message": "Φ and coercive load must be finite normalized values from 0 to 100.",
+        }
+
+    phi = inputs["regime_durability_index"]
+    if phi >= STATE_THRESHOLDS["consolidated_captivity"]["threshold_phi"]:
+        state_key = "consolidated_captivity"
+    elif phi >= STATE_THRESHOLDS["protracted_crisis"]["threshold_phi"]:
+        state_key = "protracted_crisis"
+    else:
+        state_key = "acute_systemic_failure"
+
+    state = STATE_THRESHOLDS[state_key]
+    timeline_log = {
+        "timestamp": evaluated_at_text,
+        "phi": phi,
+        "coerciveLoad": inputs["coercive_load"],
+        "classifiedState": state["name"],
+        "recommendedOrientation": state["prescription"],
+    }
+    return {
+        "status": "evaluated",
+        "evaluatedAt": evaluated_at_text,
+        "stateKey": state_key,
+        "state": state["name"],
+        "color": state["color"],
+        "prescription": state["prescription"],
+        "phi": phi,
+        "coerciveLoad": inputs["coercive_load"],
+        "timelineLog": timeline_log,
+        "method": "phi-threshold-v1",
+        "message": "Prototype threshold classification; review assumptions before use.",
+    }
+
 
 def evaluate_orientation(packet, evaluated_at=None):
     """Evaluate packet.orientationInputs; abstain unless all normalized inputs are valid."""

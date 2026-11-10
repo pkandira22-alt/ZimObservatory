@@ -47,6 +47,8 @@ The experimental `heuristic-v1` matrix emits scores from 0–100 for decentraliz
 
 Each polling cycle writes a structured orientation evaluation to the stream service's operational logs, including an abstention when inputs are missing or invalid. This log is not durable history. To enable evaluations, the telemetry producer must publish the four normalized values in `orientationInputs`; do not repurpose the dashboard's static summary figures or social counts as substitutes.
 
+The separate State Classification output uses the same `orientationInputs` object but requires only `regime_durability_index` and `coercive_load`. It classifies Φ ≥70 as Consolidated Captivity, Φ ≥40 as Protracted Crisis / Fragile State, and lower values as Acute Systemic Failure. Coercive load is validated and recorded in the timeline log but does not affect the threshold choice, matching the supplied classifier logic. Each poll logs either the evaluated timeline record or an explicit abstention/validation result. This prototype classification and its prescription text are unvalidated and should not be treated as operational advice.
+
 ## 4. Configure the KUVHURA backend
 
 The Node.js backend samples recent Zimbabwe-matching public posts from Bluesky, three Mastodon instances and Reddit, counts hashtags in that sample, and reports the status and sample size of each feed. The Python WebSocket service broadcasts the backend snapshot to the dashboard. Optional X searches are cached for five minutes and YouTube searches for 15 minutes to respect provider rate limits and quota. The telemetry is not a platform-wide or global ranking. If feeds fail, the dashboard reports that instead of showing synthetic fallback values.
