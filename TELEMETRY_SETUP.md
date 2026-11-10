@@ -24,49 +24,24 @@ In the repository's **Settings → Secrets and variables → Actions**, configur
 
 The workflow maps these secrets to the publisher's `GOOGLE_SHEETS_WEB_APP_URL` and `GOOGLE_SHEETS_WEB_APP_TOKEN` environment variables. It uses only Python's standard library, so no dependency installation is needed. The scheduled workflow is [`.github/workflows/telemetry_sync.yml`](./.github/workflows/telemetry_sync.yml). It runs every 30 minutes and can also be started with **Actions → KUVHURA Live Social Telemetry Sync → Run workflow**.
 
-## 3. Run and evaluate the forecasting model
+## 3. Run the live telemetry stream
 
-The forecast report uses World Bank annual Zimbabwe GDP growth, ZIMSTAT's monthly weighted CPI inflation series, and monthly Yahoo Finance gold futures history. It runs chronological rolling-origin validation, selects methods on earlier origins, and compares a later holdout with a last-observation benchmark. If both Yahoo chart hosts are rate-limited, the dashboard shows a current Gold API spot quote as context but explicitly withholds a gold forecast until historical data is available. It does not treat the dashboard's Φ formula or media mentions as observed outcomes.
+The public dashboard is limited to the KUVHURA core summary, Asymmetric Force Equilibrium model, and live Zimbabwe trending telemetry. The core indicators are model summary values, not live measurements. The telemetry is sampled from recent public posts matching Zimbabwe; it is not a platform-wide or global ranking.
 
-Generate a one-time report from the repository root:
-
-```sh
-python forecasting_model.py
-```
-
-Run the dashboard forecast service:
+Start the Render-compatible WebSocket and health service from the repository root:
 
 ```sh
 python -m pip install -r requirements.txt
 python stream_server.py
 ```
 
-Keep that terminal open. In VS Code, you can instead select **Run Observatory with Forecast Stream** in the Run and Debug panel; it starts both the dashboard and forecast service, and stops both when the compound session ends. The first historical data refresh can take up to 30 seconds; reports refresh every six hours and each completed report is pushed to connected dashboards over WebSocket. The research-pillar indicators show the latest forecast status, not continuously sampled economic observations. Open `index.html` from the same computer to connect to `ws://localhost:8765`. In GitHub Codespaces, forward port `8765` as **Public** or **Private** and open the dashboard in the browser; the page detects the forwarded Codespaces WebSocket hostname automatically. For other hosted setups, append `?ws=wss://YOUR-FORWARDED-WEBSOCKET-HOST` to the dashboard URL. Use `STREAM_HOST` and `STREAM_PORT` to change the server bind address or port; `PORT` takes precedence when supplied by a hosting provider such as Render.
+The HTTP server starts before fetching telemetry, so `/health` can answer while the Node.js backend or public feeds are waking up. The service sends a loading status immediately to new WebSocket clients, fetches the latest `/api/social/hashtags` snapshot in a worker thread, then broadcasts JSON updates every 60 seconds. Configure `KUVHURA_API_BASE_URL` if the Node.js backend is hosted at a different origin. Open `index.html` locally to connect to `ws://localhost:8765`. In GitHub Codespaces, forward port `8765` and open the dashboard; the page detects the forwarded hostname. For other hosted setups, use `?ws=wss://YOUR-STREAM-SERVICE.onrender.com/`. `PORT` takes precedence over `STREAM_PORT` when supplied by Render.
 
-The forecast server answers HTTP checks at `/health` and `/` (including `HEAD` probes) while accepting WebSocket upgrades at `/`. The Render Blueprint in [`render.yaml`](./render.yaml) defines a separate Python service named `zimobservatory-forecast`, with `/health` as its health-check path. The GitHub Pages dashboard connects to `wss://zimobservatory.onrender.com/` by default; local development and Codespaces keep their existing WebSocket URLs. Render's injected `PORT` is used automatically.
-
-Forecasts are not automatically considered validated: GDP and inflation show a persistence baseline when tested alternatives fail to beat it; the inflation series is the recent monthly weighted CPI reported by ZIMSTAT. The gold trend is provisional because its 12-month holdout origins overlap. Protest forecasts require a dated event dataset; Φ requires historical inputs and a measured outcome. Institutional audit and procurement indicators remain unconnected until a structured, dated source is configured. No custom target was requested.
-
-### Political economy time series
-
-The dashboard time-series panel offers four series aligned to Φ or Realized Praxis drivers. Download its CSV template and import observations with columns `series,period,metric,value,unit,source,source_url`. Accepted periods are annual (`YYYY`), quarterly (`YYYY-Q1`), monthly (`YYYY-MM`), weekly (`YYYY-W01`), or daily (`YYYY-MM-DD`). Every observation needs an HTTP(S) source URL. Future-dated values are rejected, so 2030 remains a horizon rather than a reported observation.
-
-The time slider displays the selected series cumulatively through the chosen period. Imported values are stored only in the current browser and are not uploaded or shared. The panel starts empty: it does not synthesize missing FX, payroll, OAG, narrative, or throttling data, and its driver series are not historical Φ/Praxis scores.
-
-#### Source availability
-
-| Candidate series | Public source | Coverage and limitation |
-|---|---|---|
-| Monthly inflation + parallel FX premium | The dashboard reads ZIMSTAT's monthly weighted CPI workbook (the current index series starts in April 2024); [ZIMSTAT CPI releases](https://zimstat.co.zw/consumer-price-index/) publish the monthly PDF/XLS files. [RBZ exchange rates](https://www.rbz.co.zw/index.php/research/markets/exchange-rates) provide an official-rate reference. | Currency/weight/methodology changes need review. No matched, source-attributable historical parallel-market rate series was identified. World Bank CPI is annual and is not substituted for missing monthly data. |
-| Remittances + civil-service purchasing power | [World Bank personal remittances received API](https://api.worldbank.org/v2/country/ZW/indicator/BX.TRF.PWKR.CD.DT?format=json&per_page=200). | Annual current US$ observations include personal transfers and compensation of employees. No public machine-readable civil-service pay series by grade, currency, and period was identified. |
-| Auditor-General leakage | [Auditor-General document library](https://auditorgeneral.gov.zw/document-library/) and its [WordPress API](https://auditorgeneral.gov.zw/wp-json/wp/v2/pages/262). | The index links to reports rather than structured leakage values; the checked library listed reports for 2021–2025. Audit findings are not automatically proven losses. 2018–2030 is not a continuous observed series, and 2026–2030 cannot be filled with projections. |
-| Narrative velocity + throttling | [GDELT DOC API](https://api.gdeltproject.org/api/v2/doc/doc?query=Zimbabwe&mode=timelinevol&format=json) and [OONI Zimbabwe measurements](https://api.ooni.io/api/v1/measurements?probe_cc=ZW&limit=2). | GDELT volume is news coverage, not social-media activity. OONI provides individual network measurements; anomalies alone do not prove deliberate throttling or state attribution. No direct, continuous state-throttling series was identified. |
-
-These are source leads, not preloaded observations. For any imported data, retain the source's dates, definitions, units, and caveats; only compare periods after checking comparability.
+The service responds to health checks at `/health` and `/` (including `HEAD` probes), and accepts WebSocket upgrades at `/`. The Render Blueprint in [`render.yaml`](./render.yaml) uses `python stream_server.py` as the Python service start command. Render's injected `PORT` is used automatically.
 
 ## 4. Configure the KUVHURA backend
 
-The dashboard's live public hashtag tracker polls the Node.js backend every 60 seconds. It samples recent Zimbabwe-matching public posts from Bluesky, three Mastodon instances and Reddit, counts hashtags in that sample, and reports the status and sample size of each feed. Optional X searches are cached for five minutes and YouTube searches for 15 minutes to respect provider rate limits and quota. It does not claim to measure platform-wide or global trends. If all feeds fail, the panel reports that fact instead of showing synthetic fallback values.
+The Node.js backend samples recent Zimbabwe-matching public posts from Bluesky, three Mastodon instances and Reddit, counts hashtags in that sample, and reports the status and sample size of each feed. The Python WebSocket service broadcasts the backend snapshot to the dashboard. Optional X searches are cached for five minutes and YouTube searches for 15 minutes to respect provider rate limits and quota. The telemetry is not a platform-wide or global ranking. If feeds fail, the dashboard reports that instead of showing synthetic fallback values.
 
 To add optional platform feeds, set `X_BEARER_TOKEN` to an authorized X API bearer token with recent-search access and/or `YOUTUBE_API_KEY` to a YouTube Data API v3 key in the Node.js backend environment. Keep both values private; `npm run dev` and `npm start` load values from `.env`. X search access and quotas depend on the X developer plan. YouTube contributes hashtags appearing in recent Zimbabwe-related video titles/descriptions, not a YouTube-wide hashtag trend ranking; its search endpoint has a substantially higher quota cost than ordinary API reads.
 
@@ -82,11 +57,11 @@ The copilot's cloud responses require a Gemini API key on the Node.js backend. C
 
 Without a key, the dashboard still offers its empirical offline reasoning engine. Cloud AI requires the Node.js backend: GitHub Pages and other static hosts cannot serve the `/api/ai/*` routes. For local use, start the backend and open its port 3000 URL rather than opening `index.html` directly or using a separate static server.
 
-To deploy the GitHub Pages backend and forecast stream on Render:
+To deploy the GitHub Pages backend and telemetry stream on Render:
 
-1. In Render, create a Blueprint from this repository using [`render.yaml`](./render.yaml), or sync the existing Blueprint after these changes are pushed. This defines both the Node.js API and Python forecast WebSocket services. Set `GEMINI_API_KEY` if prompted; never put the key in the repository.
-2. Wait for both Render services to become healthy: `/api/health` for the backend and `/health` for the forecast service. The Pages dashboard uses the forecast service URL above. If Render assigns a different forecast URL, open the dashboard with `?ws=wss://YOUR-FORECAST-SERVICE.onrender.com/`. If the backend URL differs from `https://zimobservatory-backend.onrender.com`, update `KUVHURA_API_BASE_URL` in [`api-config.js`](./api-config.js) to the assigned HTTPS origin and redeploy the Pages site.
-3. Reload the dashboard. Render's free services may take a short time to wake after inactivity.
+1. In Render, create a Blueprint from this repository using [`render.yaml`](./render.yaml), or sync the existing Blueprint after these changes are pushed. This defines both the Node.js API and Python WebSocket services. Set `GEMINI_API_KEY` only if needed by other backend routes; never put the key in the repository.
+2. Wait for `/api/health` on the Node.js backend and `/health` on the Python stream service. The stream service uses `KUVHURA_API_BASE_URL` to fetch snapshots; update that environment variable if the Node.js service URL changes.
+3. If Render assigns a different WebSocket URL, open the Pages dashboard with `?ws=wss://YOUR-STREAM-SERVICE.onrender.com/`. The page and health endpoint respond without waiting for public feeds; live trends appear when the backend snapshot arrives.
 
 The browser configuration contains only the public backend URL. The Gemini key remains on the backend and is never sent to the browser.
 
