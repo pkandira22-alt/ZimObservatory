@@ -86,8 +86,8 @@
 
     .card { padding: 18px; }
     .card.core { border-top: 4px solid var(--gold); }
-    .card.equilibrium { border-top: 4px solid #a78bfa; }
-    .card.trends { border-top: 4px solid var(--blue); }
+    .card.equilibrium { border-top: 4px solid var(--blue); }
+    .card.trends { border-top: 4px solid #a5b4fc; }
     .card.orientation { border-top: 4px solid var(--green); }
     .card.classification { border-top: 4px solid #f87171; }
 
@@ -106,8 +106,8 @@
     }
 
     .core .card-heading { color: var(--gold); }
-    .equilibrium .card-heading { color: #c4b5fd; }
-    .trends .card-heading { color: var(--blue); }
+    .equilibrium .card-heading { color: var(--blue); }
+    .trends .card-heading { color: #a5b4fc; }
     .orientation .card-heading { color: var(--green); }
     .classification .card-heading { color: #f87171; }
 
@@ -227,10 +227,20 @@
       <p class="model-note">Model summary indicators; they are not live measurements. Live social telemetry is shown separately below.</p>
     </section>
 
+    <section class="card classification" aria-labelledby="classification-heading">
+      <h2 class="card-heading" id="classification-heading">
+        <span>Institutional State Classification</span>
+        <span class="heading-detail">Experimental Φ thresholds</span>
+      </h2>
+      <p id="classificationStatus" class="stream-status" data-state="connecting" role="status" aria-live="polite">Waiting for live Φ and coercive-load inputs.</p>
+      <div id="classificationResult" class="classified-state" hidden></div>
+      <p class="model-note">Classification uses Φ only (≥70 consolidated, ≥40 protracted, otherwise acute). Coercive load is validated and logged as context but does not change the classification. This experimental label is not a verified assessment.</p>
+    </section>
+
     <section class="card equilibrium" aria-labelledby="equilibrium-heading">
       <h2 class="card-heading" id="equilibrium-heading">
-        <span>Asymmetric Force Equilibrium</span>
-        <span class="heading-detail">Dynamic fulcrum</span>
+        <span>Asymmetric Force Equilibrium &amp; Historical Arcs</span>
+        <span class="heading-detail">Structural context</span>
       </h2>
       <div class="force-model" role="img" aria-label="Conceptual comparison of regime pressure and citizen autonomy">
         <div class="force-side regime">
@@ -244,12 +254,13 @@
         </div>
       </div>
       <p class="model-note">A conceptual framework for examining the balance between institutional power and independent capacity. It does not claim that these factors are continuously measured.</p>
+      <p class="model-note">Historical arcs include structural adjustment legacies, the 2008 hyperinflationary collapse, and modern digital informalization.</p>
     </section>
 
     <section class="card trends" aria-labelledby="trends-heading">
       <h2 class="card-heading" id="trends-heading">
         <span>Dynamic Zimbabwe Trend Discovery</span>
-        <span class="heading-detail">Live public-feed sample</span>
+        <span class="heading-detail">Automated semantic feed</span>
       </h2>
       <p id="streamStatus" class="stream-status" data-state="connecting" role="status" aria-live="polite">Connecting to live telemetry…</p>
       <div id="trendTags" class="tag-list" aria-live="polite">
@@ -267,16 +278,6 @@
       <p id="orientationStatus" class="stream-status" data-state="connecting" role="status" aria-live="polite">Waiting for complete live orientation inputs.</p>
       <div id="orientationResult" class="orientation-scores" aria-live="polite"></div>
       <p class="model-note">No orientation is produced from social trends or static dashboard values. Inputs must be supplied as normalized 0–100 telemetry; scores are experimental, not validated recommendations.</p>
-    </section>
-
-    <section class="card classification" aria-labelledby="classification-heading">
-      <h2 class="card-heading" id="classification-heading">
-        <span>Structural State Classification</span>
-        <span class="heading-detail">Experimental Φ thresholds</span>
-      </h2>
-      <p id="classificationStatus" class="stream-status" data-state="connecting" role="status" aria-live="polite">Waiting for live Φ and coercive-load inputs.</p>
-      <div id="classificationResult" class="classified-state" hidden></div>
-      <p class="model-note">Classification uses Φ only (≥70 consolidated, ≥40 protracted, otherwise acute). Coercive load is validated and logged as context but does not change the classification. This experimental label is not a verified assessment.</p>
     </section>
   </main>
 
