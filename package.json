@@ -13,9 +13,13 @@
     "vite": "^8.3.6"
   },
   "dependencies": {
+    "@google/genai": "^3.0.0",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",
     "express": "^5.3.0",
     "multer": "^2.5.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   }
 }

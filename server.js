@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'path';
-import { createReadStream, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
@@ -17,12 +17,66 @@ const MAX_ATTACHMENT_SIZE = 500 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_SIZE = process.env.MAX_TOTAL_ATTACHMENT_SIZE_BYTES
   ? Number(process.env.MAX_TOTAL_ATTACHMENT_SIZE_BYTES)
   : 5 * 1024 * 1024 * 1024;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINIKEY;
+function isPlaceholderKey(key) {
+  if (!key) return true;
+  const k = key.trim();
+  return (
+    k === '' ||
+    k === 'MY_GEMINI_API_KEY' ||
+    k === 'your_gemini_api_key' ||
+    k === 'your_api_key_here' ||
+    k.toLowerCase().includes('placeholder') ||
+    k.startsWith('TODO')
+  );
+}
+
+function loadEnvFile() {
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (!existsSync(envPath)) return {};
+    const content = readFileSync(envPath, 'utf8');
+    const result = {};
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx !== -1) {
+        const key = trimmed.slice(0, eqIdx).trim();
+        let val = trimmed.slice(eqIdx + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        result[key] = val;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function getGeminiApiKey() {
+  const envFile = loadEnvFile();
+  const fileKey = (envFile.GEMINI_API_KEY || envFile.GEMINIKEY || '').trim();
+  const procKey = (process.env.GEMINI_API_KEY || process.env.GEMINIKEY || '').trim();
+
+  if (fileKey && !isPlaceholderKey(fileKey)) {
+    return fileKey;
+  }
+  if (procKey && !isPlaceholderKey(procKey)) {
+    return procKey;
+  }
+  return null;
+}
+
 const GEMINI_MODEL = 'gemini-3.8-flash';
 const MAX_GEMINI_CHAT_REQUESTS = 10;
 const GEMINI_CHAT_WINDOW_MS = 10 * 60 * 1000;
 const allowedDashboardOrigins = new Set(
-  (process.env.ALLOWED_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean)
+  (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(origin => origin.trim().replace(/\/+$/, ''))
+    .filter(Boolean)
 );
 const AI_STATUS_CACHE_MS = 30000;
 let aiStatusCache = { checkedAt: 0, result: null };
@@ -35,15 +89,25 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req, res, next) => {
   const origin = req.get('origin');
-  if (!origin || !allowedDashboardOrigins.has(origin)) return next();
+  if (!origin) return next();
+  const normalized = origin.replace(/\/+$/, '');
+  const isAllowed = allowedDashboardOrigins.size === 0
+    || allowedDashboardOrigins.has(normalized)
+    || normalized.endsWith('.github.io')
+    || normalized.includes('localhost')
+    || normalized.includes('127.0.0.1')
+    || normalized.includes('.google.com')
+    || normalized.includes('.run.app');
 
-  res.set({
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Max-Age': '600',
-    Vary: 'Origin'
-  });
+  if (isAllowed) {
+    res.set({
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '600',
+      Vary: 'Origin'
+    });
+  }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -642,14 +706,18 @@ app.get('/api/social/hashtags', async (req, res) => {
 });
 
 app.get('/api/ai/status', async (req, res) => {
-  if (!GEMINI_API_KEY) return res.json({ configured: false, available: false });
-  if (aiStatusCache.result && Date.now() - aiStatusCache.checkedAt < AI_STATUS_CACHE_MS) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    aiStatusCache = { checkedAt: Date.now(), result: { configured: false, available: false } };
+    return res.json({ configured: false, available: false });
+  }
+  if (aiStatusCache.result && aiStatusCache.result.configured && Date.now() - aiStatusCache.checkedAt < AI_STATUS_CACHE_MS) {
     return res.json(aiStatusCache.result);
   }
 
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`, {
-      headers: { 'x-goog-api-key': GEMINI_API_KEY },
+      headers: { 'x-goog-api-key': apiKey },
       signal: AbortSignal.timeout(8000)
     });
     const result = response.ok
@@ -675,7 +743,7 @@ app.post('/api/ai/query', async (req, res) => {
   if (!prompt || prompt.length > 12000) {
     return res.status(400).json({ error: 'A prompt of 1–12,000 characters is required.' });
   }
-  const apiKey = GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey) return res.status(503).json({ error: 'Gemini is not configured on this app host.' });
 
   const now = Date.now();
@@ -790,7 +858,7 @@ app.post('/api/attachments/:id/analyze', async (req, res) => {
   if (req.body?.consent !== true) {
     return res.status(400).json({ error: 'Explicit consent is required before sending evidence to Gemini.' });
   }
-  const apiKey = GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey) return res.status(503).json({ error: 'Gemini is not configured on this app host.' });
 
   const attachment = attachments.find(item => item.id === req.params.id);
