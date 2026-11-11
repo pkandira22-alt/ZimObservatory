@@ -35,7 +35,7 @@ python -m pip install -r requirements.txt
 python stream_server.py
 ```
 
-The HTTP server starts before fetching telemetry, so `/health` can answer while the Node.js backend or public feeds are waking up. The service sends a loading status immediately to new WebSocket clients, fetches the latest `/api/social/hashtags` snapshot in a worker thread, then broadcasts JSON updates every 60 seconds. Configure `KUVHURA_API_BASE_URL` if the Node.js backend is hosted at a different origin. Open `index.html` locally to connect to `ws://localhost:8765`. In GitHub Codespaces, forward port `8765` and open the dashboard; the page detects the forwarded hostname. For other hosted setups, use `?ws=wss://YOUR-STREAM-SERVICE.onrender.com/`. `PORT` takes precedence over `STREAM_PORT` when supplied by Render.
+The HTTP server starts before fetching telemetry, so `/health` can answer while public feeds are waking up. The service sends a loading status immediately to new WebSocket clients, collects the latest social snapshot using the shared Python telemetry collector in `server.py`, then broadcasts JSON updates every 60 seconds. This keeps the stream independent of the separately deployed Node.js backend. Open `index.html` locally to connect to `ws://localhost:8765`. In GitHub Codespaces, forward port `8765` and open the dashboard; the page detects the forwarded hostname. For other hosted setups, use `?ws=wss://YOUR-STREAM-SERVICE.onrender.com/`. `PORT` takes precedence over `STREAM_PORT` when supplied by Render.
 
 The dashboard's Political Economy Time Series & Forecasts panel can render `forecast_report` packets when a stream provides them. This service currently publishes `trending_telemetry` packets only, so the panel does not show forecasts unless a forecast-producing service is connected; it does not substitute synthetic values.
 
@@ -72,7 +72,7 @@ Without a key, the dashboard still offers its empirical offline reasoning engine
 To deploy the GitHub Pages backend and telemetry stream on Render:
 
 1. In Render, create a Blueprint from this repository using [`render.yaml`](./render.yaml), or sync the existing Blueprint after these changes are pushed. This defines both the Node.js API and Python WebSocket services. Set `GEMINI_API_KEY` only if needed by other backend routes; never put the key in the repository.
-2. Wait for `/api/health` on the Node.js backend and `/health` on the Python stream service. The stream service uses `KUVHURA_API_BASE_URL` to fetch snapshots; update that environment variable if the Node.js service URL changes.
+2. Wait for `/api/health` on the Node.js backend and `/health` on the Python stream service. The stream service collects telemetry directly and does not depend on the Node.js service URL.
 3. If Render assigns a different WebSocket URL, open the Pages dashboard with `?ws=wss://YOUR-STREAM-SERVICE.onrender.com/`. The page and health endpoint respond without waiting for public feeds; live trends appear when the backend snapshot arrives.
 
 The browser configuration contains only the public backend URL. The Gemini key remains on the backend and is never sent to the browser.

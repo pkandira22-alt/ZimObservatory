@@ -3,17 +3,15 @@ import json
 import logging
 import os
 import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 
 from aiohttp import web
 from prescriptive_orientation import evaluate_orientation, evaluate_state_classification
+from server import fetch_social_hashtag_trends
 
 CONNECTED_CLIENTS = set()
 LATEST_TRENDS = None
 TREND_REFRESH_SECONDS = 60
-TREND_REQUEST_TIMEOUT_SECONDS = 15
-DEFAULT_API_BASE_URL = "https://zimobservatory-backend.onrender.com"
 logger = logging.getLogger("kuvhura.orientation")
 
 
@@ -36,17 +34,7 @@ async def unregister(websocket):
 
 
 def fetch_trending_telemetry():
-    base_url = os.environ.get("KUVHURA_API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/")
-    request = urllib.request.Request(
-        f"{base_url}/api/social/hashtags",
-        headers={
-            "Accept": "application/json",
-            "User-Agent": "KUVHURA-Observatory/1.0",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=TREND_REQUEST_TIMEOUT_SECONDS) as response:
-        payload = json.load(response)
-
+    payload = fetch_social_hashtag_trends()
     if not isinstance(payload, dict) or not isinstance(payload.get("hashtags"), list):
         raise ValueError("Social telemetry endpoint returned an unexpected response")
 
