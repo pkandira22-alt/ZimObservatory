@@ -23,7 +23,7 @@ from email.parser import BytesParser
 from email.policy import default
 
 HOST = "0.0.0.0"
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "data.db")
 INDEX_PATH = os.path.join(BASE_DIR, "index.html")
