@@ -25,7 +25,9 @@
             "request": "launch",
             "program": "${workspaceFolder}/stream_server.py",
             "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal"
+            "python": "${command:python.interpreterPath}",
+            "console": "integratedTerminal",
+            "justMyCode": true
         },
         {
             "name": "Attach to Chrome",
