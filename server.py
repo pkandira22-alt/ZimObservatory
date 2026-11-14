@@ -630,10 +630,20 @@ class AppHandler(BaseHTTPRequestHandler):
             serve_file(self, INDEX_PATH)
             return
 
-        file_path = os.path.join(BASE_DIR, path.lstrip("/"))
-        if os.path.isfile(file_path):
-            serve_file(self, file_path)
-            return
+        public_files = {
+            "/index.html",
+            "/structural-telemetry.html",
+            "/api-config.js",
+            "/political-economy-timeseries.js",
+            "/manifest.json",
+            "/service-worker.js",
+            "/icon.svg",
+        }
+        if path in public_files:
+            file_path = os.path.join(BASE_DIR, path.lstrip("/"))
+            if os.path.isfile(file_path):
+                serve_file(self, file_path)
+                return
 
         self.send_error(404)
 

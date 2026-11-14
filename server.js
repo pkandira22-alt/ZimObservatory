@@ -1026,11 +1026,23 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'The request could not be completed.' });
 });
 
-// Serve static frontend
-app.use(express.static(__dirname));
+// Serve only explicit public frontend assets (never backend code, config, or databases)
+const PUBLIC_FRONTEND_FILES = new Set([
+  '/index.html',
+  '/structural-telemetry.html',
+  '/api-config.js',
+  '/political-economy-timeseries.js',
+  '/manifest.json',
+  '/service-worker.js',
+  '/icon.svg'
+]);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get(Array.from(PUBLIC_FRONTEND_FILES), (req, res) => {
+  res.sendFile(path.join(__dirname, req.path.slice(1)));
 });
 
 app.listen(PORT, HOST, () => {
