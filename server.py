@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from io import BytesIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 from threading import Lock
@@ -27,9 +27,111 @@ PORT = int(os.environ.get("PORT", 8000))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "data.db")
 INDEX_PATH = os.path.join(BASE_DIR, "index.html")
+ENV_PATH = os.path.join(BASE_DIR, ".env")
+GEMINI_MODELS = ("gemini-3.8-flash", "gemini-3.1-flash-lite")
 SOCIAL_CACHE = {"expires_at": 0, "payload": None}
 SOCIAL_CACHE_LOCK = Lock()
 HASHTAG_PATTERN = re.compile(r"(?<![\w])#[\w][\w-]*", re.UNICODE)
+
+
+def _is_placeholder_key(value):
+    if not value:
+        return True
+    trimmed = value.strip()
+    return (
+        not trimmed
+        or trimmed in ("MY_GEMINI_API_KEY", "your_gemini_api_key", "your_api_key_here")
+        or "placeholder" in trimmed.lower()
+        or trimmed.startswith("TODO")
+    )
+
+
+def get_gemini_api_key():
+    if os.path.isfile(ENV_PATH):
+        try:
+            with open(ENV_PATH, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#") or "=" not in stripped:
+                        continue
+                    k, v = stripped.split("=", 1)
+                    if k.strip() in ("GEMINI_API_KEY", "GEMINIKEY"):
+                        val = v.strip().strip('"').strip("'")
+                        if not _is_placeholder_key(val):
+                            return val
+        except OSError:
+            pass
+    for env_name in ("GEMINI_API_KEY", "GEMINIKEY"):
+        val = os.environ.get(env_name, "").strip()
+        if not _is_placeholder_key(val):
+            return val
+    return None
+
+
+def check_gemini_status():
+    api_key = get_gemini_api_key()
+    if not api_key:
+        return 200, {"configured": False, "available": False}
+    req = Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODELS[0]}",
+        headers={"x-goog-api-key": api_key},
+    )
+    try:
+        with urlopen(req, timeout=8) as response:
+            if response.status == 200:
+                return 200, {"configured": True, "available": True}
+            return 502, {
+                "configured": True,
+                "available": False,
+                "error": f"Gemini rejected the model availability check (HTTP {response.status}).",
+            }
+    except HTTPError as err:
+        return 502, {
+            "configured": True,
+            "available": False,
+            "error": f"Gemini rejected the model availability check (HTTP {err.code}).",
+        }
+    except (URLError, OSError, TimeoutError):
+        return 502, {
+            "configured": True,
+            "available": False,
+            "error": "Gemini could not be reached from the backend.",
+        }
+
+
+def query_gemini_model(prompt):
+    api_key = get_gemini_api_key()
+    if not api_key:
+        return 503, {"error": "Gemini is not configured on this app host."}
+    body = json.dumps({"contents": [{"role": "user", "parts": [{"text": prompt}]}]}).encode("utf-8")
+    last_error = "Gemini could not complete the request."
+    for model in GEMINI_MODELS:
+        req = Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            data=body,
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(req, timeout=20) as response:
+                result = json.loads(response.read().decode("utf-8"))
+                parts = result.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                answer = "".join(part.get("text", "") for part in parts)
+                if answer:
+                    return 200, {"answer": answer, "model": model}
+                last_error = "Gemini returned no response."
+        except HTTPError as err:
+            try:
+                err_body = json.loads(err.read().decode("utf-8"))
+                last_error = err_body.get("error", {}).get("message") or f"Gemini HTTP {err.code}"
+            except Exception:
+                last_error = f"Gemini HTTP {err.code}"
+            if err.code in (429, 503) or err.code >= 500:
+                continue
+            return 502, {"error": last_error}
+        except (URLError, OSError, TimeoutError, ValueError) as err:
+            last_error = str(err)
+    return 502, {"error": last_error}
 SOCIAL_FEEDS = (
     (
         "Bluesky",
@@ -515,6 +617,11 @@ class AppHandler(BaseHTTPRequestHandler):
             respond_json(self, 200, fetch_social_hashtag_trends())
             return
 
+        if path == "/api/ai/status":
+            status_code, payload = check_gemini_status()
+            respond_json(self, status_code, payload)
+            return
+
         if path == "/api/health":
             respond_json(self, 200, {"status": "ok"})
             return
@@ -533,6 +640,22 @@ class AppHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         url = urlparse(self.path)
         path = url.path
+
+        if path == "/api/ai/query":
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length)
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+            except Exception:
+                respond_json(self, 400, {"error": "Invalid JSON body"})
+                return
+            prompt = payload.get("prompt", "") if isinstance(payload, dict) else ""
+            if not isinstance(prompt, str) or not prompt.strip() or len(prompt.strip()) > 12000:
+                respond_json(self, 400, {"error": "A prompt of 1–12,000 characters is required."})
+                return
+            status_code, result = query_gemini_model(prompt.strip())
+            respond_json(self, status_code, result)
+            return
 
         if path == "/api/reports":
             length = int(self.headers.get("Content-Length", "0"))

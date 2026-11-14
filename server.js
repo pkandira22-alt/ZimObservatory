@@ -1,10 +1,13 @@
 import express from 'express';
 import path from 'path';
+import dns from 'node:dns';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
+
+dns.setDefaultResultOrder('ipv4first');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -754,24 +757,38 @@ app.post('/api/ai/query', async (req, res) => {
   requests.push(now);
   geminiChatRequests.set(req.ip, requests);
 
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] })
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      console.error('Gemini chat request failed:', result.error?.message || response.status);
-      return res.status(502).json({ error: 'Gemini could not complete the request.' });
+  const candidateModels = [GEMINI_MODEL, 'gemini-3.1-flash-lite'];
+  let lastErrorMessage = 'Gemini could not complete the request.';
+
+  for (const model of candidateModels) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
+        signal: AbortSignal.timeout(20000)
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        lastErrorMessage = result.error?.message || `Gemini HTTP ${response.status}`;
+        console.error(`Gemini chat request failed (${model}):`, lastErrorMessage);
+        if (response.status === 503 || response.status === 429 || response.status >= 500) {
+          continue;
+        }
+        return res.status(502).json({ error: lastErrorMessage });
+      }
+      const answer = result.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('');
+      if (!answer) {
+        lastErrorMessage = 'Gemini returned no response.';
+        continue;
+      }
+      return res.json({ answer, model });
+    } catch (error) {
+      lastErrorMessage = error.message || 'Gemini request timed out.';
+      console.error(`Gemini chat request failed (${model}):`, error);
     }
-    const answer = result.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('');
-    if (!answer) return res.status(502).json({ error: 'Gemini returned no response.' });
-    res.json({ answer });
-  } catch (error) {
-    console.error('Gemini chat request failed:', error);
-    res.status(502).json({ error: 'Gemini could not complete the request.' });
   }
+  res.status(502).json({ error: lastErrorMessage });
 });
 
 app.post('/api/attachments', (req, res, next) => {
