@@ -2,7 +2,9 @@ import asyncio
 import json
 import logging
 import os
+import time
 import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
 from aiohttp import web
@@ -12,7 +14,49 @@ from server import fetch_social_hashtag_trends
 CONNECTED_CLIENTS = set()
 LATEST_TRENDS = None
 TREND_REFRESH_SECONDS = 60
+LAYER2_MACRO_TTL_SECONDS = 6 * 60 * 60
+LAYER2_MACRO_CACHE = {"expires_at": 0.0, "data": None}
 logger = logging.getLogger("kuvhura.orientation")
+
+
+def fetch_layer2_macro_telemetry(use_cache=True):
+    """Fetch Layer 2 macroeconomic indicators for Zimbabwe (ZWE) with baseline fallback."""
+    now = time.monotonic()
+    if use_cache and LAYER2_MACRO_CACHE["data"] is not None and LAYER2_MACRO_CACHE["expires_at"] > now:
+        return LAYER2_MACRO_CACHE["data"]
+
+    indicators = {
+        "GDP_Growth": "NY.GDP.MKTP.KD.ZG",
+        "Inflation": "FP.CPI.TOTL.ZG",
+        "Debt_GNI": "DT.DOD.DECT.GN.ZS",
+    }
+    fallback_values = {"GDP_Growth": 8.3, "Inflation": 5.2, "Debt_GNI": 37.9}
+    layer2_telemetry = {}
+    used_fallback = False
+
+    for key, ind_code in indicators.items():
+        url = f"https://api.worldbank.org/v2/country/ZWE/indicator/{ind_code}?format=json&mrv=1"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "KUVHURA-Observatory/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                response_data = json.loads(response.read().decode("utf-8"))
+            if isinstance(response_data, list) and len(response_data) > 1 and response_data[1]:
+                latest_val = response_data[1][0].get("value")
+                if latest_val is not None:
+                    layer2_telemetry[key] = float(latest_val)
+                    continue
+            layer2_telemetry[key] = fallback_values[key]
+            used_fallback = True
+        except Exception as error:
+            print(f"Warning: Could not fetch Layer 2 indicator {key}: {error}")
+            layer2_telemetry[key] = fallback_values[key]
+            used_fallback = True
+
+    layer2_telemetry["source"] = "fallback_baseline" if used_fallback else "world_bank_v2"
+    print("Layer 2 Macro Telemetry Synchronized:", layer2_telemetry)
+    LAYER2_MACRO_CACHE["data"] = layer2_telemetry
+    LAYER2_MACRO_CACHE["expires_at"] = now + (300 if used_fallback else LAYER2_MACRO_TTL_SECONDS)
+    return layer2_telemetry
 
 
 async def register(websocket):
@@ -41,6 +85,7 @@ def fetch_trending_telemetry():
     updated_at = payload.get("updatedAt") or datetime.now(timezone.utc).isoformat()
     orientation = evaluate_orientation(payload)
     state_classification = evaluate_state_classification(payload.get("orientationInputs"))
+    layer2_macro = fetch_layer2_macro_telemetry()
     return {
         "type": "trending_telemetry",
         "status": "available" if payload.get("available") else "no_sources",
@@ -48,6 +93,7 @@ def fetch_trending_telemetry():
         "telemetry": payload,
         "orientation": orientation,
         "stateClassification": state_classification,
+        "layer2Macro": layer2_macro,
         **({"message": payload["message"]} if payload.get("message") else {}),
     }
 

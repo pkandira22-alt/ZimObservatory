@@ -258,9 +258,14 @@
                 const telemetryNote = data.telemetry && typeof data.telemetry.scannedPosts === "number"
                     ? ` (${data.telemetry.scannedPosts} live social posts sampled across ${data.telemetry.sampledPlatforms?.length || 0} platforms)`
                     : "";
+                const macro = data.layer2Macro;
+                const macroLine = macro
+                    ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">Layer 2 Macro (ZWE): GDP Growth <strong style="color:#f8fafc;">${macro.GDP_Growth}%</strong> · Inflation <strong style="color:#f8fafc;">${macro.Inflation}%</strong> · External Debt/GNI <strong style="color:#f8fafc;">${macro.Debt_GNI}%</strong></div>`
+                    : "";
                 forecastCard.innerHTML = `
                     <div style="font-size: 11px; color: #4ADE80; font-weight: 700; margin-bottom: 6px;">LIVE TELEMETRY ACTIVE${updatedText}</div>
                     <div style="font-size: 13px; color: #f8fafc;">Model Status: Out-of-sample holdout error within stable parameters (RMSE: 0.042)${telemetryNote}.</div>
+                    ${macroLine}
                 `;
             }
         }
