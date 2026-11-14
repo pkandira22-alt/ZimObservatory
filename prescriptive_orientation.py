@@ -48,6 +48,34 @@ STATE_THRESHOLDS = {
 }
 
 
+def compute_bayesian_durability_update(prior_crisis_prob, social_volume, engagement_score):
+    """Return a posterior systemic-stress risk percentage from social telemetry."""
+    values = (prior_crisis_prob, social_volume, engagement_score)
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in values):
+        raise ValueError("Inputs must be numeric values.")
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("Inputs must be finite values.")
+    if not 0 <= prior_crisis_prob <= 1:
+        raise ValueError("prior_crisis_prob must be between 0 and 1.")
+    if social_volume < 0 or engagement_score < 0:
+        raise ValueError("Social volume and engagement score must be non-negative.")
+
+    is_high_stress_signal = social_volume > 35 or engagement_score > 1000
+    if is_high_stress_signal:
+        p_evidence_given_crisis = 0.85
+        p_evidence_given_stable = 0.20
+    else:
+        p_evidence_given_crisis = 0.15
+        p_evidence_given_stable = 0.80
+
+    p_evidence = (
+        p_evidence_given_crisis * prior_crisis_prob
+        + p_evidence_given_stable * (1 - prior_crisis_prob)
+    )
+    posterior_prob = p_evidence_given_crisis * prior_crisis_prob / p_evidence
+    return round(posterior_prob * 100, 2)
+
+
 def evaluate_state_classification(inputs, evaluated_at=None):
     """Classify normalized Φ thresholds; CL is validated and retained as context."""
     timestamp = evaluated_at or datetime.now(timezone.utc)

@@ -1,10 +1,31 @@
 import unittest
 from datetime import datetime, timezone
 
-from prescriptive_orientation import evaluate_orientation, evaluate_state_classification
+from prescriptive_orientation import (
+    compute_bayesian_durability_update,
+    evaluate_orientation,
+    evaluate_state_classification,
+)
 
 
 class PrescriptiveOrientationTests(unittest.TestCase):
+    def test_bayesian_durability_update_uses_signal_likelihoods_and_strict_thresholds(self):
+        self.assertEqual(compute_bayesian_durability_update(0.2, 36, 0), 51.52)
+        self.assertEqual(compute_bayesian_durability_update(0.2, 0, 1001), 51.52)
+        self.assertEqual(compute_bayesian_durability_update(0.2, 35, 1000), 4.48)
+
+    def test_bayesian_durability_update_validates_probability_and_telemetry(self):
+        for inputs in (
+            (-0.1, 0, 0),
+            (1.1, 0, 0),
+            (0.5, -1, 0),
+            (0.5, 0, float("nan")),
+            (True, 0, 0),
+        ):
+            with self.subTest(inputs=inputs):
+                with self.assertRaises(ValueError):
+                    compute_bayesian_durability_update(*inputs)
+
     def test_state_classification_uses_phi_thresholds_and_includes_context(self):
         cases = (
             (70, "consolidated_captivity"),
