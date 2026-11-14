@@ -1702,6 +1702,14 @@
       if (apiBaseUrl === '' && window.KUVHURA_API_BASE_URL) {
         candidates.push(window.KUVHURA_API_BASE_URL.replace(/\/+$/, ''));
       }
+      if (Array.isArray(window.KUVHURA_API_FALLBACK_URLS)) {
+        for (const fallbackUrl of window.KUVHURA_API_FALLBACK_URLS) {
+          if (typeof fallbackUrl === 'string' && fallbackUrl.trim()) {
+            const clean = fallbackUrl.trim().replace(/\/+$/, '');
+            if (!candidates.includes(clean)) candidates.push(clean);
+          }
+        }
+      }
       for (const candidate of candidates) {
         try {
           const probe = await probeAiStatus(candidate);

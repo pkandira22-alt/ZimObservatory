@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: 20.18.0
       - key: ALLOWED_ORIGINS
         value: https://pkandira22-alt.github.io
       - key: GEMINI_API_KEY
@@ -20,3 +22,6 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python stream_server.py
     healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7

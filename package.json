@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file-if-exists=.env server.js",
-    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node server.js",
+    "start": "node server.js",
     "build": "node -e 'console.log(\"Build complete\")'",
     "lint": "node -c server.js"
   },

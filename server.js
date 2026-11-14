@@ -58,6 +58,21 @@ function loadEnvFile() {
   }
 }
 
+function applyEnvFileToProcess() {
+  const envFile = loadEnvFile();
+  for (const [key, val] of Object.entries(envFile)) {
+    const existing = (process.env[key] || '').trim();
+    if (!existing || isPlaceholderKey(existing)) {
+      if (val && !isPlaceholderKey(val)) {
+        process.env[key] = val;
+      }
+    }
+  }
+  return envFile;
+}
+
+applyEnvFileToProcess();
+
 function getGeminiApiKey() {
   const envFile = loadEnvFile();
   const fileKey = (envFile.GEMINI_API_KEY || envFile.GEMINIKEY || '').trim();
