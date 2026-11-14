@@ -7,6 +7,7 @@ from forecasting_model import (
     _rolling_backtest,
     build_forecast_report,
     fetch_gold_monthly_series,
+    fetch_world_bank_telemetry,
     fetch_zimstat_monthly_inflation,
 )
 
@@ -146,6 +147,23 @@ class RollingBacktestTests(unittest.TestCase):
         self.assertEqual(targets["protests"]["status"], "unavailable")
         self.assertEqual(targets["phi"]["status"], "unavailable")
         self.assertEqual(targets["other"]["status"], "not_requested")
+
+    @patch("forecasting_model.fetch_world_bank_series")
+    def test_fetch_world_bank_telemetry_returns_latest_macro_indicators(self, fetch_series):
+        fetch_series.side_effect = [
+            ([(2023, 5.3)], "2026-10-08"),
+            ([(2023, 104.2)], "2026-10-08"),
+            ([(2023, 44.1)], "2026-10-08"),
+        ]
+        result = fetch_world_bank_telemetry()
+        self.assertIsNotNone(result)
+        self.assertEqual(result["GDP_Growth"]["value"], 5.3)
+        self.assertEqual(result["Inflation"]["value"], 104.2)
+        self.assertEqual(result["Debt_GNI"]["value"], 44.1)
+
+    @patch("forecasting_model.fetch_world_bank_series", side_effect=TimeoutError("timed out"))
+    def test_fetch_world_bank_telemetry_returns_none_on_error(self, _fetch_series):
+        self.assertIsNone(fetch_world_bank_telemetry())
 
 
 if __name__ == "__main__":

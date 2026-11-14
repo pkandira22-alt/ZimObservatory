@@ -63,6 +63,44 @@ def fetch_world_bank_series(indicator):
     return observations, payload[0].get("lastupdated")
 
 
+WORLD_BANK_TELEMETRY_INDICATORS = {
+    "GDP_Growth": "NY.GDP.MKTP.KD.ZG",
+    "Inflation": "FP.CPI.TOTL.ZG",
+    "Debt_GNI": "DT.DOD.DECT.GN.ZS",
+}
+
+
+def fetch_world_bank_telemetry():
+    """Fetch latest World Bank macroeconomic telemetry for Zimbabwe (ZWE)."""
+    try:
+        try:
+            import wbgapi as wb  # Optional; falls back to direct REST v2 below if absent
+
+            data = wb.data.DataFrame(
+                list(WORLD_BANK_TELEMETRY_INDICATORS.values()),
+                "ZWE",
+                mrv=1,
+            )
+            print("Successfully fetched World Bank telemetry:", data)
+            return data
+        except ImportError:
+            telemetry = {}
+            for name, code in WORLD_BANK_TELEMETRY_INDICATORS.items():
+                observations, last_updated = fetch_world_bank_series(code)
+                year, value = observations[-1]
+                telemetry[name] = {
+                    "code": code,
+                    "year": year,
+                    "value": value,
+                    "lastUpdated": last_updated,
+                }
+            print("Successfully fetched World Bank telemetry:", telemetry)
+            return telemetry
+    except Exception as error:
+        print("Error fetching World Bank data, using fallback baseline:", error)
+        return None
+
+
 def fetch_zimstat_monthly_inflation():
     current_month = dt.datetime.now(dt.timezone.utc).date().replace(day=1)
     latest_completed_month = current_month - dt.timedelta(days=1)
