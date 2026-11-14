@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#030712">
     <meta name="description" content="KUVHURA Political Economy & Resistance Observatory — Advanced Structural Predictors and Adjusted Regime Durability.">
     <title>KUVHURA | Political Economy &amp; Resistance Observatory</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
             color-scheme: dark;
@@ -160,6 +161,18 @@
             </div>
         </section>
 
+        <!-- ZIMBABWE SPATIAL CONTEXT MAP MODULE -->
+        <section class="card-panel" style="border-top: 4px solid #10B981;">
+            <div class="panel-hdr">
+                <span style="color: #10B981;">🗺️ Zimbabwe Spatial Context &amp; Structural Friction Map</span>
+                <span style="font-size:10px; color:var(--text-muted);">Live Provincial Telemetry Overlay</span>
+            </div>
+            <div style="font-size: 12px; color: #CBD5E1; margin-bottom: 12px;">
+                Geospatial tracking of resource concessions, informal extraction corridors, and administrative durability indices.
+            </div>
+            <div id="zimbabwemap" style="height: 400px; width: 100%; border-radius: 8px; border: 1px solid var(--border-soft); background: #070B14;"></div>
+        </section>
+
         <!-- LIVE TELEMETRY & FORECAST PANEL -->
         <section class="card-panel" style="border-top: 4px solid #A5B4FC;">
             <div class="panel-hdr">
@@ -280,6 +293,59 @@
                 forecastSocket.close();
             }
         });
+    </script>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        (function initZimbabweSpatialMap() {
+            const mapEl = document.getElementById("zimbabwemap");
+            if (!mapEl || typeof L === "undefined") {
+                if (mapEl) {
+                    mapEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #94a3b8; font-size: 12px;">Interactive map library could not be loaded. Check network access to unpkg.com.</div>';
+                }
+                return;
+            }
+
+            const map = L.map("zimbabwemap").setView([-19.0154, 29.1549], 6);
+
+            L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+                subdomains: "abcd",
+                maxZoom: 12
+            }).addTo(map);
+
+            const provincialTelemetry = [
+                { name: "Harare Metropolitan", lat: -17.8252, lng: 31.0335, iefr: 3.12, rsr: 1.20, clp: 0.85, status: "High Extraction Friction" },
+                { name: "Bulawayo Metropolitan", lat: -20.1594, lng: 28.5838, iefr: 2.65, rsr: 1.10, clp: 0.70, status: "Moderate Friction" },
+                { name: "Manicaland", lat: -18.9216, lng: 32.1663, iefr: 2.80, rsr: 2.45, clp: 0.60, status: "High Resource Securitization" },
+                { name: "Mashonaland Central", lat: -16.9333, lng: 31.0833, iefr: 2.10, rsr: 2.15, clp: 0.75, status: "Concession Enclave" },
+                { name: "Midlands", lat: -19.4500, lng: 29.8167, iefr: 2.95, rsr: 2.30, clp: 0.80, status: "Extractive Corridor Active" },
+                { name: "Matabeleland North", lat: -18.5000, lng: 27.7000, iefr: 1.90, rsr: 1.95, clp: 0.55, status: "Stable Baseline" }
+            ];
+
+            provincialTelemetry.forEach(prov => {
+                const circleColor = prov.iefr > 2.8 ? "#f87171" : "#f59e0b";
+                const marker = L.circleMarker([prov.lat, prov.lng], {
+                    radius: 8,
+                    fillColor: circleColor,
+                    color: "#fff",
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.85
+                }).addTo(map);
+
+                marker.bindPopup(`
+                    <div style="font-family: system-ui, sans-serif; color: #030712; font-size: 11px;">
+                        <b style="font-size: 13px; color: #1e293b;">${prov.name}</b><br>
+                        <hr style="margin: 4px 0;">
+                        <b>Status:</b> ${prov.status}<br>
+                        <b>IEFR Index:</b> ${prov.iefr}<br>
+                        <b>RSR Concession:</b> ${prov.rsr}<br>
+                        <b>CLP Penetration:</b> ${prov.clp}
+                    </div>
+                `);
+            });
+        })();
     </script>
 
 </body>
