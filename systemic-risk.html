@@ -87,7 +87,7 @@
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
                 <h2 class="text-2xl font-bold tracking-tight text-white">Real-Time Systemic Risk Monitoring</h2>
-                <p id="telemetry-subtitle" class="text-sm text-slate-400">Dual-Engine Bayesian Telemetry, Markov Path Projections &amp; Fragility State Index</p>
+                <p id="telemetry-subtitle" class="text-sm text-slate-400">Dual-Engine Bayesian Telemetry &amp; Semantic Hansard Legislative Oversight</p>
             </div>
             <div id="alert-banner" class="px-4 py-2 rounded-lg bg-warning/10 border border-warning/30 text-warning text-sm font-semibold flex items-center space-x-2">
                 <span>Warning Level:</span>
@@ -95,38 +95,46 @@
             </div>
         </div>
 
-        <!-- KPI Scorecards Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <!-- KPI Scorecards Grid (5 Cards including Hansard Telemetry) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <!-- Card 1: Regime Durability Phi -->
-            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 text-accent/20 font-bold text-4xl">Φ</div>
-                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Posterior Regime Durability (Φ)</p>
-                <p id="kpi-phi" class="text-3xl font-extrabold text-white mt-2 font-mono">--</p>
-                <p id="kpi-phi-note" class="text-xs text-slate-400 mt-2 flex items-center"><span class="text-accent font-semibold mr-1">Bayesian</span> Awaiting live sample</p>
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-3 text-accent/20 font-bold text-3xl">Φ</div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Regime Durability (Φ)</p>
+                <p id="kpi-phi" class="text-2xl font-extrabold text-white mt-2 font-mono tabular-nums">--</p>
+                <p id="kpi-phi-note" class="text-xs text-slate-400 mt-2">Bayesian Posterior</p>
             </div>
 
             <!-- Card 2: Fragility State Index -->
-            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 text-warning/20 font-bold text-4xl">FSI</div>
-                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Fragility State Index (FSI)</p>
-                <p id="kpi-fsi" class="text-3xl font-extrabold text-warning mt-2 font-mono">--</p>
-                <p id="kpi-fsi-note" class="text-xs text-slate-400 mt-2">Composite Warning Score (0–100)</p>
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-3 text-warning/20 font-bold text-3xl">FSI</div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Fragility State Index</p>
+                <p id="kpi-fsi" class="text-2xl font-extrabold text-warning mt-2 font-mono tabular-nums">--</p>
+                <p id="kpi-fsi-note" class="text-xs text-slate-400 mt-2">Composite Score (0–100)</p>
             </div>
 
             <!-- Card 3: Markov Crisis Probability -->
-            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 text-danger/20 font-bold text-4xl">M</div>
-                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Markov Crisis Probability</p>
-                <p id="kpi-markov" class="text-3xl font-extrabold text-danger mt-2 font-mono">--</p>
-                <p class="text-xs text-slate-400 mt-2">Path Trajectory Projection</p>
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-3 text-danger/20 font-bold text-3xl">M</div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Markov Crisis Prob</p>
+                <p id="kpi-markov" class="text-2xl font-extrabold text-danger mt-2 font-mono tabular-nums">--</p>
+                <p class="text-xs text-slate-400 mt-2">Trajectory Projection</p>
             </div>
 
-            <!-- Card 4: Macro Stress Proxy -->
-            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 text-emerald-500/20 font-bold text-4xl">V</div>
+            <!-- Card 4: Macro Volatility / Stress Proxy -->
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-3 text-emerald-500/20 font-bold text-3xl">V</div>
                 <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Macro Stress Proxy</p>
-                <p id="kpi-macro" class="text-3xl font-extrabold text-emerald-400 mt-2 font-mono">--</p>
-                <p id="kpi-macro-note" class="text-xs text-slate-400 mt-2">World Bank Inflation, Debt &amp; Growth Scale</p>
+                <p id="kpi-macro" class="text-2xl font-extrabold text-emerald-400 mt-2 font-mono tabular-nums">--</p>
+                <p id="kpi-macro-note" class="text-xs text-slate-400 mt-2">Inflation, Debt &amp; Growth</p>
+            </div>
+
+            <!-- Card 5: Hansard Legislative Friction Telemetry -->
+            <div class="bg-cardbg/90 backdrop-blur border border-accent/40 rounded-xl p-4 shadow-lg relative overflow-hidden bg-gradient-to-br from-cardbg/95 to-accent/10">
+                <div class="absolute top-0 right-0 p-3 text-accent/25 font-bold text-2xl font-mono">F<sub>p</sub></div>
+                <p class="text-xs uppercase tracking-wider text-sky-300 font-medium">Hansard Friction (F<sub>parl</sub>)</p>
+                <p id="kpi-hansard" class="text-2xl font-extrabold text-white mt-2 font-mono tabular-nums">--</p>
+                <p id="kpi-hansard-note" class="text-xs text-slate-400 mt-2">Parliament Semantic NLP</p>
             </div>
         </div>
 
@@ -135,8 +143,8 @@
             <!-- Timeline Chart (2 Cols) -->
             <div class="lg:col-span-2 bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold text-white">Longitudinal Risk Trajectory</h3>
-                    <span id="window-label" class="text-xs text-slate-400 font-mono">Rolling Window</span>
+                    <h3 class="text-lg font-bold text-white">Longitudinal Risk &amp; Legislative Trajectory</h3>
+                    <span id="window-label" class="text-xs text-slate-400 font-mono">Live Telemetry Window</span>
                 </div>
                 <div class="relative flex-grow h-80">
                     <canvas id="timelineChart"></canvas>
@@ -146,9 +154,9 @@
             <!-- System Architecture & Engine Status (1 Col) -->
             <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col justify-between space-y-6">
                 <div>
-                    <h3 class="text-lg font-bold text-white mb-3">Analytical Architecture</h3>
+                    <h3 class="text-lg font-bold text-white mb-3">Active Analytical Engines</h3>
                     <p id="history-note" class="text-sm text-slate-400 leading-relaxed">
-                        KUVHURA combines live social-post hashtag telemetry, World Bank macroeconomic indicators, and Semantic Hansard NLP scoring through a dual-engine Bayesian and Markov model.
+                        KUVHURA integrates Bayesian updating, Markov transition matrices, World Bank macroeconomic friction, and live semantic NLP ingestion of the Parliament of Zimbabwe Hansard Repository.
                     </p>
                 </div>
 
@@ -165,7 +173,7 @@
 
                     <div>
                         <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-                            <span>Markov Path Transition Matrix</span>
+                            <span>Markov Path Transition</span>
                             <span id="engine-markov" class="text-warning">CHECKING</span>
                         </div>
                         <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -185,7 +193,7 @@
 
                     <div>
                         <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-                            <span>Semantic Hansard NLP</span>
+                            <span>Hansard Semantic NLP Ingestion</span>
                             <span id="engine-hansard" class="text-emerald-400">CHECKING</span>
                         </div>
                         <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -281,6 +289,8 @@
             if (!data) {
                 statusEl.innerHTML = '<span class="h-2 w-2 rounded-full bg-danger mr-2"></span>Backend Unreachable';
                 document.getElementById('warning-label').innerText = 'Awaiting Backend';
+                document.getElementById('kpi-hansard').innerText = '--';
+                document.getElementById('kpi-hansard-note').innerText = 'Backend unreachable';
                 document.getElementById('engine-bayesian').innerText = 'OFFLINE';
                 document.getElementById('engine-markov').innerText = 'OFFLINE';
                 document.getElementById('engine-fsi').innerText = 'OFFLINE';
@@ -342,17 +352,37 @@
             }
 
             const hansard = data.hansardStatus || {};
+            const latestHansardScore = Number.isFinite(latest.hansard_friction)
+                ? latest.hansard_friction
+                : Number.isFinite(hansard.score)
+                    ? hansard.score
+                    : null;
+            const hansardKpi = document.getElementById('kpi-hansard');
+            const hansardNote = document.getElementById('kpi-hansard-note');
             const hansardLabel = document.getElementById('engine-hansard');
             const hansardBar = document.getElementById('bar-hansard');
-            if (hansard.status === 'available' && Number.isFinite(hansard.score)) {
-                hansardLabel.innerText = `LIVE (${hansard.score.toFixed(1)})`;
+
+            if (hansard.status === 'available' && Number.isFinite(latestHansardScore)) {
+                hansardKpi.innerText = latestHansardScore.toFixed(1);
+                hansardNote.innerText = 'ParlZim Live TF-IDF Cosine';
+                hansardLabel.innerText = `LIVE (${latestHansardScore.toFixed(1)})`;
                 hansardLabel.className = 'text-emerald-400';
-                hansardBar.style.width = `${Math.min(100, Math.max(8, hansard.score))}%`;
+                hansardBar.style.width = `${Math.min(100, Math.max(8, latestHansardScore))}%`;
             } else if (hansard.status === 'blocked_by_cloudflare') {
+                hansardKpi.innerText = Number.isFinite(latest.hansard_friction) ? latest.hansard_friction.toFixed(1) : 'CF 403';
+                hansardNote.innerText = 'ParlZim Cloudflare challenge';
                 hansardLabel.innerText = 'BLOCKED (CF 403)';
                 hansardLabel.className = 'text-amber-400';
                 hansardBar.style.width = '18%';
+            } else if (Number.isFinite(latestHansardScore)) {
+                hansardKpi.innerText = latestHansardScore.toFixed(1);
+                hansardNote.innerText = 'Seed Baseline Hansard Proxy';
+                hansardLabel.innerText = 'SEED';
+                hansardLabel.className = 'text-slate-300';
+                hansardBar.style.width = `${Math.min(100, Math.max(8, latestHansardScore))}%`;
             } else {
+                hansardKpi.innerText = 'Unavailable';
+                hansardNote.innerText = 'Awaiting ParlZim feed';
                 hansardLabel.innerText = 'UNAVAILABLE';
                 hansardLabel.className = 'text-slate-400';
                 hansardBar.style.width = '10%';
@@ -370,6 +400,7 @@
             const phiData = timeline.map(item => item.phi);
             const fsiData = timeline.map(item => Number.isFinite(item.fsi) ? item.fsi : null);
             const markovData = timeline.map(item => item.markov_crisis_prob);
+            const hansardData = timeline.map(item => Number.isFinite(item.hansard_friction) ? item.hansard_friction : null);
 
             const ctx = document.getElementById('timelineChart').getContext('2d');
             if (myChart) myChart.destroy();
@@ -379,9 +410,10 @@
                 data: {
                     labels: labels,
                     datasets: [
-                        { label: 'Regime Durability (Φ)', data: phiData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 },
+                        { label: 'Regime Durability (Φ)', data: phiData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.08)', borderWidth: 3, fill: true, tension: 0.3 },
                         { label: 'Fragility State Index (FSI)', data: fsiData, borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, borderDash: [5, 5], tension: 0.3, spanGaps: false },
-                        { label: 'Markov Crisis Prob (%)', data: markovData, borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3 }
+                        { label: 'Markov Crisis Prob (%)', data: markovData, borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3 },
+                        { label: 'Hansard Friction (Fparl)', data: hansardData, borderColor: '#10b981', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: false }
                     ]
                 },
                 options: {
