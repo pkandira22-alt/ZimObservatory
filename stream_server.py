@@ -1,8 +1,11 @@
 import asyncio
+from collections import Counter
+import html as html_lib
 import json
 import logging
 import math
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -17,6 +20,26 @@ LATEST_TRENDS = None
 TREND_REFRESH_SECONDS = 60
 LAYER2_MACRO_TTL_SECONDS = 6 * 60 * 60
 LAYER2_MACRO_CACHE = {"expires_at": 0.0, "data": None}
+HANSARD_TTL_SECONDS = 6 * 60 * 60
+HANSARD_ERROR_TTL_SECONDS = 15 * 60
+HANSARD_CACHE = {"expires_at": 0.0, "data": None}
+HANSARD_PORTAL_URL = os.environ.get("HANSARD_PORTAL_URL", "https://e-portal.parlzim.gov.zw/hansards")
+HANSARD_RISK_CORPUS = (
+    "corruption tender embezzlement illicit financial flows asset recovery graft scandal looting",
+    "inflation parallel market currency depreciation exchange rate foreign currency shortage devaluation",
+    "budget deficit unauthorized expenditure audit discrepancy public funds misappropriation debt",
+    "parliamentary walkout suspension clash censure motion of no confidence boycott standoff",
+)
+ENGLISH_STOPWORDS = frozenset({
+    "the", "and", "for", "that", "with", "this", "from", "are", "was", "were",
+    "will", "would", "have", "has", "had", "not", "but", "all", "any", "can",
+    "could", "should", "shall", "may", "might", "must", "into", "about", "there",
+    "their", "they", "them", "these", "those", "which", "who", "whom", "what",
+    "when", "where", "why", "how", "been", "being", "its", "our", "out", "over",
+    "under", "more", "most", "some", "such", "than", "then", "very", "also",
+    "only", "other", "between", "through", "during", "before", "after", "above",
+    "below", "each", "few", "both", "same", "own", "while", "because", "until",
+})
 logger = logging.getLogger("kuvhura.orientation")
 TELEMETRY_TIMELINE = [
     {"date": "2026-11-08", "phi": 39.50, "markov_crisis_prob": 22.0, "state": "Latent Friction"},
@@ -45,6 +68,7 @@ TIMELINE_BASELINE_DATE = None
 TIMELINE_BASELINE = None
 LATEST_DUAL_ENGINE_INPUTS = None
 LATEST_FSI_INPUTS = None
+LATEST_HANSARD_STATUS = None
 MARKOV_TRANSITION_MATRIX = (
     (0.75, 0.20, 0.05),
     (0.15, 0.60, 0.25),
@@ -106,13 +130,149 @@ def compute_markov_path_projection(last_crisis_prob):
     return round(next_vector[2] * 100, 2)
 
 
-def compute_fragility_state_index(phi, markov_crisis_prob, macro_volatility):
-    """Compute FSI from normalized 0–100 inputs."""
-    for name, value in (
+def _tokenize_hansard(text):
+    cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", text or "")
+    cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
+    cleaned = html_lib.unescape(cleaned).lower()
+    return [
+        token for token in re.findall(r"[a-z]{2,}", cleaned)
+        if token not in ENGLISH_STOPWORDS
+    ]
+
+
+def score_hansard_text(live_text):
+    """Compute 40-100 TF-IDF cosine similarity friction index from parliamentary text."""
+    docs_tokens = [_tokenize_hansard(doc) for doc in HANSARD_RISK_CORPUS]
+    live_tokens = _tokenize_hansard(live_text)
+    if not live_tokens:
+        return None
+    all_docs = docs_tokens + [live_tokens]
+    num_docs = len(all_docs)
+
+    doc_freq = Counter()
+    for tokens in all_docs:
+        for term in set(tokens):
+            doc_freq[term] += 1
+
+    def _tfidf_vector(tokens):
+        counts = Counter(tokens)
+        vec = {}
+        norm_sq = 0.0
+        for term, tf in counts.items():
+            idf = math.log((1.0 + num_docs) / (1.0 + doc_freq[term])) + 1.0
+            weight = tf * idf
+            vec[term] = weight
+            norm_sq += weight * weight
+        norm = math.sqrt(norm_sq)
+        if norm > 0:
+            for term in vec:
+                vec[term] /= norm
+        return vec
+
+    ref_vectors = [_tfidf_vector(tokens) for tokens in docs_tokens]
+    live_vector = _tfidf_vector(live_tokens)
+
+    similarities = []
+    for ref_vec in ref_vectors:
+        sim = sum(live_vector.get(term, 0.0) * weight for term, weight in ref_vec.items())
+        similarities.append(sim)
+
+    mean_similarity = sum(similarities) / len(similarities)
+    semantic_friction = min(100.0, max(40.0, (mean_similarity * 250.0) + 42.0))
+    return round(semantic_friction, 2)
+
+
+def fetch_semantic_hansard_telemetry(use_cache=True):
+    """Fetch Parliament of Zimbabwe Hansards and score institutional friction without fake fallbacks."""
+    now = time.monotonic()
+    if use_cache and HANSARD_CACHE["data"] is not None and HANSARD_CACHE["expires_at"] > now:
+        return HANSARD_CACHE["data"]
+
+    req = urllib.request.Request(
+        HANSARD_PORTAL_URL,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KUVHURA-Observatory/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=6) as response:
+            status_code = getattr(response, "status", 200)
+            body = response.read().decode("utf-8", errors="ignore")
+        stripped_text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", body)
+        stripped_text = re.sub(r"(?s)<[^>]+>", " ", stripped_text)
+        stripped_text = " ".join(html_lib.unescape(stripped_text).split())
+        if status_code != 200 or len(stripped_text) < 100:
+            result = {
+                "score": None,
+                "status": "unavailable",
+                "source": "unavailable",
+                "httpStatus": status_code,
+                "message": "Parliament Hansard portal returned insufficient content.",
+            }
+            HANSARD_CACHE["data"] = result
+            HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
+            return result
+
+        score = score_hansard_text(stripped_text)
+        if score is None:
+            result = {
+                "score": None,
+                "status": "unavailable",
+                "source": "unavailable",
+                "httpStatus": status_code,
+                "message": "Parliament Hansard page contained no indexable debate tokens.",
+            }
+            HANSARD_CACHE["data"] = result
+            HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
+            return result
+
+        result = {
+            "score": score,
+            "status": "available",
+            "source": "parlzim_hansards",
+            "httpStatus": status_code,
+            "charCount": len(stripped_text),
+        }
+        HANSARD_CACHE["data"] = result
+        HANSARD_CACHE["expires_at"] = now + HANSARD_TTL_SECONDS
+        return result
+    except urllib.error.HTTPError as error:
+        cf_mitigated = error.headers.get("cf-mitigated", "").lower() if error.headers else ""
+        is_cloudflare = error.code == 403 and (cf_mitigated == "challenge" or "cloudflare" in str(error.headers).lower())
+        result = {
+            "score": None,
+            "status": "blocked_by_cloudflare" if is_cloudflare else "unavailable",
+            "source": "unavailable",
+            "httpStatus": error.code,
+            "message": (
+                "Parliament Hansard portal is protected by a Cloudflare challenge (HTTP 403)."
+                if is_cloudflare
+                else f"Parliament Hansard portal returned HTTP {error.code}."
+            ),
+        }
+        HANSARD_CACHE["data"] = result
+        HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
+        return result
+    except Exception as error:
+        result = {
+            "score": None,
+            "status": "unavailable",
+            "source": "unavailable",
+            "message": str(error),
+        }
+        HANSARD_CACHE["data"] = result
+        HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
+        return result
+
+
+def compute_fragility_state_index(phi, markov_crisis_prob, macro_volatility, hansard_friction=None):
+    """Compute FSI from normalized 0–100 inputs (3-factor baseline or 4-factor with Hansard)."""
+    checks = [
         ("phi", phi),
         ("markov_crisis_prob", markov_crisis_prob),
         ("macro_volatility", macro_volatility),
-    ):
+    ]
+    if hansard_friction is not None:
+        checks.append(("hansard_friction", hansard_friction))
+    for name, value in checks:
         if (
             isinstance(value, bool)
             or not isinstance(value, (int, float))
@@ -120,6 +280,14 @@ def compute_fragility_state_index(phi, markov_crisis_prob, macro_volatility):
             or not 0 <= value <= 100
         ):
             raise ValueError(f"{name} must be a finite value between 0 and 100.")
+    if hansard_friction is not None:
+        return round(
+            0.35 * (100.0 - phi)
+            + 0.30 * markov_crisis_prob
+            + 0.20 * macro_volatility
+            + 0.15 * hansard_friction,
+            2,
+        )
     return round(
         0.40 * (100.0 - phi)
         + 0.35 * markov_crisis_prob
@@ -206,9 +374,9 @@ def _state_for_phi(phi):
     return "Acute Systemic Crisis"
 
 
-def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None):
+def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None, hansard_telemetry=None):
     """Update today's entry from one day's baseline and the latest social sample."""
-    global LATEST_DUAL_ENGINE_INPUTS, LATEST_FSI_INPUTS, TELEMETRY_TIMELINE
+    global LATEST_DUAL_ENGINE_INPUTS, LATEST_FSI_INPUTS, LATEST_HANSARD_STATUS, TELEMETRY_TIMELINE
     global TIMELINE_BASELINE, TIMELINE_BASELINE_DATE
 
     metrics = derive_social_metrics(payload)
@@ -240,6 +408,11 @@ def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None):
         prior["markov_crisis_prob"]
     )
     macro_stress_proxy = compute_macro_stress_proxy(layer2_macro)
+    hansard_score = (
+        hansard_telemetry.get("score")
+        if isinstance(hansard_telemetry, dict) and hansard_telemetry.get("source") == "parlzim_hansards"
+        else None
+    )
     entry = {
         "date": today,
         "phi": current_phi,
@@ -250,16 +423,25 @@ def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None):
         "telemetry_source": payload.get("source", "social telemetry"),
         "updated_at": evaluated_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+    if hansard_score is not None:
+        entry["hansard_friction"] = hansard_score
+    LATEST_HANSARD_STATUS = (
+        dict(hansard_telemetry)
+        if isinstance(hansard_telemetry, dict)
+        else {"score": None, "status": "unavailable", "source": "unavailable"}
+    )
+
     if macro_stress_proxy is not None:
         entry["macro_volatility_proxy"] = macro_stress_proxy
         entry["fsi"] = compute_fragility_state_index(
-            current_phi, projected_crisis_prob, macro_stress_proxy
+            current_phi, projected_crisis_prob, macro_stress_proxy, hansard_friction=hansard_score
         )
         entry["warning_level"] = classify_fragility_state(entry["fsi"])
         LATEST_FSI_INPUTS = {
             "status": "available",
             "macro_stress_proxy": macro_stress_proxy,
             "macro_source": layer2_macro["source"],
+            "hansard_included": hansard_score is not None,
             "updated_at": entry["updated_at"],
         }
     else:
@@ -267,6 +449,7 @@ def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None):
             "status": "awaiting_sourced_macro_data",
             "macro_stress_proxy": None,
             "macro_source": layer2_macro.get("source") if isinstance(layer2_macro, dict) else None,
+            "hansard_included": False,
             "updated_at": entry["updated_at"],
         }
 
@@ -285,6 +468,11 @@ def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None):
 
 
 def get_dual_engine_timeline():
+    hansard_status = (
+        dict(LATEST_HANSARD_STATUS)
+        if LATEST_HANSARD_STATUS
+        else {"score": None, "status": "awaiting_check", "source": "unavailable"}
+    )
     return {
         "timeline": [dict(entry) for entry in TELEMETRY_TIMELINE],
         "engines": {
@@ -295,6 +483,11 @@ def get_dual_engine_timeline():
                 if LATEST_FSI_INPUTS and LATEST_FSI_INPUTS["status"] == "available"
                 else "Awaiting sourced World Bank macro data"
             ),
+            "hansard_status": (
+                f"Active (ParlZim TF-IDF cosine score {hansard_status['score']})"
+                if hansard_status.get("status") == "available"
+                else hansard_status.get("message") or "Awaiting Parliament Hansard portal access"
+            ),
         },
         "inputStatus": "updated" if LATEST_DUAL_ENGINE_INPUTS else "awaiting_social_sample",
         "latestInputs": dict(LATEST_DUAL_ENGINE_INPUTS) if LATEST_DUAL_ENGINE_INPUTS else None,
@@ -303,11 +496,12 @@ def get_dual_engine_timeline():
             if LATEST_FSI_INPUTS
             else {"status": "awaiting_sourced_macro_data", "macro_stress_proxy": None}
         ),
+        "hansardStatus": hansard_status,
         "historyNote": (
             "Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% "
-            "Markov crisis projection, and 25% macro-stress proxy. The proxy uses "
-            "50% capped inflation/2, 30% capped debt-to-GNI, and 20% capped "
-            "(10 minus GDP growth) times 5; these experimental scales are not calibrated."
+            "Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when "
+            "live ParlZim Semantic Hansard Friction is reachable). Macro stress scaling and "
+            "TF-IDF cosine weighting are experimental assumptions."
         ),
     }
 
@@ -376,7 +570,8 @@ def fetch_trending_telemetry():
         raise ValueError("Social telemetry endpoint returned an unexpected response")
 
     layer2_macro = fetch_layer2_macro_telemetry()
-    update_telemetry_timeline(payload, layer2_macro=layer2_macro)
+    hansard_telemetry = fetch_semantic_hansard_telemetry()
+    update_telemetry_timeline(payload, layer2_macro=layer2_macro, hansard_telemetry=hansard_telemetry)
     updated_at = payload.get("updatedAt") or datetime.now(timezone.utc).isoformat()
     orientation = evaluate_orientation(payload)
     state_classification = evaluate_state_classification(payload.get("orientationInputs"))

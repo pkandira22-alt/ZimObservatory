@@ -782,7 +782,165 @@ async function fetchLayer2MacroTelemetry() {
   return result;
 }
 
+let latestHansardStatus = null;
+const HANSARD_TTL_MS = 6 * 60 * 60 * 1000;
+const HANSARD_ERROR_TTL_MS = 15 * 60 * 1000;
+let hansardCache = { expiresAt: 0, data: null };
+const HANSARD_PORTAL_URL = process.env.HANSARD_PORTAL_URL || 'https://e-portal.parlzim.gov.zw/hansards';
+const HANSARD_RISK_CORPUS = [
+  'corruption tender embezzlement illicit financial flows asset recovery graft scandal looting',
+  'inflation parallel market currency depreciation exchange rate foreign currency shortage devaluation',
+  'budget deficit unauthorized expenditure audit discrepancy public funds misappropriation debt',
+  'parliamentary walkout suspension clash censure motion of no confidence boycott standoff'
+];
+const ENGLISH_STOPWORDS = new Set([
+  'the', 'and', 'for', 'that', 'with', 'this', 'from', 'are', 'was', 'were',
+  'will', 'would', 'have', 'has', 'had', 'not', 'but', 'all', 'any', 'can',
+  'could', 'should', 'shall', 'may', 'might', 'must', 'into', 'about', 'there',
+  'their', 'they', 'them', 'these', 'those', 'which', 'who', 'whom', 'what',
+  'when', 'where', 'why', 'how', 'been', 'being', 'its', 'our', 'out', 'over',
+  'under', 'more', 'most', 'some', 'such', 'than', 'then', 'very', 'also',
+  'only', 'other', 'between', 'through', 'during', 'before', 'after', 'above',
+  'below', 'each', 'few', 'both', 'same', 'own', 'while', 'because', 'until'
+]);
+
+function stripHtmlToText(raw) {
+  return String(raw || '')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenizeHansard(text) {
+  return stripHtmlToText(text)
+    .toLowerCase()
+    .match(/[a-z]{2,}/g)
+    ?.filter(tok => !ENGLISH_STOPWORDS.has(tok)) || [];
+}
+
+function scoreHansardText(liveText) {
+  const docsTokens = HANSARD_RISK_CORPUS.map(tokenizeHansard);
+  const liveTokens = tokenizeHansard(liveText);
+  if (!liveTokens.length) return null;
+
+  const allDocs = [...docsTokens, liveTokens];
+  const numDocs = allDocs.length;
+  const docFreq = new Map();
+  for (const tokens of allDocs) {
+    for (const term of new Set(tokens)) {
+      docFreq.set(term, (docFreq.get(term) || 0) + 1);
+    }
+  }
+
+  const buildVector = (tokens) => {
+    const tfMap = new Map();
+    for (const tok of tokens) tfMap.set(tok, (tfMap.get(tok) || 0) + 1);
+    const vec = new Map();
+    let normSq = 0;
+    for (const [term, tf] of tfMap.entries()) {
+      const idf = Math.log((1 + numDocs) / (1 + (docFreq.get(term) || 0))) + 1;
+      const weight = tf * idf;
+      vec.set(term, weight);
+      normSq += weight * weight;
+    }
+    const norm = Math.sqrt(normSq);
+    if (norm > 0) {
+      for (const [term, weight] of vec.entries()) vec.set(term, weight / norm);
+    }
+    return vec;
+  };
+
+  const refVectors = docsTokens.map(buildVector);
+  const liveVec = buildVector(liveTokens);
+  let sumSim = 0;
+  for (const refVec of refVectors) {
+    let sim = 0;
+    for (const [term, weight] of refVec.entries()) {
+      sim += (liveVec.get(term) || 0) * weight;
+    }
+    sumSim += sim;
+  }
+  const meanSimilarity = sumSim / refVectors.length;
+  return Number(Math.min(100, Math.max(40, (meanSimilarity * 250) + 42)).toFixed(2));
+}
+
+async function fetchSemanticHansardTelemetry() {
+  const now = Date.now();
+  if (hansardCache.data && hansardCache.expiresAt > now) {
+    return hansardCache.data;
+  }
+  try {
+    const response = await fetch(HANSARD_PORTAL_URL, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) KUVHURA-Observatory/1.0' },
+      signal: AbortSignal.timeout(5000)
+    });
+    const cfMitigated = (response.headers.get('cf-mitigated') || '').toLowerCase();
+    if (response.status === 403 && (cfMitigated === 'challenge' || (response.headers.get('server') || '').toLowerCase().includes('cloudflare'))) {
+      const blocked = {
+        score: null,
+        status: 'blocked_by_cloudflare',
+        source: 'unavailable',
+        httpStatus: 403,
+        message: 'Parliament Hansard portal is protected by a Cloudflare challenge (HTTP 403).'
+      };
+      hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: blocked };
+      return blocked;
+    }
+    if (!response.ok) {
+      const failed = {
+        score: null,
+        status: 'unavailable',
+        source: 'unavailable',
+        httpStatus: response.status,
+        message: `Parliament Hansard portal returned HTTP ${response.status}.`
+      };
+      hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: failed };
+      return failed;
+    }
+    const rawHtml = await response.text();
+    const cleanText = stripHtmlToText(rawHtml);
+    const score = cleanText.length >= 100 ? scoreHansardText(cleanText) : null;
+    if (score === null) {
+      const emptyResult = {
+        score: null,
+        status: 'unavailable',
+        source: 'unavailable',
+        httpStatus: response.status,
+        message: 'Parliament Hansard portal returned insufficient content.'
+      };
+      hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: emptyResult };
+      return emptyResult;
+    }
+    const okResult = {
+      score,
+      status: 'available',
+      source: 'parlzim_hansards',
+      httpStatus: response.status,
+      charCount: cleanText.length
+    };
+    hansardCache = { expiresAt: now + HANSARD_TTL_MS, data: okResult };
+    return okResult;
+  } catch (error) {
+    const errResult = {
+      score: null,
+      status: 'unavailable',
+      source: 'unavailable',
+      message: error.message || 'Parliament Hansard portal request failed.'
+    };
+    hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: errResult };
+    return errResult;
+  }
+}
+
 function getDualEngineTimelineResponse() {
+  const hansardStatus = latestHansardStatus
+    ? { ...latestHansardStatus }
+    : { score: null, status: 'awaiting_check', source: 'unavailable' };
   return {
     timeline: TELEMETRY_TIMELINE.map(entry => ({ ...entry })),
     engines: {
@@ -790,14 +948,18 @@ function getDualEngineTimelineResponse() {
       markov_status: 'Active (three-state transition matrix)',
       fsi_status: latestFsiInputs?.status === 'available'
         ? 'Active (World Bank macro-stress proxy)'
-        : 'Awaiting sourced World Bank macro data'
+        : 'Awaiting sourced World Bank macro data',
+      hansard_status: hansardStatus.status === 'available'
+        ? `Active (ParlZim TF-IDF cosine score ${hansardStatus.score})`
+        : hansardStatus.message || 'Awaiting Parliament Hansard portal access'
     },
     inputStatus: latestDualEngineInputs ? 'updated' : 'awaiting_social_sample',
     latestInputs: latestDualEngineInputs ? { ...latestDualEngineInputs } : null,
     fsiStatus: latestFsiInputs
       ? { ...latestFsiInputs }
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
-    historyNote: 'Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy. The proxy uses 50% capped inflation/2, 30% capped debt-to-GNI, and 20% capped (10 minus GDP growth) times 5; these experimental scales are not calibrated.'
+    hansardStatus,
+    historyNote: 'Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Hansard Friction is reachable). Macro stress scaling and TF-IDF cosine weighting are experimental assumptions.'
   };
 }
 
@@ -895,10 +1057,13 @@ app.get('/api/social/hashtags', async (req, res) => {
 
 app.get('/api/timeline', async (req, res) => {
   try {
-    const [socialPayload, layer2Macro] = await Promise.all([
+    const [socialPayload, layer2Macro, hansardTelemetry] = await Promise.all([
       getSocialHashtagTrends(),
-      fetchLayer2MacroTelemetry()
+      fetchLayer2MacroTelemetry(),
+      fetchSemanticHansardTelemetry()
     ]);
+
+    latestHansardStatus = hansardTelemetry ? { ...hansardTelemetry } : { score: null, status: 'unavailable', source: 'unavailable' };
 
     if (socialPayload?.available && Array.isArray(socialPayload.hashtags) && Number.isFinite(socialPayload.scannedPosts)) {
       const today = new Date().toISOString().slice(0, 10);
@@ -919,6 +1084,9 @@ app.get('/api/timeline', async (req, res) => {
       const currentPhi = computeBayesianPosterior(timelineBaseline.phi, socialVolume, engagementProxy);
       const projectedCrisisProb = computeMarkovPathProjection(timelineBaseline.markov_crisis_prob);
       const macroStressProxy = computeMacroStressProxy(layer2Macro);
+      const hansardScore = hansardTelemetry?.source === 'parlzim_hansards' && Number.isFinite(hansardTelemetry.score)
+        ? hansardTelemetry.score
+        : null;
       const updatedAt = socialPayload.updatedAt || new Date().toISOString();
 
       const entry = {
@@ -931,15 +1099,21 @@ app.get('/api/timeline', async (req, res) => {
         telemetry_source: 'Node social telemetry',
         updated_at: updatedAt
       };
+      if (hansardScore !== null) {
+        entry.hansard_friction = hansardScore;
+      }
 
       if (macroStressProxy !== null) {
         entry.macro_volatility_proxy = macroStressProxy;
-        entry.fsi = Number((0.40 * (100 - currentPhi) + 0.35 * projectedCrisisProb + 0.25 * macroStressProxy).toFixed(2));
+        entry.fsi = hansardScore !== null
+          ? Number((0.35 * (100 - currentPhi) + 0.30 * projectedCrisisProb + 0.20 * macroStressProxy + 0.15 * hansardScore).toFixed(2))
+          : Number((0.40 * (100 - currentPhi) + 0.35 * projectedCrisisProb + 0.25 * macroStressProxy).toFixed(2));
         entry.warning_level = classifyFragilityState(entry.fsi);
         latestFsiInputs = {
           status: 'available',
           macro_stress_proxy: macroStressProxy,
           macro_source: layer2Macro.source,
+          hansard_included: hansardScore !== null,
           updated_at: updatedAt
         };
       } else {
@@ -947,6 +1121,7 @@ app.get('/api/timeline', async (req, res) => {
           status: 'awaiting_sourced_macro_data',
           macro_stress_proxy: null,
           macro_source: layer2Macro?.source || null,
+          hansard_included: false,
           updated_at: updatedAt
         };
       }

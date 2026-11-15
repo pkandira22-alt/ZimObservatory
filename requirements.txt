@@ -1,6 +1,10 @@
 flask
 flask-cors
 requests
+beautifulsoup4
+scikit-learn
+numpy
+apscheduler
 aiohttp
 xlrd
 wbgapi

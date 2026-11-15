@@ -25,6 +25,7 @@ class StreamServerTests(unittest.TestCase):
 
     def test_fragility_index_formula_and_warning_bands(self):
         self.assertEqual(stream_server.compute_fragility_state_index(40, 45, 40), 49.75)
+        self.assertEqual(stream_server.compute_fragility_state_index(40, 45, 40, hansard_friction=70), 53.0)
         cases = (
             (25, "Stable Consolidation"),
             (25.01, "Latent Friction"),
@@ -36,6 +37,33 @@ class StreamServerTests(unittest.TestCase):
         for fsi, expected in cases:
             with self.subTest(fsi=fsi):
                 self.assertEqual(stream_server.classify_fragility_state(fsi), expected)
+
+    def test_hansard_tfidf_scoring_and_cloudflare_challenge_handling(self):
+        high_friction = stream_server.score_hansard_text(
+            "Parliament debated corruption tender embezzlement, inflation parallel market depreciation, "
+            "budget deficit unauthorized expenditure audit discrepancy, and a parliamentary walkout standoff."
+        )
+        low_friction = stream_server.score_hansard_text(
+            "The honorable committee approved routine agricultural irrigation maintenance minutes for rural schools."
+        )
+        self.assertIsNotNone(high_friction)
+        self.assertIsNotNone(low_friction)
+        self.assertGreater(high_friction, low_friction)
+        self.assertGreaterEqual(low_friction, 40.0)
+        self.assertLessEqual(high_friction, 100.0)
+
+        cf_error = stream_server.urllib.error.HTTPError(
+            "https://e-portal.parlzim.gov.zw/hansards",
+            403,
+            "Forbidden",
+            {"cf-mitigated": "challenge", "server": "cloudflare"},
+            None,
+        )
+        with patch("stream_server.urllib.request.urlopen", side_effect=cf_error):
+            blocked = stream_server.fetch_semantic_hansard_telemetry(use_cache=False)
+        self.assertIsNone(blocked["score"])
+        self.assertEqual(blocked["status"], "blocked_by_cloudflare")
+        self.assertEqual(blocked["source"], "unavailable")
 
     def test_macro_stress_proxy_requires_sourced_world_bank_data(self):
         macro = {
@@ -79,6 +107,7 @@ class StreamServerTests(unittest.TestCase):
             patch.object(stream_server, "TIMELINE_BASELINE", None),
             patch.object(stream_server, "LATEST_DUAL_ENGINE_INPUTS", None),
             patch.object(stream_server, "LATEST_FSI_INPUTS", None),
+            patch.object(stream_server, "LATEST_HANSARD_STATUS", None),
         ):
             evaluated_at = stream_server.datetime(2026, 11, 15, tzinfo=stream_server.timezone.utc)
             stream_server.update_telemetry_timeline({
@@ -120,6 +149,7 @@ class StreamServerTests(unittest.TestCase):
             patch.object(stream_server, "TIMELINE_BASELINE", None),
             patch.object(stream_server, "LATEST_DUAL_ENGINE_INPUTS", None),
             patch.object(stream_server, "LATEST_FSI_INPUTS", None),
+            patch.object(stream_server, "LATEST_HANSARD_STATUS", None),
         ):
             stream_server.update_telemetry_timeline(
                 social_payload, evaluated_at, layer2_macro=live_macro
@@ -145,9 +175,10 @@ class StreamServerTests(unittest.TestCase):
                 "awaiting_sourced_macro_data",
             )
 
+    @patch.object(stream_server, "fetch_semantic_hansard_telemetry")
     @patch.object(stream_server, "fetch_layer2_macro_telemetry")
     @patch.object(stream_server, "fetch_social_hashtag_trends")
-    def test_stream_uses_local_social_telemetry_collector(self, fetch_trends, fetch_macro):
+    def test_stream_uses_local_social_telemetry_collector(self, fetch_trends, fetch_macro, fetch_hansard):
         payload = {
             "available": True,
             "updatedAt": "2026-11-08T12:00:00Z",
@@ -156,8 +187,10 @@ class StreamServerTests(unittest.TestCase):
             "orientationInputs": None,
         }
         macro_payload = {"GDP_Growth": 5.3, "Inflation": 104.2, "Debt_GNI": 44.1, "source": "world_bank_v2"}
+        hansard_payload = {"score": 68.4, "status": "available", "source": "parlzim_hansards"}
         fetch_trends.return_value = payload
         fetch_macro.return_value = macro_payload
+        fetch_hansard.return_value = hansard_payload
 
         with (
             patch.object(stream_server, "TELEMETRY_TIMELINE", [
@@ -167,17 +200,21 @@ class StreamServerTests(unittest.TestCase):
             patch.object(stream_server, "TIMELINE_BASELINE", None),
             patch.object(stream_server, "LATEST_DUAL_ENGINE_INPUTS", None),
             patch.object(stream_server, "LATEST_FSI_INPUTS", None),
+            patch.object(stream_server, "LATEST_HANSARD_STATUS", None),
         ):
             result = stream_server.fetch_trending_telemetry()
 
         fetch_trends.assert_called_once_with()
         fetch_macro.assert_called_once_with()
+        fetch_hansard.assert_called_once_with()
         self.assertEqual(result["status"], "available")
         self.assertIs(result["telemetry"], payload)
         self.assertEqual(result["telemetry"]["hashtags"][0]["tag"], "#ZimResources")
         self.assertEqual(result["layer2Macro"], macro_payload)
         self.assertEqual(result["dualEngineTimeline"]["inputStatus"], "updated")
         self.assertEqual(result["dualEngineTimeline"]["fsiStatus"]["status"], "available")
+        self.assertTrue(result["dualEngineTimeline"]["fsiStatus"]["hansard_included"])
+        self.assertEqual(result["dualEngineTimeline"]["hansardStatus"]["score"], 68.4)
 
     @patch("stream_server.urllib.request.urlopen")
     def test_fetch_layer2_macro_telemetry_parses_world_bank_values(self, mock_urlopen):
