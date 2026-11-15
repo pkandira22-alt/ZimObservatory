@@ -59,7 +59,12 @@ class StreamServerTests(unittest.TestCase):
             {"cf-mitigated": "challenge", "server": "cloudflare"},
             None,
         )
-        with patch.object(stream_server, "cureq", None), patch("stream_server.urllib.request.urlopen", side_effect=cf_error):
+        with (
+            patch.dict("os.environ", {"TELEMETRY_CACHE_PATH": "/tmp/nonexistent_kuvhura_cache.json"}),
+            patch.object(stream_server, "HANSARD_CACHE", {"expires_at": 0.0, "data": None}),
+            patch.object(stream_server, "cureq", None),
+            patch("stream_server.urllib.request.urlopen", side_effect=cf_error),
+        ):
             blocked = stream_server.fetch_semantic_hansard_telemetry(use_cache=False)
         self.assertIsNone(blocked["score"])
         self.assertEqual(blocked["status"], "blocked_by_cloudflare")
@@ -138,7 +143,7 @@ class StreamServerTests(unittest.TestCase):
 
         fake_cureq.get.side_effect = fake_get
         with patch.object(stream_server, "cureq", fake_cureq):
-            tracker = stream_server.fetch_parliamentary_policy_tracker(use_cache=False)
+            tracker = stream_server.fetch_parliamentary_policy_tracker(use_cache=False, allow_mirror_fallback=False)
 
         self.assertEqual(fake_cureq.get.call_count, 5)
         self.assertEqual(tracker["status"], "available")
@@ -146,6 +151,155 @@ class StreamServerTests(unittest.TestCase):
         self.assertEqual(tracker["totalSources"], 5)
         self.assertEqual(tracker["sources"][-1]["transport"], "curl_cffi_chrome")
         self.assertEqual(tracker["tracked_topics"][0]["topic"], "Audit Discrepancy & Public Funds Committee Report")
+
+    def test_cloudflare_403_fails_over_to_zimlii_and_parliament_rss_mirrors(self):
+        zimlii_html = """
+        <html><body>
+          <a href="/akn/zw/act/si/2026/9/eng@2026-01-12">Public Procurement and Disposal of Public Assets (Amendment) Regulations, 2026</a>
+          <p>Regulations addressing tender audit discrepancy, public funds accountability, and procurement transparency across ministries.</p>
+        </body></html>
+        """.encode("utf-8")
+        rss_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0"><channel><title>Parliament Debates</title>
+          <item>
+            <title>Parliament portfolio committee debates 2027 National Budget and audit discrepancies</title>
+            <link>https://news.google.com/articles/zimbabwe-parliament-budget</link>
+            <description>Parliamentary committee oversight on expenditure, debt, and exchange rate friction.</description>
+          </item>
+        </channel></rss>
+        """.encode("utf-8")
+
+        def fake_urlopen(request, timeout=8):
+            url = request.full_url if hasattr(request, "full_url") else str(request)
+            if "zimlii.org" in url:
+                cm = MagicMock()
+                cm.__enter__.return_value.status = 200
+                cm.__enter__.return_value.headers = {}
+                cm.__enter__.return_value.read.return_value = zimlii_html
+                cm.__exit__.return_value = False
+                return cm
+            if "news.google.com" in url:
+                cm = MagicMock()
+                cm.__enter__.return_value.status = 200
+                cm.__enter__.return_value.headers = {}
+                cm.__enter__.return_value.read.return_value = rss_xml
+                cm.__exit__.return_value = False
+                return cm
+            raise stream_server.urllib.error.HTTPError(
+                url, 403, "Forbidden", {"cf-mitigated": "challenge", "server": "cloudflare"}, None
+            )
+
+        with (
+            patch.object(stream_server, "HANSARD_CACHE", {"expires_at": 0.0, "data": None}),
+            patch.object(stream_server, "cureq", None),
+            patch("stream_server.urllib.request.urlopen", side_effect=fake_urlopen),
+        ):
+            tracker = stream_server.fetch_parliamentary_policy_tracker(use_cache=False, allow_mirror_fallback=True)
+
+        self.assertEqual(tracker["status"], "available")
+        self.assertEqual(tracker["accessibleSources"], 5)
+        self.assertTrue(all(src.get("viaFallbackMirror") for src in tracker["sources"]))
+        self.assertTrue(all(src.get("primaryBlockedByCloudflare") for src in tracker["sources"]))
+        topic_titles = [t["topic"] for t in tracker["tracked_topics"]]
+        self.assertIn("Public Procurement and Disposal of Public Assets (Amendment) Regulations, 2026", topic_titles)
+        self.assertIn("Parliament portfolio committee debates 2027 National Budget and audit discrepancies", topic_titles)
+
+    def test_telemetry_cache_fallback_only_uses_verified_available_snapshots(self):
+        import os
+        import tempfile
+
+        cf_error = stream_server.urllib.error.HTTPError(
+            "https://e-portal.parlzim.gov.zw/",
+            403,
+            "Forbidden",
+            {"cf-mitigated": "challenge", "server": "cloudflare"},
+            None,
+        )
+        with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as tf:
+            cache_file = tf.name
+            json.dump({
+                "updated_at": "2026-11-15T06:00:00Z",
+                "parlzim": {
+                    "score": None,
+                    "status": "blocked_by_cloudflare",
+                    "source": "unavailable",
+                    "accessibleSources": 0,
+                    "totalSources": 5,
+                    "tracked_topics": [],
+                },
+                "last_available_parlzim": {
+                    "score": 61.5,
+                    "status": "available",
+                    "source": "parlzim_portals",
+                    "accessibleSources": 2,
+                    "totalSources": 5,
+                    "sources": [],
+                    "tracked_topics": [{"topic": "Verified Cached Finance Bill", "category": "Bill Digests", "status": "Legislative Pipeline", "friction": 61.5}],
+                },
+            }, tf)
+
+        try:
+            with (
+                patch.dict(os.environ, {"TELEMETRY_CACHE_PATH": cache_file}),
+                patch.object(stream_server, "cureq", None),
+                patch("stream_server.urllib.request.urlopen", side_effect=cf_error),
+            ):
+                fallback = stream_server.fetch_parliamentary_policy_tracker(use_cache=False)
+            self.assertEqual(fallback["status"], "available")
+            self.assertEqual(fallback["score"], 61.5)
+            self.assertTrue(fallback["fromCache"])
+            self.assertEqual(fallback["cacheUpdatedAt"], "2026-11-15T06:00:00Z")
+            self.assertEqual(fallback["tracked_topics"][0]["topic"], "Verified Cached Finance Bill")
+
+            with open(cache_file, "w", encoding="utf-8") as wf:
+                json.dump({
+                    "timestamp": "2026-11-15T06:00:00Z",
+                    "accessible_sources": 0,
+                    "total_sources": 5,
+                    "hansard_friction": 58.0,
+                    "tracked_topics": [],
+                    "status": "Live Crawl Attempted via Actions",
+                }, wf)
+
+            with (
+                patch.dict(os.environ, {"TELEMETRY_CACHE_PATH": cache_file}),
+                patch.object(stream_server, "HANSARD_CACHE", {"expires_at": 0.0, "data": None}),
+                patch.object(stream_server, "cureq", None),
+                patch("stream_server.urllib.request.urlopen", side_effect=cf_error),
+            ):
+                blocked = stream_server.fetch_parliamentary_policy_tracker(use_cache=False)
+            self.assertEqual(blocked["status"], "blocked_by_cloudflare")
+            self.assertIsNone(blocked["score"])
+
+            with open(cache_file, "w", encoding="utf-8") as wf:
+                json.dump({
+                    "timestamp": "2026-11-15T06:00:00Z",
+                    "accessible_sources": 3,
+                    "total_sources": 5,
+                    "hansard_friction": 64.25,
+                    "tracked_topics": [{"topic": "Cached Treasury Oversight Brief", "category": "Policy Briefs", "status": "Policy Review", "friction": 64.25}],
+                    "status": "Live Crawl Attempted via Actions",
+                }, wf)
+
+            with (
+                patch.dict(os.environ, {"TELEMETRY_CACHE_PATH": cache_file}),
+                patch.object(stream_server, "HANSARD_CACHE", {"expires_at": 0.0, "data": None}),
+                patch("stream_server.urllib.request.urlopen", side_effect=AssertionError("Should read disk cache first")),
+            ):
+                cache_first = stream_server.fetch_parliamentary_policy_tracker(use_cache=True)
+                tuple_result = stream_server.load_telemetry_cache()
+            self.assertEqual(cache_first["score"], 64.25)
+            self.assertEqual(cache_first["accessibleSources"], 3)
+            self.assertTrue(cache_first["fromCache"])
+            self.assertEqual(cache_first["tracked_topics"][0]["topic"], "Cached Treasury Oversight Brief")
+            self.assertEqual(tuple_result[0], 64.25)
+            self.assertEqual(tuple_result[2], 3)
+            self.assertEqual(tuple_result[1][0]["topic"], "Cached Treasury Oversight Brief")
+        finally:
+            os.remove(cache_file)
+
+        with patch.dict(os.environ, {"TELEMETRY_CACHE_PATH": cache_file + ".missing"}):
+            self.assertEqual(stream_server.load_telemetry_cache(), (None, [], 0))
 
     def test_macro_stress_proxy_requires_sourced_world_bank_data(self):
         macro = {

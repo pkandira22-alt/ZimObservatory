@@ -1,0 +1,36 @@
+name: Automated ParlZim Telemetry Ingestion
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # Runs every day at 06:00 UTC
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  scrape-and-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests beautifulsoup4 curl-cffi scikit-learn numpy
+
+      - name: Run Scraper Script
+        run: |
+          python scripts/update_telemetry.py
+
+      - name: Commit and Push Cache
+        run: |
+          git config --global user.name "KUVHURA Bot"
+          git config --global user.email "bot@kuvhura.org"
+          git add telemetry_cache.json
+          git diff --cached --quiet || (git commit -m "chore: automated daily ParlZim telemetry cache update" && git push)

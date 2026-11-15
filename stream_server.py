@@ -9,9 +9,13 @@ import re
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-from aiohttp import web
+try:
+    from aiohttp import web
+except ImportError:
+    web = None
 try:
     from curl_cffi import requests as cureq
 except ImportError:
@@ -27,13 +31,31 @@ LAYER2_MACRO_CACHE = {"expires_at": 0.0, "data": None}
 HANSARD_TTL_SECONDS = 6 * 60 * 60
 HANSARD_ERROR_TTL_SECONDS = 15 * 60
 HANSARD_CACHE = {"expires_at": 0.0, "data": None}
+TELEMETRY_CACHE_PATH = os.environ.get(
+    "TELEMETRY_CACHE_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "telemetry_cache.json"),
+)
 HANSARD_PORTAL_URL = os.environ.get("HANSARD_PORTAL_URL", "https://e-portal.parlzim.gov.zw/")
+FLARESOLVERR_URL = os.environ.get("FLARESOLVERR_URL", "").strip()
 PARLZIM_STATIC_PORTALS = (
     ("Bill Digests", "https://www.parlzim.gov.zw/bill-digest/"),
     ("Enacted Acts", "https://www.parlzim.gov.zw/acts/"),
     ("Policy Briefs", "https://www.parlzim.gov.zw/policy-briefs/"),
     ("Fact Sheets", "https://www.parlzim.gov.zw/fact-sheets/"),
 )
+PARLZIM_FALLBACK_MIRRORS = {
+    "Bill Digests": ("ZimLII Uncommenced Legislation", "https://zimlii.org/legislation/uncommenced"),
+    "Enacted Acts": ("ZimLII Recent Legislation", "https://zimlii.org/legislation/recent"),
+    "Policy Briefs": (
+        "Parliament Oversight RSS (30d)",
+        "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    ),
+    "Fact Sheets": ("ZimLII Subsidiary Legislation", "https://zimlii.org/legislation/subsidiary"),
+    "Hansards": (
+        "Parliament Debates RSS (30d)",
+        "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    ),
+}
 HANSARD_RISK_CORPUS = (
     "corruption tender embezzlement illicit financial flows asset recovery graft scandal looting",
     "inflation parallel market currency depreciation exchange rate foreign currency shortage devaluation",
@@ -198,10 +220,54 @@ def _strip_html(raw_html):
     return " ".join(html_lib.unescape(cleaned).split())
 
 
+def _extract_rss_topics(raw_xml, category, base_url, limit=4):
+    try:
+        root = ET.fromstring(raw_xml)
+    except Exception:
+        return [], ""
+    category_status = {
+        "Bill Digests": "Legislative Pipeline",
+        "Enacted Acts": "Enacted / Gazetted",
+        "Policy Briefs": "Policy Review",
+        "Fact Sheets": "Briefing Published",
+        "Hansards": "Parliamentary Debate",
+    }.get(category, "Tracked")
+
+    items = root.findall(".//item")
+    text_parts = []
+    candidates = []
+    seen = set()
+    for item in items:
+        title = " ".join(_strip_html(item.findtext("title") or "").split())
+        link = (item.findtext("link") or base_url).strip()
+        desc = " ".join(_strip_html(item.findtext("description") or "").split())
+        if title:
+            text_parts.append(title)
+        if desc:
+            text_parts.append(desc)
+        lower_title = title.lower()
+        if len(title) >= 12 and lower_title not in seen and len(candidates) < limit:
+            seen.add(lower_title)
+            friction = score_hansard_text(f"{title} {desc}")
+            candidates.append({
+                "topic": title[:160],
+                "category": category,
+                "status": category_status,
+                "friction": friction if friction is not None else 42.0,
+                "url": link,
+            })
+    return candidates, " ".join(text_parts)
+
+
 def extract_legislative_topics(raw_html, category, base_url, limit=4):
-    """Extract real document/debate titles from accessible ParlZim HTML pages without fabricating entries."""
+    """Extract real document/debate titles from accessible HTML or XML RSS pages without fabricating entries."""
     if not raw_html:
         return []
+    stripped_start = raw_html.lstrip()
+    if stripped_start.startswith("<?xml") or "<rss" in stripped_start[:300].lower():
+        rss_candidates, _ = _extract_rss_topics(raw_html, category, base_url, limit=limit)
+        return rss_candidates
+
     category_status = {
         "Bill Digests": "Legislative Pipeline",
         "Enacted Acts": "Enacted / Gazetted",
@@ -211,17 +277,28 @@ def extract_legislative_topics(raw_html, category, base_url, limit=4):
     }.get(category, "Tracked")
 
     skip_phrases = {
-        "skip to content", "home", "about us", "contact us", "read more",
+        "skip to content", "skip to document content", "skip to main menu", "skip to search",
+        "home", "about us", "contact us", "read more", "filter results",
         "menu", "search", "login", "register", "privacy policy", "parliament of zimbabwe",
+        "current legislation", "recent legislation", "subsidiary legislation",
+        "uncommenced legislation", "repealed legislation",
     }
     candidates = []
     seen = set()
 
-    # Match headings (h1-h4) and anchor tags pointing to legislative docs/articles
-    for pattern in (
-        r"(?is)<h[1-4][^>]*>(.*?)</h[1-4]>",
-        r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
-    ):
+    patterns = (
+        (
+            r'(?is)<a[^>]+href=["\'](/akn/zw/[^"\']+)["\'][^>]*>(.*?)</a>',
+            r"(?is)<h[1-4][^>]*>(.*?)</h[1-4]>",
+        )
+        if "zimlii.org" in (base_url or "").lower()
+        else (
+            r"(?is)<h[1-4][^>]*>(.*?)</h[1-4]>",
+            r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+        )
+    )
+
+    for pattern in patterns:
         for match in re.finditer(pattern, raw_html):
             if match.lastindex == 1:
                 href = base_url
@@ -262,31 +339,78 @@ def _get_parlzim_portals():
     return PARLZIM_STATIC_PORTALS + (("Hansards", HANSARD_PORTAL_URL),)
 
 
+def _fetch_via_flaresolverr(portal_url, timeout=20):
+    solver_endpoint = os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip()
+    if not solver_endpoint:
+        return None
+    payload = json.dumps({
+        "cmd": "request.get",
+        "url": portal_url,
+        "maxTimeout": int(timeout * 1000),
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        solver_endpoint,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout + 5) as resp:
+        solved = json.loads(resp.read().decode("utf-8", errors="ignore"))
+    sol = solved.get("solution") or {}
+    if solved.get("status") == "ok" and sol.get("response"):
+        headers = {str(k).lower(): str(v) for k, v in (sol.get("headers") or {}).items()}
+        return int(sol.get("status", 200)), sol.get("response", ""), headers, "flaresolverr"
+    return None
+
+
 def _fetch_portal_response(portal_url, timeout=10):
-    """Fetch a Parliament portal using curl_cffi Chrome TLS impersonation when installed, else urllib."""
+    """Fetch a portal using curl_cffi Chrome TLS impersonation (and optional FlareSolverr), else urllib."""
     if cureq is not None:
         response = cureq.get(portal_url, impersonate="chrome", timeout=timeout)
         status_code = getattr(response, "status_code", 200)
         headers = {str(k).lower(): str(v) for k, v in getattr(response, "headers", {}).items()}
         body = getattr(response, "text", "") or ""
+        if status_code == 403 and os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip():
+            solved = _fetch_via_flaresolverr(portal_url, timeout=max(timeout, 20))
+            if solved is not None:
+                return solved
         return status_code, body, headers, "curl_cffi_chrome"
 
     req = urllib.request.Request(
         portal_url,
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KUVHURA-Observatory/1.0"},
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
     )
-    with urllib.request.urlopen(req, timeout=min(timeout, 6)) as response:
-        status_code = getattr(response, "status", 200)
-        headers = {str(k).lower(): str(v) for k, v in getattr(response, "headers", {}).items()}
-        body = response.read().decode("utf-8", errors="ignore")
-    return status_code, body, headers, "urllib"
+    try:
+        with urllib.request.urlopen(req, timeout=min(timeout, 8)) as response:
+            status_code = getattr(response, "status", 200)
+            headers = {str(k).lower(): str(v) for k, v in getattr(response, "headers", {}).items()}
+            body = response.read().decode("utf-8", errors="ignore")
+        return status_code, body, headers, "urllib"
+    except urllib.error.HTTPError as err:
+        if err.code == 403 and os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip():
+            solved = _fetch_via_flaresolverr(portal_url, timeout=max(timeout, 20))
+            if solved is not None:
+                return solved
+        raise
 
 
-def fetch_parliamentary_policy_tracker(use_cache=True):
-    """Crawl the 5 ParlZim portals (Bill Digests, Acts, Policy Briefs, Fact Sheets, Hansards) using Chrome TLS impersonation when available."""
+def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=True):
+    """Read verified telemetry_cache.json first when cached; otherwise crawl the 5 ParlZim portals with automatic CF-free legislative mirror failover."""
     now = time.monotonic()
-    if use_cache and HANSARD_CACHE["data"] is not None and HANSARD_CACHE["expires_at"] > now:
-        return HANSARD_CACHE["data"]
+    if use_cache:
+        if HANSARD_CACHE["data"] is not None and HANSARD_CACHE["expires_at"] > now:
+            return HANSARD_CACHE["data"]
+        disk_cache = _load_verified_telemetry_cache(allow_fresh_blocked=True)
+        if disk_cache is not None:
+            HANSARD_CACHE["data"] = disk_cache
+            HANSARD_CACHE["expires_at"] = now + (
+                HANSARD_TTL_SECONDS if disk_cache.get("status") == "available" else HANSARD_ERROR_TTL_SECONDS
+            )
+            return disk_cache
 
     sources_status = []
     scores = []
@@ -295,6 +419,13 @@ def fetch_parliamentary_policy_tracker(use_cache=True):
     blocked_count = 0
 
     for category, portal_url in _get_parlzim_portals():
+        primary_blocked_cf = False
+        primary_error_msg = None
+        primary_http_status = None
+        selected_url = portal_url
+        mirror_label = None
+        via_fallback = False
+
         try:
             status_code, body, resp_headers, transport = _fetch_portal_response(portal_url, timeout=10)
             cf_mitigated = resp_headers.get("cf-mitigated", "").lower()
@@ -304,89 +435,109 @@ def fetch_parliamentary_policy_tracker(use_cache=True):
                 or "just a moment" in body.lower()
             )
             if status_code == 403 and is_cloudflare:
-                blocked_count += 1
-                sources_status.append({
-                    "category": category,
-                    "url": portal_url,
-                    "status": "blocked_by_cloudflare",
-                    "httpStatus": 403,
-                    "score": None,
-                    "transport": transport,
-                    "message": "Protected by Cloudflare challenge (HTTP 403).",
-                })
-                continue
-
-            stripped_text = _strip_html(body)
-            if status_code != 200 or len(stripped_text) < 100:
-                sources_status.append({
-                    "category": category,
-                    "url": portal_url,
-                    "status": "unavailable",
-                    "httpStatus": status_code,
-                    "score": None,
-                    "transport": transport,
-                    "message": (
-                        f"Portal returned HTTP {status_code}."
-                        if status_code != 200
-                        else "Portal returned insufficient content."
-                    ),
-                })
-                continue
-
-            cat_score = score_hansard_text(stripped_text)
-            if cat_score is None:
-                sources_status.append({
-                    "category": category,
-                    "url": portal_url,
-                    "status": "unavailable",
-                    "httpStatus": status_code,
-                    "score": None,
-                    "transport": transport,
-                    "message": "Portal contained no indexable legislative tokens.",
-                })
-                continue
-
-            total_chars += len(stripped_text)
-            scores.append(cat_score)
-            topics = extract_legislative_topics(body, category, portal_url)
-            tracked_topics.extend(topics)
-            sources_status.append({
-                "category": category,
-                "url": portal_url,
-                "status": "available",
-                "httpStatus": status_code,
-                "score": cat_score,
-                "charCount": len(stripped_text),
-                "topicCount": len(topics),
-                "transport": transport,
-            })
+                primary_blocked_cf = True
+                primary_http_status = 403
+                primary_error_msg = "Protected by Cloudflare challenge (HTTP 403)."
+            elif status_code != 200:
+                primary_http_status = status_code
+                primary_error_msg = f"Portal returned HTTP {status_code}."
         except urllib.error.HTTPError as error:
             cf_mitigated = error.headers.get("cf-mitigated", "").lower() if error.headers else ""
-            is_cloudflare = error.code == 403 and (
+            primary_blocked_cf = error.code == 403 and (
                 cf_mitigated == "challenge" or "cloudflare" in str(error.headers).lower()
             )
-            if is_cloudflare:
+            primary_http_status = error.code
+            primary_error_msg = (
+                "Protected by Cloudflare challenge (HTTP 403)."
+                if primary_blocked_cf
+                else f"Portal returned HTTP {error.code}."
+            )
+        except Exception as error:
+            primary_error_msg = str(error)
+
+        if primary_error_msg is not None and allow_mirror_fallback and category in PARLZIM_FALLBACK_MIRRORS:
+            mirror_name, mirror_url = PARLZIM_FALLBACK_MIRRORS[category]
+            try:
+                m_status, m_body, m_headers, m_transport = _fetch_portal_response(mirror_url, timeout=10)
+                if m_status == 200 and m_body:
+                    status_code, body, resp_headers, transport = m_status, m_body, m_headers, m_transport
+                    selected_url = mirror_url
+                    mirror_label = mirror_name
+                    via_fallback = True
+                    primary_error_msg = None
+            except Exception:
+                pass
+
+        if primary_error_msg is not None:
+            if primary_blocked_cf:
                 blocked_count += 1
             sources_status.append({
                 "category": category,
                 "url": portal_url,
-                "status": "blocked_by_cloudflare" if is_cloudflare else "unavailable",
-                "httpStatus": error.code,
+                "status": "blocked_by_cloudflare" if primary_blocked_cf else "unavailable",
+                "httpStatus": primary_http_status,
                 "score": None,
-                "message": (
-                    "Protected by Cloudflare challenge (HTTP 403)."
-                    if is_cloudflare
-                    else f"Portal returned HTTP {error.code}."
-                ),
+                "message": primary_error_msg,
             })
-        except Exception as error:
+            continue
+
+        is_rss = body.lstrip().startswith("<?xml") or "<rss" in body[:300].lower()
+        if is_rss:
+            topics, rss_text = _extract_rss_topics(body, category, selected_url)
+            stripped_text = rss_text
+        else:
+            stripped_text = _strip_html(body)
+            topics = extract_legislative_topics(body, category, selected_url)
+
+        if status_code != 200 or len(stripped_text) < 80:
             sources_status.append({
                 "category": category,
-                "url": portal_url,
+                "url": selected_url,
                 "status": "unavailable",
+                "httpStatus": status_code,
                 "score": None,
-                "message": str(error),
+                "transport": transport,
+                "message": (
+                    f"Portal returned HTTP {status_code}."
+                    if status_code != 200
+                    else "Portal returned insufficient content."
+                ),
             })
+            continue
+
+        cat_score = score_hansard_text(stripped_text)
+        if cat_score is None:
+            sources_status.append({
+                "category": category,
+                "url": selected_url,
+                "status": "unavailable",
+                "httpStatus": status_code,
+                "score": None,
+                "transport": transport,
+                "message": "Portal contained no indexable legislative tokens.",
+            })
+            continue
+
+        total_chars += len(stripped_text)
+        scores.append(cat_score)
+        tracked_topics.extend(topics)
+        entry_status = {
+            "category": category,
+            "url": selected_url,
+            "status": "available",
+            "httpStatus": status_code,
+            "score": cat_score,
+            "charCount": len(stripped_text),
+            "topicCount": len(topics),
+            "transport": transport,
+        }
+        if via_fallback:
+            entry_status["viaFallbackMirror"] = True
+            entry_status["mirrorLabel"] = mirror_label
+            entry_status["primaryUrl"] = portal_url
+            entry_status["primaryStatus"] = primary_http_status
+            entry_status["primaryBlockedByCloudflare"] = primary_blocked_cf
+        sources_status.append(entry_status)
 
     total_sources = len(sources_status)
     accessible_sources = len(scores)
@@ -408,6 +559,12 @@ def fetch_parliamentary_policy_tracker(use_cache=True):
         HANSARD_CACHE["expires_at"] = now + HANSARD_TTL_SECONDS
         return result
 
+    cached_snapshot = _load_verified_telemetry_cache()
+    if cached_snapshot is not None:
+        HANSARD_CACHE["data"] = cached_snapshot
+        HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
+        return cached_snapshot
+
     all_cf = blocked_count > 0
     result = {
         "score": None,
@@ -427,6 +584,106 @@ def fetch_parliamentary_policy_tracker(use_cache=True):
     HANSARD_CACHE["data"] = result
     HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
     return result
+
+
+def _is_fresh_timestamp(ts_value, max_age_seconds=HANSARD_TTL_SECONDS):
+    if not isinstance(ts_value, str) or not ts_value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(ts_value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - parsed).total_seconds()
+        return -300 <= age <= max_age_seconds
+    except Exception:
+        return False
+
+
+def _load_verified_telemetry_cache(allow_fresh_blocked=False):
+    """Return a pre-crawled ParlZim snapshot from telemetry_cache.json when available, or recent blocked metadata if allowed."""
+    cache_path = os.environ.get("TELEMETRY_CACHE_PATH", TELEMETRY_CACHE_PATH)
+    if not cache_path or not os.path.exists(cache_path):
+        return None
+    try:
+        with open(cache_path, "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except Exception:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    for key in ("parlzim", "last_available_parlzim"):
+        snapshot = raw.get(key)
+        if not isinstance(snapshot, dict):
+            continue
+        score = snapshot.get("score")
+        if (
+            snapshot.get("status") == "available"
+            and isinstance(score, (int, float))
+            and not isinstance(score, bool)
+            and math.isfinite(score)
+        ):
+            hydrated = dict(snapshot)
+            hydrated["fromCache"] = True
+            hydrated["cacheUpdatedAt"] = raw.get("updated_at") or raw.get("timestamp") or snapshot.get("captured_at")
+            return hydrated
+
+    flat_accessible = raw.get("accessible_sources")
+    flat_score = raw.get("hansard_friction")
+    if (
+        isinstance(flat_accessible, int)
+        and flat_accessible > 0
+        and isinstance(flat_score, (int, float))
+        and not isinstance(flat_score, bool)
+        and math.isfinite(flat_score)
+    ):
+        topics = raw.get("tracked_topics") if isinstance(raw.get("tracked_topics"), list) else []
+        return {
+            "score": round(float(flat_score), 2),
+            "status": "available",
+            "source": "parlzim_portals",
+            "httpStatus": 200,
+            "accessibleSources": flat_accessible,
+            "totalSources": raw.get("total_sources", 5),
+            "sources": [],
+            "tracked_topics": topics,
+            "fromCache": True,
+            "cacheUpdatedAt": raw.get("timestamp") or raw.get("updated_at"),
+        }
+
+    if allow_fresh_blocked and _is_fresh_timestamp(raw.get("timestamp") or raw.get("updated_at")):
+        parlzim = raw.get("parlzim")
+        if isinstance(parlzim, dict) and parlzim.get("status") in ("blocked_by_cloudflare", "unavailable"):
+            hydrated = dict(parlzim)
+            hydrated["fromCache"] = True
+            hydrated["cacheUpdatedAt"] = raw.get("timestamp") or raw.get("updated_at")
+            return hydrated
+        if isinstance(flat_accessible, int) and flat_accessible == 0:
+            return {
+                "score": None,
+                "status": "blocked_by_cloudflare",
+                "source": "unavailable",
+                "httpStatus": 403,
+                "accessibleSources": 0,
+                "totalSources": raw.get("total_sources", 5),
+                "sources": [],
+                "tracked_topics": [],
+                "fromCache": True,
+                "cacheUpdatedAt": raw.get("timestamp") or raw.get("updated_at"),
+                "message": "Cached crawl recorded 0/5 accessible Parliament portals (Cloudflare HTTP 403).",
+            }
+    return None
+
+
+def load_telemetry_cache():
+    """Return (hansard_friction, tracked_topics, accessible_sources) from telemetry_cache.json without fabricating placeholder bills."""
+    snapshot = _load_verified_telemetry_cache(allow_fresh_blocked=True)
+    if not isinstance(snapshot, dict):
+        return None, [], 0
+    return (
+        snapshot.get("score"),
+        list(snapshot.get("tracked_topics") or []),
+        int(snapshot.get("accessibleSources") or 0),
+    )
 
 
 def fetch_semantic_hansard_telemetry(use_cache=True):

@@ -887,7 +887,7 @@ let latestHansardStatus = null;
 const HANSARD_TTL_MS = 6 * 60 * 60 * 1000;
 const HANSARD_ERROR_TTL_MS = 15 * 60 * 1000;
 let hansardCache = { expiresAt: 0, data: null };
-const HANSARD_PORTAL_URL = process.env.HANSARD_PORTAL_URL || 'https://e-portal.parlzim.gov.zw/hansards';
+const HANSARD_PORTAL_URL = process.env.HANSARD_PORTAL_URL || 'https://e-portal.parlzim.gov.zw/';
 const PARLZIM_PORTAL_SOURCES = [
   { category: 'Bill Digests', url: process.env.PARLZIM_BILL_DIGEST_URL || 'https://www.parlzim.gov.zw/bill-digest/' },
   { category: 'Enacted Acts', url: process.env.PARLZIM_ACTS_URL || 'https://www.parlzim.gov.zw/acts/' },
@@ -895,6 +895,19 @@ const PARLZIM_PORTAL_SOURCES = [
   { category: 'Fact Sheets', url: process.env.PARLZIM_FACT_SHEETS_URL || 'https://www.parlzim.gov.zw/fact-sheets/' },
   { category: 'Hansards', url: HANSARD_PORTAL_URL }
 ];
+const PARLZIM_FALLBACK_MIRRORS = {
+  'Bill Digests': { label: 'ZimLII Uncommenced Legislation', url: 'https://zimlii.org/legislation/uncommenced' },
+  'Enacted Acts': { label: 'ZimLII Recent Legislation', url: 'https://zimlii.org/legislation/recent' },
+  'Policy Briefs': {
+    label: 'Parliament Oversight RSS (30d)',
+    url: 'https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en'
+  },
+  'Fact Sheets': { label: 'ZimLII Subsidiary Legislation', url: 'https://zimlii.org/legislation/subsidiary' },
+  'Hansards': {
+    label: 'Parliament Debates RSS (30d)',
+    url: 'https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en'
+  }
+};
 const HANSARD_RISK_CORPUS = [
   'corruption tender embezzlement illicit financial flows asset recovery graft scandal looting',
   'inflation parallel market currency depreciation exchange rate foreign currency shortage devaluation',
@@ -977,8 +990,54 @@ function scoreHansardText(liveText) {
   return Number(Math.min(100, Math.max(40, (meanSimilarity * 250) + 42)).toFixed(2));
 }
 
+function extractRssLegislativeTopics(rawXml, category, baseUrl, limit = 4) {
+  const categoryStatus = {
+    'Bill Digests': 'Legislative Pipeline',
+    'Enacted Acts': 'Enacted / Gazetted',
+    'Policy Briefs': 'Policy Review',
+    'Fact Sheets': 'Briefing Published',
+    'Hansards': 'Parliamentary Debate'
+  }[category] || 'Tracked';
+
+  const items = [...String(rawXml || '').matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)];
+  const candidates = [];
+  const seen = new Set();
+  const textParts = [];
+
+  for (const match of items) {
+    const block = match[1];
+    const rawTitle = (block.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+    const rawLink = (block.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1] || '';
+    const rawDesc = (block.match(/<description[^>]*>([\s\S]*?)<\/description>/i) || [])[1] || '';
+    const title = stripHtmlToText(decodeXmlEntities(rawTitle.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')));
+    const desc = stripHtmlToText(decodeXmlEntities(rawDesc.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')));
+    const link = decodeXmlEntities(rawLink).trim() || baseUrl;
+    if (title) textParts.push(title);
+    if (desc) textParts.push(desc);
+
+    const lowerTitle = title.toLowerCase();
+    if (title.length >= 12 && !seen.has(lowerTitle) && candidates.length < limit) {
+      seen.add(lowerTitle);
+      const friction = scoreHansardText(`${title} ${desc}`);
+      candidates.push({
+        topic: title.slice(0, 160),
+        category,
+        status: categoryStatus,
+        friction: friction !== null ? friction : 42.0,
+        url: link
+      });
+    }
+  }
+  return { candidates, text: textParts.join(' ') };
+}
+
 function extractLegislativeTopics(rawHtml, category, baseUrl, limit = 4) {
   if (!rawHtml) return [];
+  const trimmed = String(rawHtml).trimStart();
+  if (trimmed.startsWith('<?xml') || trimmed.slice(0, 300).toLowerCase().includes('<rss')) {
+    return extractRssLegislativeTopics(rawHtml, category, baseUrl, limit).candidates;
+  }
+
   const categoryStatus = {
     'Bill Digests': 'Legislative Pipeline',
     'Enacted Acts': 'Enacted / Gazetted',
@@ -988,24 +1047,33 @@ function extractLegislativeTopics(rawHtml, category, baseUrl, limit = 4) {
   }[category] || 'Tracked';
 
   const skipPhrases = new Set([
-    'skip to content', 'home', 'about us', 'contact us', 'read more',
-    'menu', 'search', 'login', 'register', 'privacy policy', 'parliament of zimbabwe'
+    'skip to content', 'skip to document content', 'skip to main menu', 'skip to search',
+    'home', 'about us', 'contact us', 'read more', 'filter results',
+    'menu', 'search', 'login', 'register', 'privacy policy', 'parliament of zimbabwe',
+    'current legislation', 'recent legislation', 'subsidiary legislation',
+    'uncommenced legislation', 'repealed legislation'
   ]);
   const candidates = [];
   const seen = new Set();
 
-  const patterns = [
-    /<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi,
-    /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
-  ];
+  const patterns = (baseUrl || '').toLowerCase().includes('zimlii.org')
+    ? [
+        /<a[^>]+href=["'](\/akn\/zw\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+        /<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi
+      ]
+    : [
+        /<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi,
+        /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+      ];
 
   for (let pIdx = 0; pIdx < patterns.length; pIdx++) {
     const regex = patterns[pIdx];
+    const isAnchorPattern = regex.source.startsWith('<a');
     let match;
     while ((match = regex.exec(rawHtml)) !== null) {
       let href = baseUrl;
       let rawTitle;
-      if (pIdx === 0) {
+      if (!isAnchorPattern) {
         rawTitle = match[1];
       } else {
         href = decodeXmlEntities(match[1]).trim();
@@ -1049,72 +1117,137 @@ async function fetchParliamentaryPolicyTracker() {
     return hansardCache.data;
   }
 
+  const hasPortalOverrides = Boolean(
+    process.env.PARLZIM_BILL_DIGEST_URL ||
+    process.env.PARLZIM_ACTS_URL ||
+    process.env.PARLZIM_POLICY_BRIEFS_URL ||
+    process.env.PARLZIM_FACT_SHEETS_URL ||
+    process.env.HANSARD_PORTAL_URL
+  );
+  if (!hasPortalOverrides) {
+    const diskCache = readVerifiedTelemetryCache({ allowFreshBlocked: true });
+    if (diskCache) {
+      hansardCache = {
+        expiresAt: now + (diskCache.status === 'available' ? HANSARD_TTL_MS : HANSARD_ERROR_TTL_MS),
+        data: diskCache
+      };
+      return diskCache;
+    }
+  }
+
+  const browserHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9'
+  };
+
   const results = await Promise.all(PARLZIM_PORTAL_SOURCES.map(async ({ category, url }) => {
+    let primaryBlockedCf = false;
+    let primaryHttpStatus = null;
+    let primaryErrorMsg = null;
+    let selectedUrl = url;
+    let mirrorLabel = null;
+    let viaFallback = false;
+    let rawBody = null;
+    let finalStatus = null;
+
     try {
       const response = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) KUVHURA-Observatory/1.0' },
-        signal: AbortSignal.timeout(5000)
+        headers: browserHeaders,
+        signal: AbortSignal.timeout(6000)
       });
       const cfMitigated = (response.headers.get('cf-mitigated') || '').toLowerCase();
       const serverHeader = (response.headers.get('server') || '').toLowerCase();
       if (response.status === 403 && (cfMitigated === 'challenge' || serverHeader.includes('cloudflare'))) {
-        return {
-          category,
-          url,
-          status: 'blocked_by_cloudflare',
-          httpStatus: 403,
-          score: null,
-          topics: [],
-          message: 'Protected by Cloudflare challenge (HTTP 403).'
-        };
+        primaryBlockedCf = true;
+        primaryHttpStatus = 403;
+        primaryErrorMsg = 'Protected by Cloudflare challenge (HTTP 403).';
+      } else if (!response.ok) {
+        primaryHttpStatus = response.status;
+        primaryErrorMsg = `Portal returned HTTP ${response.status}.`;
+      } else {
+        rawBody = await response.text();
+        finalStatus = response.status;
       }
-      if (!response.ok) {
-        return {
-          category,
-          url,
-          status: 'unavailable',
-          httpStatus: response.status,
-          score: null,
-          topics: [],
-          message: `Portal returned HTTP ${response.status}.`
-        };
-      }
-      const rawHtml = await response.text();
-      const cleanText = stripHtmlToText(rawHtml);
-      const catScore = cleanText.length >= 100 ? scoreHansardText(cleanText) : null;
-      if (catScore === null) {
-        return {
-          category,
-          url,
-          status: 'unavailable',
-          httpStatus: response.status,
-          score: null,
-          topics: [],
-          message: 'Portal returned insufficient legislative content.'
-        };
-      }
-      const topics = extractLegislativeTopics(rawHtml, category, url);
-      return {
-        category,
-        url,
-        status: 'available',
-        httpStatus: response.status,
-        score: catScore,
-        charCount: cleanText.length,
-        topicCount: topics.length,
-        topics
-      };
     } catch (error) {
+      primaryErrorMsg = error.message || 'Portal request failed.';
+    }
+
+    if (primaryErrorMsg && process.env.PARLZIM_DISABLE_MIRROR_FALLBACK !== '1' && PARLZIM_FALLBACK_MIRRORS[category]) {
+      const mirror = PARLZIM_FALLBACK_MIRRORS[category];
+      try {
+        const mResp = await fetch(mirror.url, {
+          headers: browserHeaders,
+          signal: AbortSignal.timeout(7000)
+        });
+        if (mResp.ok) {
+          rawBody = await mResp.text();
+          finalStatus = mResp.status;
+          selectedUrl = mirror.url;
+          mirrorLabel = mirror.label;
+          viaFallback = true;
+          primaryErrorMsg = null;
+        }
+      } catch {
+        // Ignore mirror error and report primary error
+      }
+    }
+
+    if (primaryErrorMsg || rawBody === null) {
       return {
         category,
         url,
-        status: 'unavailable',
-        httpStatus: null,
+        status: primaryBlockedCf ? 'blocked_by_cloudflare' : 'unavailable',
+        httpStatus: primaryHttpStatus,
         score: null,
         topics: [],
-        message: error.message || 'Portal request failed.'
+        message: primaryErrorMsg || 'Portal unreachable.'
       };
     }
+
+    const trimmedStart = rawBody.trimStart();
+    const isRss = trimmedStart.startsWith('<?xml') || trimmedStart.slice(0, 300).toLowerCase().includes('<rss');
+    let cleanText;
+    let topics;
+    if (isRss) {
+      const parsedRss = extractRssLegislativeTopics(rawBody, category, selectedUrl);
+      cleanText = parsedRss.text;
+      topics = parsedRss.candidates;
+    } else {
+      cleanText = stripHtmlToText(rawBody);
+      topics = extractLegislativeTopics(rawBody, category, selectedUrl);
+    }
+
+    const catScore = cleanText.length >= 80 ? scoreHansardText(cleanText) : null;
+    if (catScore === null) {
+      return {
+        category,
+        url: selectedUrl,
+        status: 'unavailable',
+        httpStatus: finalStatus,
+        score: null,
+        topics: [],
+        message: 'Portal returned insufficient legislative content.'
+      };
+    }
+
+    return {
+      category,
+      url: selectedUrl,
+      status: 'available',
+      httpStatus: finalStatus,
+      score: catScore,
+      charCount: cleanText.length,
+      topicCount: topics.length,
+      topics,
+      ...(viaFallback ? {
+        viaFallbackMirror: true,
+        mirrorLabel,
+        primaryUrl: url,
+        primaryStatus: primaryHttpStatus,
+        primaryBlockedByCloudflare: primaryBlockedCf
+      } : {})
+    };
   }));
 
   const available = results.filter(item => item.status === 'available' && Number.isFinite(item.score));
@@ -1141,6 +1274,12 @@ async function fetchParliamentaryPolicyTracker() {
     return okResult;
   }
 
+  const cachedSnapshot = readVerifiedTelemetryCache();
+  if (cachedSnapshot) {
+    hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: cachedSnapshot };
+    return cachedSnapshot;
+  }
+
   const allCf = blockedCount > 0;
   const unavailableResult = {
     score: null,
@@ -1157,6 +1296,84 @@ async function fetchParliamentaryPolicyTracker() {
   };
   hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: unavailableResult };
   return unavailableResult;
+}
+
+function isFreshIsoTimestamp(tsValue, maxAgeMs = HANSARD_TTL_MS) {
+  if (typeof tsValue !== 'string' || !tsValue) return false;
+  const parsed = Date.parse(tsValue);
+  if (!Number.isFinite(parsed)) return false;
+  const age = Date.now() - parsed;
+  return age >= -300000 && age <= maxAgeMs;
+}
+
+function readVerifiedTelemetryCache(options = {}) {
+  const { allowFreshBlocked = false } = options;
+  const cachePath = process.env.TELEMETRY_CACHE_PATH || path.join(__dirname, 'telemetry_cache.json');
+  try {
+    if (!existsSync(cachePath)) return null;
+    const raw = JSON.parse(readFileSync(cachePath, 'utf8'));
+    if (!raw || typeof raw !== 'object') return null;
+    for (const key of ['parlzim', 'last_available_parlzim']) {
+      const snapshot = raw[key];
+      if (
+        snapshot &&
+        typeof snapshot === 'object' &&
+        snapshot.status === 'available' &&
+        Number.isFinite(snapshot.score)
+      ) {
+        return {
+          ...snapshot,
+          fromCache: true,
+          cacheUpdatedAt: raw.updated_at || raw.timestamp || snapshot.captured_at || null
+        };
+      }
+    }
+    if (
+      Number.isInteger(raw.accessible_sources) &&
+      raw.accessible_sources > 0 &&
+      Number.isFinite(raw.hansard_friction)
+    ) {
+      return {
+        score: Number(raw.hansard_friction.toFixed(2)),
+        status: 'available',
+        source: 'parlzim_portals',
+        httpStatus: 200,
+        accessibleSources: raw.accessible_sources,
+        totalSources: raw.total_sources || 5,
+        sources: [],
+        tracked_topics: Array.isArray(raw.tracked_topics) ? raw.tracked_topics : [],
+        fromCache: true,
+        cacheUpdatedAt: raw.timestamp || raw.updated_at || null
+      };
+    }
+    if (allowFreshBlocked && isFreshIsoTimestamp(raw.timestamp || raw.updated_at)) {
+      if (raw.parlzim && typeof raw.parlzim === 'object' && (raw.parlzim.status === 'blocked_by_cloudflare' || raw.parlzim.status === 'unavailable')) {
+        return {
+          ...raw.parlzim,
+          fromCache: true,
+          cacheUpdatedAt: raw.timestamp || raw.updated_at || null
+        };
+      }
+      if (Number.isInteger(raw.accessible_sources) && raw.accessible_sources === 0) {
+        return {
+          score: null,
+          status: 'blocked_by_cloudflare',
+          source: 'unavailable',
+          httpStatus: 403,
+          accessibleSources: 0,
+          totalSources: raw.total_sources || 5,
+          sources: [],
+          tracked_topics: [],
+          fromCache: true,
+          cacheUpdatedAt: raw.timestamp || raw.updated_at || null,
+          message: 'Cached crawl recorded 0/5 accessible Parliament portals (Cloudflare HTTP 403).'
+        };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 async function fetchSemanticHansardTelemetry() {

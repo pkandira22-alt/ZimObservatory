@@ -1,0 +1,510 @@
+{
+  "schema_version": 2,
+  "timestamp": "2026-11-15T21:19:36.435913Z",
+  "updated_at": "2026-11-15T21:19:36.435913Z",
+  "runner": "local-cli",
+  "accessible_sources": 5,
+  "total_sources": 5,
+  "hansard_friction": 48.66,
+  "tracked_topics": [
+    {
+      "topic": "Deeds Registries Regulations, 2025",
+      "category": "Bill Digests",
+      "status": "Legislative Pipeline",
+      "friction": 42.0,
+      "url": "https://zimlii.org/akn/zw/act/si/2025/76/eng@2025-07-18"
+    },
+    {
+      "topic": "Persons with Disabilities Act",
+      "category": "Bill Digests",
+      "status": "Legislative Pipeline",
+      "friction": 42.0,
+      "url": "https://zimlii.org/akn/zw/act/2025/3/eng@2026-02-06"
+    },
+    {
+      "topic": "Toll Roads (Chirundu Border Post Modernisation) Regulations, 2026",
+      "category": "Bill Digests",
+      "status": "Legislative Pipeline",
+      "friction": 42.0,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/154/eng@2026-10-09"
+    },
+    {
+      "topic": "Toll Roads (Forbes Border Post Modernisation) Regulations, 2026",
+      "category": "Bill Digests",
+      "status": "Legislative Pipeline",
+      "friction": 42.0,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/179/eng@2026-11-06"
+    },
+    {
+      "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+      "category": "Enacted Acts",
+      "status": "Enacted / Gazetted",
+      "friction": 42.0,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+    },
+    {
+      "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+      "category": "Enacted Acts",
+      "status": "Enacted / Gazetted",
+      "friction": 42.0,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+    },
+    {
+      "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+      "category": "Enacted Acts",
+      "status": "Enacted / Gazetted",
+      "friction": 49.02,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+    },
+    {
+      "topic": "National Arts Council of Zimbabwe (General) (Amendment) Regulations, 2026 (No. 4)",
+      "category": "Enacted Acts",
+      "status": "Enacted / Gazetted",
+      "friction": 50.8,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
+    },
+    {
+      "topic": "Deputy Energy Minister Yeukai Simbanegavi opens ZimZam with a target to end Zimbabwe\u2019s power imports by 2027 - Energy News Network",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
+      "friction": 42.0,
+      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPT0tUcnFSWktUTnhoOGtPZEd6SThiNFpJLUZYRUFRck9GZTMwSWdoQmxubGJfOUY2QkV5RFZ2XzJVX050R3RLZ0Y1Y015TWtjblBfOTM2OHd2U24xWUtWMGpTSTVHbGRNX0poT1YxckpNYXBnNXRnUVdJMkZ5d2J0RGpqV0xtbksz?oc=5"
+    },
+    {
+      "topic": "Zimbabwe - Elections, New Government, Democracy - Britannica",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
+      "friction": 42.0,
+      "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPNzZqVGVYNzF6UVpVeFEybnRkVEJzNHJ4YTJnVEYxSm1wNGdicjU4cE8xMnE4T0JidGxOT2Fpb1pUaE51NFIyVDhCejNFOEtiTV9OTUNmUVVlNEw2TUo4MmwyZEZocXBpS1BnQlVKdUlTSURzWl8wRkdLOFNfZ05MSzNqWQ?oc=5"
+    },
+    {
+      "topic": "Zimbabwe's Zanu-PF to Discipline MPs For Missed Amendment Vote - allAfrica.com",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
+      "friction": 42.0,
+      "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE93ZlV1YzNRWUZheDE0c1hNTEVNTXVYNXJqRnRJSjllQmhlbXVzU2lwWU5wODV0WllHaTFleVNya3FmRkNJckw5ZllnSHJYejc4Tjg4SXNNYjZTUy1UdGsybUNDNUtNclZVbF93?oc=5"
+    },
+    {
+      "topic": "Autocracy by legal means - civicus lens",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
+      "friction": 42.0,
+      "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE10YjZLb1BlYUVBdkJYc19ITUF1c0xEWlg5LUVXYTRNOWdOdmJVVmRfX2Y2Ylg5dXQwR3d1VTJxMzJoNlc5Nk1mc3MtTl9pRG5XU2hzVDhwRVhqYzM4VGpR?oc=5"
+    },
+    {
+      "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+      "category": "Fact Sheets",
+      "status": "Briefing Published",
+      "friction": 42.0,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+    },
+    {
+      "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+      "category": "Fact Sheets",
+      "status": "Briefing Published",
+      "friction": 42.0,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+    },
+    {
+      "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+      "category": "Fact Sheets",
+      "status": "Briefing Published",
+      "friction": 49.02,
+      "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+    }
+  ],
+  "status": "Resolved 5/5 via CF-free mirrors/live",
+  "parlzim": {
+    "score": 48.66,
+    "status": "available",
+    "source": "parlzim_hansards",
+    "httpStatus": 200,
+    "charCount": 25861,
+    "accessibleSources": 5,
+    "totalSources": 5,
+    "sources": [
+      {
+        "category": "Bill Digests",
+        "url": "https://zimlii.org/legislation/uncommenced",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 44.98,
+        "charCount": 2630,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "ZimLII Uncommenced Legislation",
+        "primaryUrl": "https://www.parlzim.gov.zw/bill-digest/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      },
+      {
+        "category": "Enacted Acts",
+        "url": "https://zimlii.org/legislation/recent",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 53.71,
+        "charCount": 8010,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "ZimLII Recent Legislation",
+        "primaryUrl": "https://www.parlzim.gov.zw/acts/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      },
+      {
+        "category": "Policy Briefs",
+        "url": "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 45.25,
+        "charCount": 5133,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "Parliament Oversight RSS (30d)",
+        "primaryUrl": "https://www.parlzim.gov.zw/policy-briefs/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      },
+      {
+        "category": "Fact Sheets",
+        "url": "https://zimlii.org/legislation/subsidiary",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 52.37,
+        "charCount": 8351,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "ZimLII Subsidiary Legislation",
+        "primaryUrl": "https://www.parlzim.gov.zw/fact-sheets/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      },
+      {
+        "category": "Hansards",
+        "url": "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 46.99,
+        "charCount": 1737,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "Parliament Debates RSS (30d)",
+        "primaryUrl": "https://e-portal.parlzim.gov.zw/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      }
+    ],
+    "tracked_topics": [
+      {
+        "topic": "Deeds Registries Regulations, 2025",
+        "category": "Bill Digests",
+        "status": "Legislative Pipeline",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2025/76/eng@2025-07-18"
+      },
+      {
+        "topic": "Persons with Disabilities Act",
+        "category": "Bill Digests",
+        "status": "Legislative Pipeline",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/2025/3/eng@2026-02-06"
+      },
+      {
+        "topic": "Toll Roads (Chirundu Border Post Modernisation) Regulations, 2026",
+        "category": "Bill Digests",
+        "status": "Legislative Pipeline",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/154/eng@2026-10-09"
+      },
+      {
+        "topic": "Toll Roads (Forbes Border Post Modernisation) Regulations, 2026",
+        "category": "Bill Digests",
+        "status": "Legislative Pipeline",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/179/eng@2026-11-06"
+      },
+      {
+        "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+        "category": "Enacted Acts",
+        "status": "Enacted / Gazetted",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+      },
+      {
+        "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+        "category": "Enacted Acts",
+        "status": "Enacted / Gazetted",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+      },
+      {
+        "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+        "category": "Enacted Acts",
+        "status": "Enacted / Gazetted",
+        "friction": 49.02,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+      },
+      {
+        "topic": "National Arts Council of Zimbabwe (General) (Amendment) Regulations, 2026 (No. 4)",
+        "category": "Enacted Acts",
+        "status": "Enacted / Gazetted",
+        "friction": 50.8,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
+      },
+      {
+        "topic": "Deputy Energy Minister Yeukai Simbanegavi opens ZimZam with a target to end Zimbabwe\u2019s power imports by 2027 - Energy News Network",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPT0tUcnFSWktUTnhoOGtPZEd6SThiNFpJLUZYRUFRck9GZTMwSWdoQmxubGJfOUY2QkV5RFZ2XzJVX050R3RLZ0Y1Y015TWtjblBfOTM2OHd2U24xWUtWMGpTSTVHbGRNX0poT1YxckpNYXBnNXRnUVdJMkZ5d2J0RGpqV0xtbksz?oc=5"
+      },
+      {
+        "topic": "Zimbabwe - Elections, New Government, Democracy - Britannica",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPNzZqVGVYNzF6UVpVeFEybnRkVEJzNHJ4YTJnVEYxSm1wNGdicjU4cE8xMnE4T0JidGxOT2Fpb1pUaE51NFIyVDhCejNFOEtiTV9OTUNmUVVlNEw2TUo4MmwyZEZocXBpS1BnQlVKdUlTSURzWl8wRkdLOFNfZ05MSzNqWQ?oc=5"
+      },
+      {
+        "topic": "Zimbabwe's Zanu-PF to Discipline MPs For Missed Amendment Vote - allAfrica.com",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE93ZlV1YzNRWUZheDE0c1hNTEVNTXVYNXJqRnRJSjllQmhlbXVzU2lwWU5wODV0WllHaTFleVNya3FmRkNJckw5ZllnSHJYejc4Tjg4SXNNYjZTUy1UdGsybUNDNUtNclZVbF93?oc=5"
+      },
+      {
+        "topic": "Autocracy by legal means - civicus lens",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE10YjZLb1BlYUVBdkJYc19ITUF1c0xEWlg5LUVXYTRNOWdOdmJVVmRfX2Y2Ylg5dXQwR3d1VTJxMzJoNlc5Nk1mc3MtTl9pRG5XU2hzVDhwRVhqYzM4VGpR?oc=5"
+      },
+      {
+        "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+        "category": "Fact Sheets",
+        "status": "Briefing Published",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+      },
+      {
+        "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+        "category": "Fact Sheets",
+        "status": "Briefing Published",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+      },
+      {
+        "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+        "category": "Fact Sheets",
+        "status": "Briefing Published",
+        "friction": 49.02,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+      }
+    ]
+  },
+  "last_available_parlzim": {
+    "score": 48.66,
+    "status": "available",
+    "source": "parlzim_hansards",
+    "httpStatus": 200,
+    "charCount": 25861,
+    "accessibleSources": 5,
+    "totalSources": 5,
+    "sources": [
+      {
+        "category": "Bill Digests",
+        "url": "https://zimlii.org/legislation/uncommenced",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 44.98,
+        "charCount": 2630,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "ZimLII Uncommenced Legislation",
+        "primaryUrl": "https://www.parlzim.gov.zw/bill-digest/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      },
+      {
+        "category": "Enacted Acts",
+        "url": "https://zimlii.org/legislation/recent",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 53.71,
+        "charCount": 8010,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "ZimLII Recent Legislation",
+        "primaryUrl": "https://www.parlzim.gov.zw/acts/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      },
+      {
+        "category": "Policy Briefs",
+        "url": "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 45.25,
+        "charCount": 5133,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "Parliament Oversight RSS (30d)",
+        "primaryUrl": "https://www.parlzim.gov.zw/policy-briefs/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      },
+      {
+        "category": "Fact Sheets",
+        "url": "https://zimlii.org/legislation/subsidiary",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 52.37,
+        "charCount": 8351,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "ZimLII Subsidiary Legislation",
+        "primaryUrl": "https://www.parlzim.gov.zw/fact-sheets/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      },
+      {
+        "category": "Hansards",
+        "url": "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 46.99,
+        "charCount": 1737,
+        "topicCount": 4,
+        "transport": "urllib",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "Parliament Debates RSS (30d)",
+        "primaryUrl": "https://e-portal.parlzim.gov.zw/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
+      }
+    ],
+    "tracked_topics": [
+      {
+        "topic": "Deeds Registries Regulations, 2025",
+        "category": "Bill Digests",
+        "status": "Legislative Pipeline",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2025/76/eng@2025-07-18"
+      },
+      {
+        "topic": "Persons with Disabilities Act",
+        "category": "Bill Digests",
+        "status": "Legislative Pipeline",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/2025/3/eng@2026-02-06"
+      },
+      {
+        "topic": "Toll Roads (Chirundu Border Post Modernisation) Regulations, 2026",
+        "category": "Bill Digests",
+        "status": "Legislative Pipeline",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/154/eng@2026-10-09"
+      },
+      {
+        "topic": "Toll Roads (Forbes Border Post Modernisation) Regulations, 2026",
+        "category": "Bill Digests",
+        "status": "Legislative Pipeline",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/179/eng@2026-11-06"
+      },
+      {
+        "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+        "category": "Enacted Acts",
+        "status": "Enacted / Gazetted",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+      },
+      {
+        "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+        "category": "Enacted Acts",
+        "status": "Enacted / Gazetted",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+      },
+      {
+        "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+        "category": "Enacted Acts",
+        "status": "Enacted / Gazetted",
+        "friction": 49.02,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+      },
+      {
+        "topic": "National Arts Council of Zimbabwe (General) (Amendment) Regulations, 2026 (No. 4)",
+        "category": "Enacted Acts",
+        "status": "Enacted / Gazetted",
+        "friction": 50.8,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
+      },
+      {
+        "topic": "Deputy Energy Minister Yeukai Simbanegavi opens ZimZam with a target to end Zimbabwe\u2019s power imports by 2027 - Energy News Network",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPT0tUcnFSWktUTnhoOGtPZEd6SThiNFpJLUZYRUFRck9GZTMwSWdoQmxubGJfOUY2QkV5RFZ2XzJVX050R3RLZ0Y1Y015TWtjblBfOTM2OHd2U24xWUtWMGpTSTVHbGRNX0poT1YxckpNYXBnNXRnUVdJMkZ5d2J0RGpqV0xtbksz?oc=5"
+      },
+      {
+        "topic": "Zimbabwe - Elections, New Government, Democracy - Britannica",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPNzZqVGVYNzF6UVpVeFEybnRkVEJzNHJ4YTJnVEYxSm1wNGdicjU4cE8xMnE4T0JidGxOT2Fpb1pUaE51NFIyVDhCejNFOEtiTV9OTUNmUVVlNEw2TUo4MmwyZEZocXBpS1BnQlVKdUlTSURzWl8wRkdLOFNfZ05MSzNqWQ?oc=5"
+      },
+      {
+        "topic": "Zimbabwe's Zanu-PF to Discipline MPs For Missed Amendment Vote - allAfrica.com",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE93ZlV1YzNRWUZheDE0c1hNTEVNTXVYNXJqRnRJSjllQmhlbXVzU2lwWU5wODV0WllHaTFleVNya3FmRkNJckw5ZllnSHJYejc4Tjg4SXNNYjZTUy1UdGsybUNDNUtNclZVbF93?oc=5"
+      },
+      {
+        "topic": "Autocracy by legal means - civicus lens",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE10YjZLb1BlYUVBdkJYc19ITUF1c0xEWlg5LUVXYTRNOWdOdmJVVmRfX2Y2Ylg5dXQwR3d1VTJxMzJoNlc5Nk1mc3MtTl9pRG5XU2hzVDhwRVhqYzM4VGpR?oc=5"
+      },
+      {
+        "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+        "category": "Fact Sheets",
+        "status": "Briefing Published",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+      },
+      {
+        "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+        "category": "Fact Sheets",
+        "status": "Briefing Published",
+        "friction": 42.0,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+      },
+      {
+        "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+        "category": "Fact Sheets",
+        "status": "Briefing Published",
+        "friction": 49.02,
+        "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+      }
+    ],
+    "captured_at": "2026-11-15T21:19:36.435913Z"
+  },
+  "layer2_macro": {
+    "GDP_Growth": 8.10671343048909,
+    "Inflation": 104.705170628667,
+    "Debt_GNI": 31.5941416031795,
+    "source": "world_bank_v2"
+  }
+}

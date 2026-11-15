@@ -484,7 +484,9 @@
                 const desc = document.createElement('p');
                 desc.className = 'text-[11px] text-slate-400 mt-1 truncate';
                 desc.textContent = isOk
-                    ? `${item.topicCount || 0} extracted · HTTP ${item.httpStatus || 200}`
+                    ? (item.viaFallbackMirror
+                        ? `${item.topicCount || 0} topics · ${item.mirrorLabel || 'CF-free mirror'} (CF 403)`
+                        : `${item.topicCount || 0} extracted · HTTP ${item.httpStatus || 200}`)
                     : item.message || 'Awaiting poll';
 
                 card.append(top, desc);
