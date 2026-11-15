@@ -27,9 +27,24 @@ TELEMETRY_TIMELINE = [
     {"date": "2026-11-13", "phi": 27.90, "markov_crisis_prob": 42.5, "state": "Acute Crisis"},
     {"date": "2026-11-14", "phi": 24.15, "markov_crisis_prob": 46.8, "state": "Acute Systemic Crisis"},
 ]
+for _seed, _macro_proxy in zip(TELEMETRY_TIMELINE, (45.0, 48.0, 50.0, 55.0, 60.0, 62.0, 65.0)):
+    _seed["macro_volatility_proxy"] = _macro_proxy
+    _seed["fsi"] = round(
+        0.40 * (100.0 - _seed["phi"])
+        + 0.35 * _seed["markov_crisis_prob"]
+        + 0.25 * _macro_proxy,
+        2,
+    )
+    _seed["warning_level"] = (
+        "Stable Consolidation" if _seed["fsi"] <= 25
+        else "Latent Friction" if _seed["fsi"] <= 50
+        else "Accelerated Degradation" if _seed["fsi"] <= 75
+        else "Acute Systemic Crisis"
+    )
 TIMELINE_BASELINE_DATE = None
 TIMELINE_BASELINE = None
 LATEST_DUAL_ENGINE_INPUTS = None
+LATEST_FSI_INPUTS = None
 MARKOV_TRANSITION_MATRIX = (
     (0.75, 0.20, 0.05),
     (0.15, 0.60, 0.25),
@@ -91,6 +106,63 @@ def compute_markov_path_projection(last_crisis_prob):
     return round(next_vector[2] * 100, 2)
 
 
+def compute_fragility_state_index(phi, markov_crisis_prob, macro_volatility):
+    """Compute FSI from normalized 0–100 inputs."""
+    for name, value in (
+        ("phi", phi),
+        ("markov_crisis_prob", markov_crisis_prob),
+        ("macro_volatility", macro_volatility),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or not 0 <= value <= 100
+        ):
+            raise ValueError(f"{name} must be a finite value between 0 and 100.")
+    return round(
+        0.40 * (100.0 - phi)
+        + 0.35 * markov_crisis_prob
+        + 0.25 * macro_volatility,
+        2,
+    )
+
+
+def compute_macro_stress_proxy(layer2_macro):
+    """Scale World Bank indicators to an experimental 0–100 macro-stress proxy."""
+    if not isinstance(layer2_macro, dict) or layer2_macro.get("source") != "world_bank_v2":
+        return None
+
+    try:
+        growth = float(layer2_macro["GDP_Growth"])
+        inflation = float(layer2_macro["Inflation"])
+        debt_gni = float(layer2_macro["Debt_GNI"])
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    if not all(math.isfinite(value) for value in (growth, inflation, debt_gni)):
+        return None
+
+    inflation_stress = min(100.0, max(0.0, inflation / 2.0))
+    debt_stress = min(100.0, max(0.0, debt_gni))
+    growth_stress = min(100.0, max(0.0, (10.0 - growth) * 5.0))
+    return round(
+        0.50 * inflation_stress
+        + 0.30 * debt_stress
+        + 0.20 * growth_stress,
+        2,
+    )
+
+
+def classify_fragility_state(fsi):
+    if fsi <= 25:
+        return "Stable Consolidation"
+    if fsi <= 50:
+        return "Latent Friction"
+    if fsi <= 75:
+        return "Accelerated Degradation"
+    return "Acute Systemic Crisis"
+
+
 def derive_social_metrics(payload):
     """Derive sampled-post volume and hashtag-mention activity from social telemetry."""
     if not payload.get("available") or payload.get("sampleType") == "rss-sheet":
@@ -134,9 +206,9 @@ def _state_for_phi(phi):
     return "Acute Systemic Crisis"
 
 
-def update_telemetry_timeline(payload, evaluated_at=None):
+def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None):
     """Update today's entry from one day's baseline and the latest social sample."""
-    global LATEST_DUAL_ENGINE_INPUTS, TELEMETRY_TIMELINE
+    global LATEST_DUAL_ENGINE_INPUTS, LATEST_FSI_INPUTS, TELEMETRY_TIMELINE
     global TIMELINE_BASELINE, TIMELINE_BASELINE_DATE
 
     metrics = derive_social_metrics(payload)
@@ -167,6 +239,7 @@ def update_telemetry_timeline(payload, evaluated_at=None):
     projected_crisis_prob = compute_markov_path_projection(
         prior["markov_crisis_prob"]
     )
+    macro_stress_proxy = compute_macro_stress_proxy(layer2_macro)
     entry = {
         "date": today,
         "phi": current_phi,
@@ -177,6 +250,25 @@ def update_telemetry_timeline(payload, evaluated_at=None):
         "telemetry_source": payload.get("source", "social telemetry"),
         "updated_at": evaluated_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+    if macro_stress_proxy is not None:
+        entry["macro_volatility_proxy"] = macro_stress_proxy
+        entry["fsi"] = compute_fragility_state_index(
+            current_phi, projected_crisis_prob, macro_stress_proxy
+        )
+        entry["warning_level"] = classify_fragility_state(entry["fsi"])
+        LATEST_FSI_INPUTS = {
+            "status": "available",
+            "macro_stress_proxy": macro_stress_proxy,
+            "macro_source": layer2_macro["source"],
+            "updated_at": entry["updated_at"],
+        }
+    else:
+        LATEST_FSI_INPUTS = {
+            "status": "awaiting_sourced_macro_data",
+            "macro_stress_proxy": None,
+            "macro_source": layer2_macro.get("source") if isinstance(layer2_macro, dict) else None,
+            "updated_at": entry["updated_at"],
+        }
 
     if TELEMETRY_TIMELINE[-1]["date"] == today:
         TELEMETRY_TIMELINE[-1] = entry
@@ -198,10 +290,25 @@ def get_dual_engine_timeline():
         "engines": {
             "bayesian_status": "Active (sampled-post and hashtag-mention proxies)",
             "markov_status": "Active (three-state transition matrix)",
+            "fsi_status": (
+                "Active (World Bank macro-stress proxy)"
+                if LATEST_FSI_INPUTS and LATEST_FSI_INPUTS["status"] == "available"
+                else "Awaiting sourced World Bank macro data"
+            ),
         },
         "inputStatus": "updated" if LATEST_DUAL_ENGINE_INPUTS else "awaiting_social_sample",
         "latestInputs": dict(LATEST_DUAL_ENGINE_INPUTS) if LATEST_DUAL_ENGINE_INPUTS else None,
-        "historyNote": "Seed timeline values are illustrative; subsequent entries use sampled social telemetry.",
+        "fsiStatus": (
+            dict(LATEST_FSI_INPUTS)
+            if LATEST_FSI_INPUTS
+            else {"status": "awaiting_sourced_macro_data", "macro_stress_proxy": None}
+        ),
+        "historyNote": (
+            "Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% "
+            "Markov crisis projection, and 25% macro-stress proxy. The proxy uses "
+            "50% capped inflation/2, 30% capped debt-to-GNI, and 20% capped "
+            "(10 minus GDP growth) times 5; these experimental scales are not calibrated."
+        ),
     }
 
 
@@ -268,11 +375,11 @@ def fetch_trending_telemetry():
     if not isinstance(payload, dict) or not isinstance(payload.get("hashtags"), list):
         raise ValueError("Social telemetry endpoint returned an unexpected response")
 
-    update_telemetry_timeline(payload)
+    layer2_macro = fetch_layer2_macro_telemetry()
+    update_telemetry_timeline(payload, layer2_macro=layer2_macro)
     updated_at = payload.get("updatedAt") or datetime.now(timezone.utc).isoformat()
     orientation = evaluate_orientation(payload)
     state_classification = evaluate_state_classification(payload.get("orientationInputs"))
-    layer2_macro = fetch_layer2_macro_telemetry()
     return {
         "type": "trending_telemetry",
         "status": "available" if payload.get("available") else "no_sources",
