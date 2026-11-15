@@ -642,6 +642,7 @@ class AppHandler(BaseHTTPRequestHandler):
         public_files = {
             "/index.html",
             "/structural-telemetry.html",
+            "/systemic-risk.html",
             "/api-config.js",
             "/political-economy-timeseries.js",
             "/manifest.json",

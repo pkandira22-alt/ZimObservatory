@@ -666,6 +666,7 @@
           <a href="#observatory">Live Observatory &amp; Tools</a>
           <a href="#advancedModulesPanel">Institutional Modules</a>
           <a href="./structural-telemetry.html">Advanced Structural Predictors</a>
+          <a href="./systemic-risk.html">Systemic Risk Monitor (v2.0)</a>
           <a href="#historicalTrajectoryModule">Historical Arc &amp; Mathematical Framework</a>
           <a href="#foreignPolicyModule">Foreign Policy &amp; Diplomacy</a>
           <a href="#spatialMapPanel">Zimbabwe Spatial Map</a>
@@ -793,7 +794,10 @@
       <section id="dualEngineTelemetryPanel" class="card-panel" style="margin: 18px 0; border-top: 3px solid #22C55E;">
         <div class="panel-hdr">
           <span>Live Bayesian, Markov &amp; Fragility telemetry</span>
-          <span id="dualEngineStatus" role="status" aria-live="polite" style="font-size:10px; color:var(--text-muted); font-weight:400;">Connecting to social telemetry stream...</span>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <a href="./systemic-risk.html" style="font-size:10px; color:#38BDF8; text-decoration:none; border:1px solid var(--border-panel); padding:3px 8px; border-radius:6px;">Open Risk Monitor v2.0 ↗</a>
+            <span id="dualEngineStatus" role="status" aria-live="polite" style="font-size:10px; color:var(--text-muted); font-weight:400;">Connecting to social telemetry stream...</span>
+          </div>
         </div>
         <div id="dualEngineMetrics" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px;"></div>
         <p id="dualEngineTrend" role="status" aria-live="polite" style="font-size:11px; line-height:1.5; color:var(--text-muted); margin:10px 0;"></p>

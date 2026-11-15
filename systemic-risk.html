@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KUVHURA | Political Economy &amp; Systemic Risk Observatory</title>
+    <meta name="description" content="KUVHURA Political Economy &amp; Systemic Risk Observatory — Dual-Engine Bayesian Telemetry, Markov Path Projections, and Fragility State Index.">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#072B13">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="KUVHURA">
+    <link rel="icon" type="image/png" sizes="512x512" href="./pwa-512x512.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./pwa-192x192.png">
+    <link rel="icon" href="./favicon.ico" sizes="any">
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+    <meta property="og:title" content="KUVHURA | Political Economy &amp; Systemic Risk Observatory">
+    <meta property="og:description" content="Dual-Engine Bayesian Telemetry, Markov Path Projections, and Fragility State Index.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="./pwa-512x512.png">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:image" content="./pwa-512x512.png">
+    <script src="./api-config.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#070b14',
+                        cardbg: '#0f172a',
+                        accent: '#3b82f6',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                        success: '#10b981',
+                        zimgold: '#d4af37'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { position: relative; }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: url("./public/assets/aistudio/Code_Generated_Image_eb225bc7.png");
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: min(56vw, 520px);
+            opacity: 0.14;
+            mix-blend-mode: lighten;
+            -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,1) min(26vw, 240px), transparent min(29vw, 265px));
+            mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,1) min(26vw, 240px), transparent min(29vw, 265px));
+            pointer-events: none;
+            z-index: 0;
+        }
+        header, main, footer { position: relative; z-index: 1; }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-100 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <header class="border-b border-slate-800 bg-cardbg/85 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-3">
+                <img src="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png" alt="KUVHURA Crest" class="w-9 h-9 rounded-full object-cover border border-amber-500/50 shrink-0">
+                <div class="h-2.5 w-2.5 rounded-full bg-accent animate-pulse"></div>
+                <h1 class="text-lg sm:text-xl font-bold tracking-wider text-white">KUVHURA <span class="text-xs px-2 py-0.5 rounded bg-accent/20 text-accent border border-accent/30 font-normal">Observatory v2.0</span></h1>
+            </div>
+            <div class="text-sm text-slate-400 flex flex-wrap items-center gap-3">
+                <a href="./index.html" class="text-xs font-semibold text-sky-400 hover:text-sky-300 border border-slate-700 bg-slate-900/80 px-2.5 py-1 rounded">← Main Observatory</a>
+                <a href="./structural-telemetry.html" class="text-xs font-semibold text-amber-400 hover:text-amber-300 border border-slate-700 bg-slate-900/80 px-2.5 py-1 rounded">Structural Predictors</a>
+                <span id="backend-status" class="flex items-center text-xs"><span class="h-2 w-2 rounded-full bg-success mr-2"></span>Connecting to Backend...</span>
+                <span id="current-date" class="font-mono text-xs bg-slate-800 px-2.5 py-1 rounded border border-slate-700"></span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        <!-- Section Title & System Warning Alert Banner -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h2 class="text-2xl font-bold tracking-tight text-white">Real-Time Systemic Risk Monitoring</h2>
+                <p id="telemetry-subtitle" class="text-sm text-slate-400">Dual-Engine Bayesian Telemetry, Markov Path Projections &amp; Fragility State Index</p>
+            </div>
+            <div id="alert-banner" class="px-4 py-2 rounded-lg bg-warning/10 border border-warning/30 text-warning text-sm font-semibold flex items-center space-x-2">
+                <span>Warning Level:</span>
+                <span id="warning-label" class="uppercase tracking-wide font-bold">Loading...</span>
+            </div>
+        </div>
+
+        <!-- KPI Scorecards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- Card 1: Regime Durability Phi -->
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 text-accent/20 font-bold text-4xl">Φ</div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Posterior Regime Durability (Φ)</p>
+                <p id="kpi-phi" class="text-3xl font-extrabold text-white mt-2 font-mono">--</p>
+                <p id="kpi-phi-note" class="text-xs text-slate-400 mt-2 flex items-center"><span class="text-accent font-semibold mr-1">Bayesian</span> Awaiting live sample</p>
+            </div>
+
+            <!-- Card 2: Fragility State Index -->
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 text-warning/20 font-bold text-4xl">FSI</div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Fragility State Index (FSI)</p>
+                <p id="kpi-fsi" class="text-3xl font-extrabold text-warning mt-2 font-mono">--</p>
+                <p id="kpi-fsi-note" class="text-xs text-slate-400 mt-2">Composite Warning Score (0–100)</p>
+            </div>
+
+            <!-- Card 3: Markov Crisis Probability -->
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 text-danger/20 font-bold text-4xl">M</div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Markov Crisis Probability</p>
+                <p id="kpi-markov" class="text-3xl font-extrabold text-danger mt-2 font-mono">--</p>
+                <p class="text-xs text-slate-400 mt-2">Path Trajectory Projection</p>
+            </div>
+
+            <!-- Card 4: Macro Stress Proxy -->
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 text-emerald-500/20 font-bold text-4xl">V</div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Macro Stress Proxy</p>
+                <p id="kpi-macro" class="text-3xl font-extrabold text-emerald-400 mt-2 font-mono">--</p>
+                <p id="kpi-macro-note" class="text-xs text-slate-400 mt-2">World Bank Inflation, Debt &amp; Growth Scale</p>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Timeline Chart (2 Cols) -->
+            <div class="lg:col-span-2 bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-white">Longitudinal Risk Trajectory</h3>
+                    <span id="window-label" class="text-xs text-slate-400 font-mono">Rolling Window</span>
+                </div>
+                <div class="relative flex-grow h-80">
+                    <canvas id="timelineChart"></canvas>
+                </div>
+            </div>
+
+            <!-- System Architecture & Engine Status (1 Col) -->
+            <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col justify-between space-y-6">
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-3">Analytical Architecture</h3>
+                    <p id="history-note" class="text-sm text-slate-400 leading-relaxed">
+                        KUVHURA combines live social-post hashtag telemetry and World Bank macroeconomic indicators through a dual-engine Bayesian and Markov model.
+                    </p>
+                </div>
+
+                <div class="space-y-4 bg-slate-900/60 p-4 rounded-lg border border-slate-800/80">
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+                            <span>Bayesian Telemetry Engine</span>
+                            <span id="engine-bayesian" class="text-accent">CHECKING</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div id="bar-bayesian" class="bg-accent h-full w-full"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+                            <span>Markov Path Transition Matrix</span>
+                            <span id="engine-markov" class="text-warning">CHECKING</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div id="bar-markov" class="bg-warning h-full w-5/6"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+                            <span>FSI Warning Component</span>
+                            <span id="engine-fsi" class="text-danger">CHECKING</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div id="bar-fsi" class="bg-danger h-full w-3/4"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button id="refreshFeedBtn" type="button" class="w-full py-2.5 px-4 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg text-sm transition duration-150 shadow-md">
+                        Refresh Telemetry Feed
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-cardbg/50 py-6 mt-12 text-center text-xs text-slate-500">
+        <p>KUVHURA Observatory &bull; Scientific Political Economy &amp; Systemic Risk Monitoring System</p>
+    </footer>
+
+    <!-- Frontend Script -->
+    <script>
+        document.getElementById('current-date').innerText = new Date().toISOString().split('T')[0];
+        let myChart = null;
+
+        function getTimelineApiCandidates() {
+            const candidates = [];
+            const configured = window.KUVHURA_API_URL ? `${window.KUVHURA_API_URL.replace(/\/+$/, '')}/api/timeline` : null;
+            if (configured) candidates.push(configured);
+
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const isGithubPages = window.location.hostname.endsWith('.github.io');
+            if (!isGithubPages && window.location.protocol.startsWith('http')) {
+                candidates.push(`${window.location.origin}/api/timeline`);
+            }
+            if (isLocal) {
+                candidates.push(`${window.location.protocol}//${window.location.hostname}:8765/api/timeline`);
+            }
+            const fallbacks = Array.isArray(window.KUVHURA_API_FALLBACK_URLS) ? window.KUVHURA_API_FALLBACK_URLS : [
+                'https://zimobservatory-backend.onrender.com'
+            ];
+            fallbacks.forEach(base => {
+                candidates.push(`${String(base).replace(/\/+$/, '')}/api/timeline`);
+            });
+            candidates.push('https://zimobservatory-forecast.onrender.com/api/timeline');
+            return [...new Set(candidates)];
+        }
+
+        function styleWarningBanner(label) {
+            const banner = document.getElementById('alert-banner');
+            const text = (label || '').toLowerCase();
+            banner.className = 'px-4 py-2 rounded-lg text-sm font-semibold flex items-center space-x-2 border ';
+            if (text.includes('acute') || text.includes('critical')) {
+                banner.className += 'bg-danger/15 border-danger/40 text-red-400';
+            } else if (text.includes('accelerated') || text.includes('warning')) {
+                banner.className += 'bg-warning/15 border-warning/40 text-amber-400';
+            } else if (text.includes('latent') || text.includes('watch')) {
+                banner.className += 'bg-sky-500/15 border-sky-400/40 text-sky-300';
+            } else {
+                banner.className += 'bg-success/15 border-success/40 text-emerald-400';
+            }
+        }
+
+        async function fetchTimelineData() {
+            const statusEl = document.getElementById('backend-status');
+            statusEl.innerHTML = '<span class="h-2 w-2 rounded-full bg-warning mr-2 animate-ping"></span>Syncing...';
+
+            const candidates = getTimelineApiCandidates();
+            let data = null;
+            let connectedOrigin = null;
+
+            for (const url of candidates) {
+                try {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 6000);
+                    const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+                    clearTimeout(timer);
+                    if (!response.ok) continue;
+                    const parsed = await response.json();
+                    if (parsed && Array.isArray(parsed.timeline) && parsed.timeline.length > 0) {
+                        data = parsed;
+                        connectedOrigin = new URL(url).host;
+                        break;
+                    }
+                } catch {
+                    // Try next candidate
+                }
+            }
+
+            if (!data) {
+                statusEl.innerHTML = '<span class="h-2 w-2 rounded-full bg-danger mr-2"></span>Backend Unreachable';
+                document.getElementById('warning-label').innerText = 'Awaiting Backend';
+                document.getElementById('engine-bayesian').innerText = 'OFFLINE';
+                document.getElementById('engine-markov').innerText = 'OFFLINE';
+                document.getElementById('engine-fsi').innerText = 'OFFLINE';
+                return;
+            }
+
+            const timeline = data.timeline;
+            const latest = timeline[timeline.length - 1];
+            const isLive = data.inputStatus === 'updated';
+            const fsiAvailable = data.fsiStatus?.status === 'available' || (!isLive && Number.isFinite(latest.fsi));
+            const macroVal = Number.isFinite(latest.macro_volatility_proxy)
+                ? latest.macro_volatility_proxy
+                : Number.isFinite(latest.macro_volatility)
+                    ? latest.macro_volatility
+                    : null;
+
+            document.getElementById('kpi-phi').innerText = Number.isFinite(latest.phi) ? latest.phi.toFixed(2) : '--';
+            document.getElementById('kpi-phi-note').innerHTML = isLive
+                ? `<span class="text-accent font-semibold mr-1">Bayesian</span> Updated (${data.latestInputs?.social_volume ?? 0} posts)`
+                : '<span class="text-slate-400 font-semibold mr-1">Seed Baseline</span> Awaiting live social sample';
+
+            document.getElementById('kpi-fsi').innerText = fsiAvailable && Number.isFinite(latest.fsi)
+                ? latest.fsi.toFixed(2)
+                : 'Awaiting';
+            document.getElementById('kpi-fsi-note').innerText = fsiAvailable
+                ? (isLive ? 'Live Composite Score (0–100)' : 'Illustrative Seed Score (0–100)')
+                : 'Requires sourced World Bank macro feed';
+
+            document.getElementById('kpi-markov').innerText = Number.isFinite(latest.markov_crisis_prob)
+                ? `${latest.markov_crisis_prob.toFixed(1)}%`
+                : '--';
+
+            document.getElementById('kpi-macro').innerText = macroVal !== null ? macroVal.toFixed(1) : 'Unavailable';
+            document.getElementById('kpi-macro-note').innerText = data.fsiStatus?.macro_source === 'world_bank_v2'
+                ? 'World Bank v2 Sourced Proxy (0–100)'
+                : isLive
+                    ? 'Awaiting live World Bank v2 response'
+                    : 'Illustrative seed baseline proxy';
+
+            const warningText = latest.warning_level || latest.state || 'Unknown';
+            document.getElementById('warning-label').innerText = warningText;
+            styleWarningBanner(warningText);
+
+            document.getElementById('window-label').innerText = `${timeline.length}-Day Rolling Window`;
+            if (data.historyNote) {
+                document.getElementById('history-note').innerText = data.historyNote;
+            }
+
+            document.getElementById('engine-bayesian').innerText = isLive ? 'ACTIVE' : 'STANDBY (SEED)';
+            document.getElementById('engine-markov').innerText = 'ACTIVE';
+            document.getElementById('engine-fsi').innerText = fsiAvailable
+                ? (latest.fsi > 50 ? 'ELEVATED' : 'NORMAL')
+                : 'AWAITING MACRO';
+
+            const fsiBar = document.getElementById('bar-fsi');
+            if (fsiBar && Number.isFinite(latest.fsi)) {
+                fsiBar.style.width = `${Math.min(100, Math.max(8, latest.fsi))}%`;
+            }
+
+            statusEl.innerHTML = isLive
+                ? `<span class="h-2 w-2 rounded-full bg-success mr-2"></span>Live Sync Active (${connectedOrigin})`
+                : `<span class="h-2 w-2 rounded-full bg-warning mr-2"></span>Connected · Seed Mode (${connectedOrigin})`;
+
+            renderChart(timeline);
+        }
+
+        function renderChart(timeline) {
+            const labels = timeline.map(item => item.date);
+            const phiData = timeline.map(item => item.phi);
+            const fsiData = timeline.map(item => Number.isFinite(item.fsi) ? item.fsi : null);
+            const markovData = timeline.map(item => item.markov_crisis_prob);
+
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            if (myChart) myChart.destroy();
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Regime Durability (Φ)', data: phiData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 },
+                        { label: 'Fragility State Index (FSI)', data: fsiData, borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, borderDash: [5, 5], tension: 0.3, spanGaps: false },
+                        { label: 'Markov Crisis Prob (%)', data: markovData, borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                    scales: {
+                        x: { grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#94a3b8' } },
+                        y: { min: 0, max: 100, grid: { color: 'rgba(51, 65, 85, 0.3)' }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        document.getElementById('refreshFeedBtn').addEventListener('click', fetchTimelineData);
+        window.addEventListener('load', fetchTimelineData);
+    </script>
+</body>
+</html>

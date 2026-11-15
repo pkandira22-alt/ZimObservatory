@@ -653,6 +653,154 @@ async function getSocialHashtagTrends() {
   return payload;
 }
 
+const LAYER2_MACRO_TTL_MS = 6 * 60 * 60 * 1000;
+const LAYER2_FALLBACK_TTL_MS = 5 * 60 * 1000;
+let layer2MacroCache = { expiresAt: 0, data: null };
+
+const TELEMETRY_TIMELINE = [
+  { date: '2026-11-08', phi: 39.50, markov_crisis_prob: 22.0, state: 'Latent Friction', macro_volatility_proxy: 45.0 },
+  { date: '2026-11-09', phi: 38.10, markov_crisis_prob: 24.5, state: 'Latent Friction', macro_volatility_proxy: 48.0 },
+  { date: '2026-11-10', phi: 36.80, markov_crisis_prob: 27.0, state: 'Latent Friction', macro_volatility_proxy: 50.0 },
+  { date: '2026-11-11', phi: 34.20, markov_crisis_prob: 31.0, state: 'Accelerated Degradation', macro_volatility_proxy: 55.0 },
+  { date: '2026-11-12', phi: 30.50, markov_crisis_prob: 38.0, state: 'Accelerated Degradation', macro_volatility_proxy: 60.0 },
+  { date: '2026-11-13', phi: 27.90, markov_crisis_prob: 42.5, state: 'Acute Crisis', macro_volatility_proxy: 62.0 },
+  { date: '2026-11-14', phi: 24.15, markov_crisis_prob: 46.8, state: 'Acute Systemic Crisis', macro_volatility_proxy: 65.0 }
+].map(seed => {
+  const fsi = Number((0.40 * (100 - seed.phi) + 0.35 * seed.markov_crisis_prob + 0.25 * seed.macro_volatility_proxy).toFixed(2));
+  const warning_level = fsi <= 25
+    ? 'Stable Consolidation'
+    : fsi <= 50
+      ? 'Latent Friction'
+      : fsi <= 75
+        ? 'Accelerated Degradation'
+        : 'Acute Systemic Crisis';
+  return { ...seed, fsi, warning_level };
+});
+
+let timelineBaselineDate = null;
+let timelineBaseline = null;
+let latestDualEngineInputs = null;
+let latestFsiInputs = null;
+
+const MARKOV_TRANSITION_MATRIX = [
+  [0.75, 0.20, 0.05],
+  [0.15, 0.60, 0.25],
+  [0.05, 0.30, 0.65]
+];
+
+function computeBayesianPosterior(priorPhi, socialVolume, engagementScore) {
+  const priorCrisisProb = 1.0 - priorPhi / 100.0;
+  const isHighStress = socialVolume > 80 || engagementScore > 1200;
+  const pEvidenceGivenCrisis = isHighStress ? 0.82 : 0.18;
+  const pEvidenceGivenStable = isHighStress ? 0.25 : 0.75;
+  const pEvidence = pEvidenceGivenCrisis * priorCrisisProb + pEvidenceGivenStable * (1 - priorCrisisProb);
+  const posteriorProb = (pEvidenceGivenCrisis * priorCrisisProb) / pEvidence;
+  const updatedPhi = Number(((1.0 - posteriorProb) * 100).toFixed(2));
+  return Math.max(5.0, Math.min(95.0, updatedPhi));
+}
+
+function computeMarkovPathProjection(lastCrisisProb) {
+  const raw = [
+    Math.max(0.0, 1.0 - lastCrisisProb / 50.0),
+    0.5,
+    Math.min(1.0, lastCrisisProb / 100.0)
+  ];
+  const total = raw.reduce((sum, val) => sum + val, 0);
+  const vec = raw.map(val => val / total);
+  const nextCrisis = vec[0] * MARKOV_TRANSITION_MATRIX[0][2]
+    + vec[1] * MARKOV_TRANSITION_MATRIX[1][2]
+    + vec[2] * MARKOV_TRANSITION_MATRIX[2][2];
+  return Number((nextCrisis * 100).toFixed(2));
+}
+
+function classifyFragilityState(fsi) {
+  if (fsi <= 25) return 'Stable Consolidation';
+  if (fsi <= 50) return 'Latent Friction';
+  if (fsi <= 75) return 'Accelerated Degradation';
+  return 'Acute Systemic Crisis';
+}
+
+function stateForPhi(phi) {
+  if (phi > 60) return 'Stable Consolidation';
+  if (phi > 35) return 'Latent Friction';
+  if (phi > 20) return 'Accelerated Degradation';
+  return 'Acute Systemic Crisis';
+}
+
+function computeMacroStressProxy(layer2Macro) {
+  if (!layer2Macro || layer2Macro.source !== 'world_bank_v2') return null;
+  const growth = Number(layer2Macro.GDP_Growth);
+  const inflation = Number(layer2Macro.Inflation);
+  const debtGni = Number(layer2Macro.Debt_GNI);
+  if (![growth, inflation, debtGni].every(Number.isFinite)) return null;
+  const inflationStress = Math.min(100, Math.max(0, inflation / 2.0));
+  const debtStress = Math.min(100, Math.max(0, debtGni));
+  const growthStress = Math.min(100, Math.max(0, (10.0 - growth) * 5.0));
+  return Number((0.50 * inflationStress + 0.30 * debtStress + 0.20 * growthStress).toFixed(2));
+}
+
+async function fetchLayer2MacroTelemetry() {
+  const now = Date.now();
+  if (layer2MacroCache.data && layer2MacroCache.expiresAt > now) {
+    return layer2MacroCache.data;
+  }
+  const indicators = {
+    GDP_Growth: 'NY.GDP.MKTP.KD.ZG',
+    Inflation: 'FP.CPI.TOTL.ZG',
+    Debt_GNI: 'DT.DOD.DECT.GN.ZS'
+  };
+  const fallback = { GDP_Growth: 8.3, Inflation: 5.2, Debt_GNI: 37.9 };
+  const result = {};
+  let usedFallback = false;
+
+  await Promise.all(Object.entries(indicators).map(async ([key, code]) => {
+    try {
+      const response = await fetch(`https://api.worldbank.org/v2/country/ZWE/indicator/${code}?format=json&mrv=1`, {
+        headers: { 'User-Agent': 'KUVHURA-Observatory/1.0' },
+        signal: AbortSignal.timeout(3500)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      const val = Array.isArray(payload) && Array.isArray(payload[1]) && payload[1][0] ? payload[1][0].value : null;
+      if (val !== null && val !== undefined && Number.isFinite(Number(val))) {
+        result[key] = Number(val);
+        return;
+      }
+      result[key] = fallback[key];
+      usedFallback = true;
+    } catch {
+      result[key] = fallback[key];
+      usedFallback = true;
+    }
+  }));
+
+  result.source = usedFallback ? 'fallback_baseline' : 'world_bank_v2';
+  layer2MacroCache = {
+    expiresAt: now + (usedFallback ? LAYER2_FALLBACK_TTL_MS : LAYER2_MACRO_TTL_MS),
+    data: result
+  };
+  return result;
+}
+
+function getDualEngineTimelineResponse() {
+  return {
+    timeline: TELEMETRY_TIMELINE.map(entry => ({ ...entry })),
+    engines: {
+      bayesian_status: 'Active (sampled-post and hashtag-mention proxies)',
+      markov_status: 'Active (three-state transition matrix)',
+      fsi_status: latestFsiInputs?.status === 'available'
+        ? 'Active (World Bank macro-stress proxy)'
+        : 'Awaiting sourced World Bank macro data'
+    },
+    inputStatus: latestDualEngineInputs ? 'updated' : 'awaiting_social_sample',
+    latestInputs: latestDualEngineInputs ? { ...latestDualEngineInputs } : null,
+    fsiStatus: latestFsiInputs
+      ? { ...latestFsiInputs }
+      : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
+    historyNote: 'Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy. The proxy uses 50% capped inflation/2, 30% capped debt-to-GNI, and 20% capped (10 minus GDP growth) times 5; these experimental scales are not calibrated.'
+  };
+}
+
 // Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
@@ -742,6 +890,84 @@ app.get('/api/social/hashtags', async (req, res) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ available: false, error: err.message });
+  }
+});
+
+app.get('/api/timeline', async (req, res) => {
+  try {
+    const [socialPayload, layer2Macro] = await Promise.all([
+      getSocialHashtagTrends(),
+      fetchLayer2MacroTelemetry()
+    ]);
+
+    if (socialPayload?.available && Array.isArray(socialPayload.hashtags) && Number.isFinite(socialPayload.scannedPosts)) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (timelineBaselineDate !== today) {
+        const baselineIdx = TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1]?.date === today && TELEMETRY_TIMELINE.length > 1
+          ? TELEMETRY_TIMELINE.length - 2
+          : TELEMETRY_TIMELINE.length - 1;
+        const baseline = TELEMETRY_TIMELINE[baselineIdx];
+        timelineBaseline = {
+          phi: baseline.phi,
+          markov_crisis_prob: baseline.markov_crisis_prob
+        };
+        timelineBaselineDate = today;
+      }
+
+      const socialVolume = socialPayload.scannedPosts;
+      const engagementProxy = socialPayload.hashtags.reduce((sum, tag) => sum + (Number(tag.mentions) || 0), 0);
+      const currentPhi = computeBayesianPosterior(timelineBaseline.phi, socialVolume, engagementProxy);
+      const projectedCrisisProb = computeMarkovPathProjection(timelineBaseline.markov_crisis_prob);
+      const macroStressProxy = computeMacroStressProxy(layer2Macro);
+      const updatedAt = socialPayload.updatedAt || new Date().toISOString();
+
+      const entry = {
+        date: today,
+        phi: currentPhi,
+        markov_crisis_prob: projectedCrisisProb,
+        state: stateForPhi(currentPhi),
+        social_volume: socialVolume,
+        engagement_score_proxy: engagementProxy,
+        telemetry_source: 'Node social telemetry',
+        updated_at: updatedAt
+      };
+
+      if (macroStressProxy !== null) {
+        entry.macro_volatility_proxy = macroStressProxy;
+        entry.fsi = Number((0.40 * (100 - currentPhi) + 0.35 * projectedCrisisProb + 0.25 * macroStressProxy).toFixed(2));
+        entry.warning_level = classifyFragilityState(entry.fsi);
+        latestFsiInputs = {
+          status: 'available',
+          macro_stress_proxy: macroStressProxy,
+          macro_source: layer2Macro.source,
+          updated_at: updatedAt
+        };
+      } else {
+        latestFsiInputs = {
+          status: 'awaiting_sourced_macro_data',
+          macro_stress_proxy: null,
+          macro_source: layer2Macro?.source || null,
+          updated_at: updatedAt
+        };
+      }
+
+      if (TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1]?.date === today) {
+        TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1] = entry;
+      } else {
+        TELEMETRY_TIMELINE.push(entry);
+        if (TELEMETRY_TIMELINE.length > 14) TELEMETRY_TIMELINE.shift();
+      }
+      latestDualEngineInputs = {
+        social_volume: socialVolume,
+        engagement_score_proxy: engagementProxy,
+        telemetry_source: entry.telemetry_source,
+        updated_at: updatedAt
+      };
+    }
+
+    res.json(getDualEngineTimelineResponse());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1052,6 +1278,7 @@ app.use((error, req, res, next) => {
 const PUBLIC_FRONTEND_FILES = new Set([
   '/index.html',
   '/structural-telemetry.html',
+  '/systemic-risk.html',
   '/api-config.js',
   '/political-economy-timeseries.js',
   '/manifest.json',
