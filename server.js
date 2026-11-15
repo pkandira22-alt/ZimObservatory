@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import dns from 'node:dns';
+import { tmpdir } from 'node:os';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
@@ -13,9 +14,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
-const PRIVATE_UPLOAD_DIR = process.env.PRIVATE_UPLOAD_DIR || path.join(__dirname, '..', 'zimobservatory-private-uploads');
+function resolvePrivateUploadDir() {
+  const preferred = process.env.PRIVATE_UPLOAD_DIR || path.join(__dirname, '..', 'zimobservatory-private-uploads');
+  const fallback = path.join(tmpdir(), 'zimobservatory-private-uploads');
+  const candidates = path.dirname(__dirname) === path.parse(__dirname).root && !process.env.PRIVATE_UPLOAD_DIR
+    ? [fallback]
+    : [preferred, fallback];
+  for (const dir of candidates) {
+    try {
+      mkdirSync(dir, { recursive: true });
+      return dir;
+    } catch (error) {
+      console.warn(`Could not initialize upload directory ${dir}: ${error.message}`);
+    }
+  }
+  return fallback;
+}
+const PRIVATE_UPLOAD_DIR = resolvePrivateUploadDir();
 const MAX_ATTACHMENT_SIZE = 500 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_SIZE = process.env.MAX_TOTAL_ATTACHMENT_SIZE_BYTES
   ? Number(process.env.MAX_TOTAL_ATTACHMENT_SIZE_BYTES)
@@ -101,7 +118,6 @@ let aiStatusCache = { checkedAt: 0, result: null };
 if (!Number.isSafeInteger(MAX_TOTAL_ATTACHMENT_SIZE) || MAX_TOTAL_ATTACHMENT_SIZE <= 0) {
   throw new Error('MAX_TOTAL_ATTACHMENT_SIZE_BYTES must be a positive safe integer.');
 }
-mkdirSync(PRIVATE_UPLOAD_DIR, { recursive: true });
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -310,9 +326,15 @@ const filterAttachmentType = (req, file, callback) => {
   }
   callback(null, true);
 };
-let storedAttachmentBytes = readdirSync(PRIVATE_UPLOAD_DIR, { withFileTypes: true })
-  .filter(entry => entry.isFile())
-  .reduce((total, entry) => total + statSync(path.join(PRIVATE_UPLOAD_DIR, entry.name)).size, 0);
+let storedAttachmentBytes = (() => {
+  try {
+    return readdirSync(PRIVATE_UPLOAD_DIR, { withFileTypes: true })
+      .filter(entry => entry.isFile())
+      .reduce((total, entry) => total + statSync(path.join(PRIVATE_UPLOAD_DIR, entry.name)).size, 0);
+  } catch {
+    return 0;
+  }
+})();
 let attachmentUploadActive = false;
 
 const extractionSites = new Map([
