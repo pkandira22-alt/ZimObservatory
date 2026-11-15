@@ -647,6 +647,11 @@ class AppHandler(BaseHTTPRequestHandler):
             "/manifest.json",
             "/service-worker.js",
             "/icon.svg",
+            "/pwa-192x192.png",
+            "/pwa-512x512.png",
+            "/pwa-maskable-512x512.png",
+            "/apple-touch-icon.png",
+            "/favicon.ico",
         }
         if path in public_files:
             file_path = os.path.join(BASE_DIR, path.lstrip("/"))

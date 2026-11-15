@@ -1,5 +1,15 @@
-const CACHE_NAME = 'kuvhura-shell-v2';
-const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg', './public/assets/aistudio/Code_Generated_Image_eb225bc7.png'];
+const CACHE_NAME = 'kuvhura-shell-v3';
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.json',
+  './pwa-192x192.png',
+  './pwa-512x512.png',
+  './pwa-maskable-512x512.png',
+  './apple-touch-icon.png',
+  './favicon.ico',
+  './public/assets/aistudio/Code_Generated_Image_eb225bc7.png'
+];
 
 self.addEventListener('install', event => {
   event.waitUntil(

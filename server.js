@@ -1034,7 +1034,12 @@ const PUBLIC_FRONTEND_FILES = new Set([
   '/political-economy-timeseries.js',
   '/manifest.json',
   '/service-worker.js',
-  '/icon.svg'
+  '/icon.svg',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-512x512.png',
+  '/apple-touch-icon.png',
+  '/favicon.ico'
 ]);
 
 const APP_THUMBNAIL_PATH = path.join(__dirname, 'public', 'assets', 'aistudio', 'Code_Generated_Image_eb225bc7.png');
