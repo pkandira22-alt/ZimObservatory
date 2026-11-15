@@ -3,7 +3,8 @@ import path from 'path';
 import dns from 'node:dns';
 import { tmpdir } from 'node:os';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import http from 'node:http';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
@@ -416,7 +417,10 @@ const SOCIAL_FEEDS = [
     name: "Bluesky",
     platform: "Bluesky",
     type: "bluesky",
-    url: "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=Zimbabwe&sort=latest&limit=100"
+    url: "https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=Zimbabwe&sort=latest&limit=100",
+    fallbackUrls: [
+      "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=Zimbabwe&sort=latest&limit=100"
+    ]
   },
   ...[
     "mastodon.social",
@@ -432,7 +436,10 @@ const SOCIAL_FEEDS = [
     name: "Reddit",
     platform: "Reddit",
     type: "reddit",
-    url: "https://www.reddit.com/search.json?q=Zimbabwe&sort=new&limit=100&type=link"
+    url: "https://www.reddit.com/r/Zimbabwe/new.rss?limit=50",
+    fallbackUrls: [
+      "https://www.reddit.com/search.json?q=Zimbabwe&sort=new&limit=100&type=link"
+    ]
   },
   ...(process.env.YOUTUBE_API_KEY ? [{
     name: "YouTube",
@@ -444,9 +451,56 @@ const HASHTAG_REGEX = /(?<![\w])#[\w][\w-]*/gi;
 const SOCIAL_CACHE_MS = 60 * 1000;
 const SOCIAL_SOURCE_CACHE_MS = {
   default: 60 * 1000,
+  reddit: 15 * 60 * 1000,
   x: 5 * 60 * 1000,
   youtube: 15 * 60 * 1000
 };
+
+function decodeXmlEntities(value) {
+  return String(value || '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function parseRedditAtomFeed(xmlText) {
+  const posts = [];
+  const entryRegex = /<entry\b[^>]*>([\s\S]*?)<\/entry>/gi;
+  let match;
+  while ((match = entryRegex.exec(xmlText)) !== null) {
+    const entryXml = match[1];
+    const titleMatch = entryXml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const contentMatch = entryXml.match(/<content[^>]*>([\s\S]*?)<\/content>/i);
+    const updatedMatch = entryXml.match(/<(?:updated|published)[^>]*>([\s\S]*?)<\/(?:updated|published)>/i);
+    const linkMatch = entryXml.match(/<link[^>]*href="([^"]+)"/i);
+    const title = decodeXmlEntities(titleMatch ? titleMatch[1] : '').replace(/<[^>]+>/g, ' ').trim();
+    const body = decodeXmlEntities(contentMatch ? contentMatch[1] : '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const text = `${title} ${body}`.trim();
+    if (!text) continue;
+    posts.push({
+      text,
+      createdAt: updatedMatch ? updatedMatch[1].trim() : '',
+      url: linkMatch ? decodeXmlEntities(linkMatch[1]) : '',
+      platform: 'Reddit'
+    });
+  }
+  return posts;
+}
+
+function formatSocialFeedHttpError(feed, statusCode) {
+  if (feed.type === 'x' && statusCode === 402) {
+    return 'X API recent search requires paid tier or credits (HTTP 402).';
+  }
+  if (feed.type === 'x' && (statusCode === 401 || statusCode === 403)) {
+    return `X API access denied (HTTP ${statusCode}); verify X_BEARER_TOKEN permissions.`;
+  }
+  if (feed.type === 'reddit' && (statusCode === 403 || statusCode === 429)) {
+    return `Reddit blocked or rate-limited automated fetch from this host (HTTP ${statusCode}).`;
+  }
+  return `HTTP ${statusCode}`;
+}
 
 async function fetchSocialSource(feed) {
   const cacheTtl = SOCIAL_SOURCE_CACHE_MS[feed.type] || SOCIAL_SOURCE_CACHE_MS.default;
@@ -456,7 +510,7 @@ async function fetchSocialSource(feed) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
   try {
-    const url = feed.type === "x"
+    const primaryUrl = feed.type === "x"
       ? `https://api.x.com/2/tweets/search/recent?${new URLSearchParams({
           query: "Zimbabwe has:hashtags -is:retweet",
           max_results: "100",
@@ -472,20 +526,51 @@ async function fetchSocialSource(feed) {
             key: process.env.YOUTUBE_API_KEY
           })}`
       : feed.url;
+    const candidateUrls = [primaryUrl, ...(Array.isArray(feed.fallbackUrls) ? feed.fallbackUrls : [])];
     const headers = {
-      Accept: 'application/json',
-      'User-Agent': 'KUVHURA-Observatory/1.0'
+      Accept: feed.type === 'reddit'
+        ? 'application/atom+xml, application/xml, application/json, text/xml'
+        : 'application/json',
+      'User-Agent': feed.type === 'reddit'
+        ? 'web:kuvhura.observatory:v1.0 (by /u/kuvhura_observatory)'
+        : 'KUVHURA-Observatory/1.0'
     };
     if (feed.type === "x") headers.Authorization = `Bearer ${process.env.X_BEARER_TOKEN}`;
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers
-    });
-    if (!res.ok) throw new Error(`Status ${res.status}`);
-    const data = await res.json();
+
+    let lastStatus = null;
+    let lastErrorMessage = null;
+    let payloadData = null;
+    let payloadText = null;
+
+    for (const candidateUrl of candidateUrls) {
+      const res = await fetch(candidateUrl, {
+        signal: controller.signal,
+        headers
+      });
+      if (!res.ok) {
+        lastStatus = res.status;
+        lastErrorMessage = formatSocialFeedHttpError(feed, res.status);
+        continue;
+      }
+      const rawText = await res.text();
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('json') || rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+        payloadData = JSON.parse(rawText);
+      } else {
+        payloadText = rawText;
+      }
+      break;
+    }
+
+    if (payloadData === null && payloadText === null) {
+      const err = new Error(lastErrorMessage || (lastStatus ? `Status ${lastStatus}` : 'Upstream feed unavailable'));
+      err.httpStatus = lastStatus;
+      throw err;
+    }
+
     const posts = [];
     if (feed.type === 'bluesky') {
-      const items = Array.isArray(data.posts) ? data.posts : [];
+      const items = Array.isArray(payloadData?.posts) ? payloadData.posts : [];
       for (const item of items) {
         posts.push({
           text: item.record?.text || '',
@@ -495,8 +580,8 @@ async function fetchSocialSource(feed) {
         });
       }
     } else if (feed.type === 'mastodon') {
-      if (Array.isArray(data)) {
-        for (const item of data) {
+      if (Array.isArray(payloadData)) {
+        for (const item of payloadData) {
           const plainText = (item.content || '').replace(/<[^>]+>/g, ' ');
           posts.push({
             text: plainText,
@@ -507,18 +592,22 @@ async function fetchSocialSource(feed) {
         }
       }
     } else if (feed.type === 'reddit') {
-      for (const child of data.data?.children || []) {
-        const item = child.data;
-        if (!item) continue;
-        posts.push({
-          text: `${item.title || ''} ${item.selftext || ''}`,
-          createdAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : '',
-          url: item.permalink ? `https://www.reddit.com${item.permalink}` : '',
-          platform: feed.platform
-        });
+      if (payloadText) {
+        posts.push(...parseRedditAtomFeed(payloadText));
+      } else {
+        for (const child of payloadData?.data?.children || []) {
+          const item = child.data;
+          if (!item) continue;
+          posts.push({
+            text: `${item.title || ''} ${item.selftext || ''}`,
+            createdAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : '',
+            url: item.permalink ? `https://www.reddit.com${item.permalink}` : '',
+            platform: feed.platform
+          });
+        }
       }
     } else if (feed.type === 'x') {
-      for (const item of data.data || []) {
+      for (const item of payloadData?.data || []) {
         posts.push({
           text: item.text || '',
           createdAt: item.created_at || '',
@@ -527,7 +616,7 @@ async function fetchSocialSource(feed) {
         });
       }
     } else if (feed.type === 'youtube') {
-      for (const item of data.items || []) {
+      for (const item of payloadData?.items || []) {
         const snippet = item.snippet || {};
         posts.push({
           text: `${snippet.title || ''} ${snippet.description || ''}`,
@@ -547,7 +636,19 @@ async function fetchSocialSource(feed) {
     socialSourceCache.set(feed.name, { expiresAt: Date.now() + cacheTtl, result });
     return result;
   } catch (err) {
-    console.warn(`Feed ${feed.name} failed:`, err.message);
+    const isExpectedAuthOrRateLimit = [401, 402, 403, 429].includes(err.httpStatus);
+    if (!isExpectedAuthOrRateLimit) {
+      console.warn(`Feed ${feed.name} failed:`, err.message);
+    }
+    const failureTtl = isExpectedAuthOrRateLimit ? Math.max(cacheTtl, 30 * 60 * 1000) : cacheTtl;
+    if (cached?.result && !cached.result.failed && Array.isArray(cached.result.posts) && cached.result.posts.length > 0) {
+      const staleResult = {
+        ...cached.result,
+        refreshIntervalSeconds: failureTtl / 1000
+      };
+      socialSourceCache.set(feed.name, { expiresAt: Date.now() + failureTtl, result: staleResult });
+      return staleResult;
+    }
     const result = {
       name: feed.name,
       platform: feed.platform,
@@ -555,9 +656,9 @@ async function fetchSocialSource(feed) {
       failed: true,
       error: err.message,
       updatedAt: new Date().toISOString(),
-      refreshIntervalSeconds: cacheTtl / 1000
+      refreshIntervalSeconds: failureTtl / 1000
     };
-    socialSourceCache.set(feed.name, { expiresAt: Date.now() + cacheTtl, result });
+    socialSourceCache.set(feed.name, { expiresAt: Date.now() + failureTtl, result });
     return result;
   } finally {
     clearTimeout(timeoutId);
@@ -1055,95 +1156,138 @@ app.get('/api/social/hashtags', async (req, res) => {
   }
 });
 
-app.get('/api/timeline', async (req, res) => {
-  try {
-    const [socialPayload, layer2Macro, hansardTelemetry] = await Promise.all([
-      getSocialHashtagTrends(),
-      fetchLayer2MacroTelemetry(),
-      fetchSemanticHansardTelemetry()
-    ]);
+async function refreshDualEngineTimelineData() {
+  const [socialPayload, layer2Macro, hansardTelemetry] = await Promise.all([
+    getSocialHashtagTrends(),
+    fetchLayer2MacroTelemetry(),
+    fetchSemanticHansardTelemetry()
+  ]);
 
-    latestHansardStatus = hansardTelemetry ? { ...hansardTelemetry } : { score: null, status: 'unavailable', source: 'unavailable' };
+  latestHansardStatus = hansardTelemetry ? { ...hansardTelemetry } : { score: null, status: 'unavailable', source: 'unavailable' };
 
-    if (socialPayload?.available && Array.isArray(socialPayload.hashtags) && Number.isFinite(socialPayload.scannedPosts)) {
-      const today = new Date().toISOString().slice(0, 10);
-      if (timelineBaselineDate !== today) {
-        const baselineIdx = TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1]?.date === today && TELEMETRY_TIMELINE.length > 1
-          ? TELEMETRY_TIMELINE.length - 2
-          : TELEMETRY_TIMELINE.length - 1;
-        const baseline = TELEMETRY_TIMELINE[baselineIdx];
-        timelineBaseline = {
-          phi: baseline.phi,
-          markov_crisis_prob: baseline.markov_crisis_prob
-        };
-        timelineBaselineDate = today;
-      }
+  if (socialPayload?.available && Array.isArray(socialPayload.hashtags) && Number.isFinite(socialPayload.scannedPosts)) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (timelineBaselineDate !== today) {
+      const baselineIdx = TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1]?.date === today && TELEMETRY_TIMELINE.length > 1
+        ? TELEMETRY_TIMELINE.length - 2
+        : TELEMETRY_TIMELINE.length - 1;
+      const baseline = TELEMETRY_TIMELINE[baselineIdx];
+      timelineBaseline = {
+        phi: baseline.phi,
+        markov_crisis_prob: baseline.markov_crisis_prob
+      };
+      timelineBaselineDate = today;
+    }
 
-      const socialVolume = socialPayload.scannedPosts;
-      const engagementProxy = socialPayload.hashtags.reduce((sum, tag) => sum + (Number(tag.mentions) || 0), 0);
-      const currentPhi = computeBayesianPosterior(timelineBaseline.phi, socialVolume, engagementProxy);
-      const projectedCrisisProb = computeMarkovPathProjection(timelineBaseline.markov_crisis_prob);
-      const macroStressProxy = computeMacroStressProxy(layer2Macro);
-      const hansardScore = hansardTelemetry?.source === 'parlzim_hansards' && Number.isFinite(hansardTelemetry.score)
-        ? hansardTelemetry.score
-        : null;
-      const updatedAt = socialPayload.updatedAt || new Date().toISOString();
+    const socialVolume = socialPayload.scannedPosts;
+    const engagementProxy = socialPayload.hashtags.reduce((sum, tag) => sum + (Number(tag.mentions) || 0), 0);
+    const currentPhi = computeBayesianPosterior(timelineBaseline.phi, socialVolume, engagementProxy);
+    const projectedCrisisProb = computeMarkovPathProjection(timelineBaseline.markov_crisis_prob);
+    const macroStressProxy = computeMacroStressProxy(layer2Macro);
+    const hansardScore = hansardTelemetry?.source === 'parlzim_hansards' && Number.isFinite(hansardTelemetry.score)
+      ? hansardTelemetry.score
+      : null;
+    const updatedAt = socialPayload.updatedAt || new Date().toISOString();
 
-      const entry = {
-        date: today,
-        phi: currentPhi,
-        markov_crisis_prob: projectedCrisisProb,
-        state: stateForPhi(currentPhi),
-        social_volume: socialVolume,
-        engagement_score_proxy: engagementProxy,
-        telemetry_source: 'Node social telemetry',
+    const entry = {
+      date: today,
+      phi: currentPhi,
+      markov_crisis_prob: projectedCrisisProb,
+      state: stateForPhi(currentPhi),
+      social_volume: socialVolume,
+      engagement_score_proxy: engagementProxy,
+      telemetry_source: 'Node social telemetry',
+      updated_at: updatedAt
+    };
+    if (hansardScore !== null) {
+      entry.hansard_friction = hansardScore;
+    }
+
+    if (macroStressProxy !== null) {
+      entry.macro_volatility_proxy = macroStressProxy;
+      entry.fsi = hansardScore !== null
+        ? Number((0.35 * (100 - currentPhi) + 0.30 * projectedCrisisProb + 0.20 * macroStressProxy + 0.15 * hansardScore).toFixed(2))
+        : Number((0.40 * (100 - currentPhi) + 0.35 * projectedCrisisProb + 0.25 * macroStressProxy).toFixed(2));
+      entry.warning_level = classifyFragilityState(entry.fsi);
+      latestFsiInputs = {
+        status: 'available',
+        macro_stress_proxy: macroStressProxy,
+        macro_source: layer2Macro.source,
+        hansard_included: hansardScore !== null,
         updated_at: updatedAt
       };
-      if (hansardScore !== null) {
-        entry.hansard_friction = hansardScore;
-      }
-
-      if (macroStressProxy !== null) {
-        entry.macro_volatility_proxy = macroStressProxy;
-        entry.fsi = hansardScore !== null
-          ? Number((0.35 * (100 - currentPhi) + 0.30 * projectedCrisisProb + 0.20 * macroStressProxy + 0.15 * hansardScore).toFixed(2))
-          : Number((0.40 * (100 - currentPhi) + 0.35 * projectedCrisisProb + 0.25 * macroStressProxy).toFixed(2));
-        entry.warning_level = classifyFragilityState(entry.fsi);
-        latestFsiInputs = {
-          status: 'available',
-          macro_stress_proxy: macroStressProxy,
-          macro_source: layer2Macro.source,
-          hansard_included: hansardScore !== null,
-          updated_at: updatedAt
-        };
-      } else {
-        latestFsiInputs = {
-          status: 'awaiting_sourced_macro_data',
-          macro_stress_proxy: null,
-          macro_source: layer2Macro?.source || null,
-          hansard_included: false,
-          updated_at: updatedAt
-        };
-      }
-
-      if (TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1]?.date === today) {
-        TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1] = entry;
-      } else {
-        TELEMETRY_TIMELINE.push(entry);
-        if (TELEMETRY_TIMELINE.length > 14) TELEMETRY_TIMELINE.shift();
-      }
-      latestDualEngineInputs = {
-        social_volume: socialVolume,
-        engagement_score_proxy: engagementProxy,
-        telemetry_source: entry.telemetry_source,
+    } else {
+      latestFsiInputs = {
+        status: 'awaiting_sourced_macro_data',
+        macro_stress_proxy: null,
+        macro_source: layer2Macro?.source || null,
+        hansard_included: false,
         updated_at: updatedAt
       };
     }
 
-    res.json(getDualEngineTimelineResponse());
+    if (TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1]?.date === today) {
+      TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1] = entry;
+    } else {
+      TELEMETRY_TIMELINE.push(entry);
+      if (TELEMETRY_TIMELINE.length > 14) TELEMETRY_TIMELINE.shift();
+    }
+    latestDualEngineInputs = {
+      social_volume: socialVolume,
+      engagement_score_proxy: engagementProxy,
+      telemetry_source: entry.telemetry_source,
+      updated_at: updatedAt
+    };
+  }
+
+  return getDualEngineTimelineResponse();
+}
+
+app.get('/api/timeline', async (req, res) => {
+  try {
+    res.json(await refreshDualEngineTimelineData());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.get('/api/timeline/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  let closed = false;
+  const sendSnapshot = async () => {
+    if (closed) return;
+    try {
+      const dualEngineTimeline = await refreshDualEngineTimelineData();
+      if (closed) return;
+      const packet = {
+        type: 'trending_telemetry',
+        status: 'ok',
+        dualEngineTimeline,
+        updatedAt: new Date().toISOString()
+      };
+      res.write(`event: telemetry\ndata: ${JSON.stringify(packet)}\n\n`);
+    } catch (err) {
+      if (!closed) {
+        res.write(`event: telemetry\ndata: ${JSON.stringify({ type: 'trending_telemetry', status: 'error', message: err.message })}\n\n`);
+      }
+    }
+  };
+
+  await sendSnapshot();
+  const interval = setInterval(sendSnapshot, 60000);
+  const keepalive = setInterval(() => {
+    if (!closed) res.write(': keepalive\n\n');
+  }, 25000);
+
+  req.on('close', () => {
+    closed = true;
+    clearInterval(interval);
+    clearInterval(keepalive);
+  });
 });
 
 app.get('/api/ai/status', async (req, res) => {
@@ -1480,6 +1624,99 @@ app.get(Array.from(PUBLIC_FRONTEND_FILES), (req, res) => {
   res.sendFile(path.join(__dirname, req.path.slice(1)));
 });
 
-app.listen(PORT, HOST, () => {
+function buildWebSocketFrame(payload, opcode = 0x1) {
+  const data = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload), 'utf8');
+  const len = data.length;
+  let header;
+  if (len < 126) {
+    header = Buffer.alloc(2);
+    header[0] = 0x80 | opcode;
+    header[1] = len;
+  } else if (len < 65536) {
+    header = Buffer.alloc(4);
+    header[0] = 0x80 | opcode;
+    header[1] = 126;
+    header.writeUInt16BE(len, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[0] = 0x80 | opcode;
+    header[1] = 127;
+    header.writeBigUInt64BE(BigInt(len), 2);
+  }
+  return Buffer.concat([header, data]);
+}
+
+const server = http.createServer(app);
+
+server.on('upgrade', async (req, socket) => {
+  const upgradePath = (req.url || '/').split('?')[0];
+  const wsKey = req.headers['sec-websocket-key'];
+  if (!wsKey || (upgradePath !== '/ws' && upgradePath !== '/')) {
+    socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+
+  const acceptKey = createHash('sha1')
+    .update(`${wsKey}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`, 'utf8')
+    .digest('base64');
+
+  socket.write([
+    'HTTP/1.1 101 Switching Protocols',
+    'Upgrade: websocket',
+    'Connection: Upgrade',
+    `Sec-WebSocket-Accept: ${acceptKey}`,
+    '\r\n'
+  ].join('\r\n'));
+
+  let closed = false;
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(timer);
+  };
+
+  const pushTelemetry = async () => {
+    if (closed || socket.destroyed) return;
+    try {
+      const dualEngineTimeline = await refreshDualEngineTimelineData();
+      if (closed || socket.destroyed) return;
+      const payload = JSON.stringify({
+        type: 'trending_telemetry',
+        status: 'ok',
+        dualEngineTimeline,
+        updatedAt: new Date().toISOString()
+      });
+      socket.write(buildWebSocketFrame(payload, 0x1));
+    } catch {
+      // Ignore transient telemetry push failures on closing sockets
+    }
+  };
+
+  socket.on('data', chunk => {
+    if (chunk.length < 2) return;
+    const opcode = chunk[0] & 0x0f;
+    if (opcode === 0x8) {
+      try {
+        socket.write(buildWebSocketFrame(Buffer.alloc(0), 0x8));
+      } catch {}
+      socket.end();
+      cleanup();
+    } else if (opcode === 0x9) {
+      try {
+        socket.write(buildWebSocketFrame(Buffer.alloc(0), 0xA));
+      } catch {}
+    }
+  });
+
+  socket.on('close', cleanup);
+  socket.on('error', cleanup);
+
+  const timer = setInterval(pushTelemetry, 60000);
+  await pushTelemetry();
+});
+
+server.listen(PORT, HOST, () => {
   console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
 });
+

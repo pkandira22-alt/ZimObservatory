@@ -227,7 +227,12 @@
         function resolveSocketUrl() {
             const paramUrl = new URLSearchParams(window.location.search).get("ws");
             if (paramUrl) return paramUrl;
-            return "wss://kuvhura-stream-server.onrender.com";
+            const host = window.location.hostname;
+            if (!host.endsWith(".github.io") && window.location.protocol.startsWith("http")) {
+                const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+                return `${proto}//${window.location.host}/ws`;
+            }
+            return "wss://zimobservatory-forecast.onrender.com";
         }
 
         const socketUrl = resolveSocketUrl();
@@ -237,7 +242,15 @@
 
         function initForecastStream() {
             const statusLabel = document.getElementById("streamStatusLabel");
+            const explicitWs = new URLSearchParams(window.location.search).get("ws");
+            if (!explicitWs && /^ais-(dev|pre)-/.test(window.location.hostname)) {
+                if (statusLabel) statusLabel.textContent = "Baseline Simulation Active";
+                loadSyntheticBaseline();
+                return;
+            }
+
             if (statusLabel) statusLabel.textContent = "Connecting WebSocket...";
+            let openedOnce = false;
 
             try {
                 forecastSocket = new WebSocket(socketUrl);
@@ -248,6 +261,7 @@
             }
 
             forecastSocket.onopen = function() {
+                openedOnce = true;
                 if (statusLabel) statusLabel.textContent = "WebSocket Connected";
             };
 
@@ -259,7 +273,7 @@
                         updateForecastDisplay(data);
                     }
                 } catch (e) {
-                    console.error("Error parsing incoming stream packet:", e);
+                    console.warn("Error parsing incoming stream packet:", e);
                 }
             };
 
@@ -276,8 +290,10 @@
                 } else if (statusLabel) {
                     statusLabel.textContent = "Reconnecting...";
                 }
-                window.clearTimeout(reconnectTimer);
-                reconnectTimer = window.setTimeout(initForecastStream, 5000);
+                if (openedOnce || explicitWs) {
+                    window.clearTimeout(reconnectTimer);
+                    reconnectTimer = window.setTimeout(initForecastStream, 10000);
+                }
             };
         }
 
