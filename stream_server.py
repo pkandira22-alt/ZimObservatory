@@ -12,6 +12,10 @@ import urllib.request
 from datetime import datetime, timezone
 
 from aiohttp import web
+try:
+    from curl_cffi import requests as cureq
+except ImportError:
+    cureq = None
 from prescriptive_orientation import evaluate_orientation, evaluate_state_classification
 from server import fetch_social_hashtag_trends
 
@@ -23,7 +27,13 @@ LAYER2_MACRO_CACHE = {"expires_at": 0.0, "data": None}
 HANSARD_TTL_SECONDS = 6 * 60 * 60
 HANSARD_ERROR_TTL_SECONDS = 15 * 60
 HANSARD_CACHE = {"expires_at": 0.0, "data": None}
-HANSARD_PORTAL_URL = os.environ.get("HANSARD_PORTAL_URL", "https://e-portal.parlzim.gov.zw/hansards")
+HANSARD_PORTAL_URL = os.environ.get("HANSARD_PORTAL_URL", "https://e-portal.parlzim.gov.zw/")
+PARLZIM_STATIC_PORTALS = (
+    ("Bill Digests", "https://www.parlzim.gov.zw/bill-digest/"),
+    ("Enacted Acts", "https://www.parlzim.gov.zw/acts/"),
+    ("Policy Briefs", "https://www.parlzim.gov.zw/policy-briefs/"),
+    ("Fact Sheets", "https://www.parlzim.gov.zw/fact-sheets/"),
+)
 HANSARD_RISK_CORPUS = (
     "corruption tender embezzlement illicit financial flows asset recovery graft scandal looting",
     "inflation parallel market currency depreciation exchange rate foreign currency shortage devaluation",
@@ -182,85 +192,246 @@ def score_hansard_text(live_text):
     return round(semantic_friction, 2)
 
 
-def fetch_semantic_hansard_telemetry(use_cache=True):
-    """Fetch Parliament of Zimbabwe Hansards and score institutional friction without fake fallbacks."""
+def _strip_html(raw_html):
+    cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", raw_html or "")
+    cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
+    return " ".join(html_lib.unescape(cleaned).split())
+
+
+def extract_legislative_topics(raw_html, category, base_url, limit=4):
+    """Extract real document/debate titles from accessible ParlZim HTML pages without fabricating entries."""
+    if not raw_html:
+        return []
+    category_status = {
+        "Bill Digests": "Legislative Pipeline",
+        "Enacted Acts": "Enacted / Gazetted",
+        "Policy Briefs": "Policy Review",
+        "Fact Sheets": "Briefing Published",
+        "Hansards": "Parliamentary Debate",
+    }.get(category, "Tracked")
+
+    skip_phrases = {
+        "skip to content", "home", "about us", "contact us", "read more",
+        "menu", "search", "login", "register", "privacy policy", "parliament of zimbabwe",
+    }
+    candidates = []
+    seen = set()
+
+    # Match headings (h1-h4) and anchor tags pointing to legislative docs/articles
+    for pattern in (
+        r"(?is)<h[1-4][^>]*>(.*?)</h[1-4]>",
+        r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+    ):
+        for match in re.finditer(pattern, raw_html):
+            if match.lastindex == 1:
+                href = base_url
+                raw_title = match.group(1)
+            else:
+                href = html_lib.unescape(match.group(1)).strip()
+                raw_title = match.group(2)
+                if href.startswith("#") or href.lower().startswith("javascript:"):
+                    continue
+                if href.startswith("/"):
+                    from urllib.parse import urljoin
+                    href = urljoin(base_url, href)
+            title = " ".join(_strip_html(raw_title).split())
+            lower_title = title.lower()
+            if (
+                len(title) < 12
+                or len(title) > 160
+                or lower_title in skip_phrases
+                or lower_title in seen
+                or not re.search(r"[a-zA-Z]{4,}", title)
+            ):
+                continue
+            seen.add(lower_title)
+            friction = score_hansard_text(title)
+            candidates.append({
+                "topic": title,
+                "category": category,
+                "status": category_status,
+                "friction": friction if friction is not None else 42.0,
+                "url": href,
+            })
+            if len(candidates) >= limit:
+                return candidates
+    return candidates
+
+
+def _get_parlzim_portals():
+    return PARLZIM_STATIC_PORTALS + (("Hansards", HANSARD_PORTAL_URL),)
+
+
+def _fetch_portal_response(portal_url, timeout=10):
+    """Fetch a Parliament portal using curl_cffi Chrome TLS impersonation when installed, else urllib."""
+    if cureq is not None:
+        response = cureq.get(portal_url, impersonate="chrome", timeout=timeout)
+        status_code = getattr(response, "status_code", 200)
+        headers = {str(k).lower(): str(v) for k, v in getattr(response, "headers", {}).items()}
+        body = getattr(response, "text", "") or ""
+        return status_code, body, headers, "curl_cffi_chrome"
+
+    req = urllib.request.Request(
+        portal_url,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KUVHURA-Observatory/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=min(timeout, 6)) as response:
+        status_code = getattr(response, "status", 200)
+        headers = {str(k).lower(): str(v) for k, v in getattr(response, "headers", {}).items()}
+        body = response.read().decode("utf-8", errors="ignore")
+    return status_code, body, headers, "urllib"
+
+
+def fetch_parliamentary_policy_tracker(use_cache=True):
+    """Crawl the 5 ParlZim portals (Bill Digests, Acts, Policy Briefs, Fact Sheets, Hansards) using Chrome TLS impersonation when available."""
     now = time.monotonic()
     if use_cache and HANSARD_CACHE["data"] is not None and HANSARD_CACHE["expires_at"] > now:
         return HANSARD_CACHE["data"]
 
-    req = urllib.request.Request(
-        HANSARD_PORTAL_URL,
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KUVHURA-Observatory/1.0"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=6) as response:
-            status_code = getattr(response, "status", 200)
-            body = response.read().decode("utf-8", errors="ignore")
-        stripped_text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", body)
-        stripped_text = re.sub(r"(?s)<[^>]+>", " ", stripped_text)
-        stripped_text = " ".join(html_lib.unescape(stripped_text).split())
-        if status_code != 200 or len(stripped_text) < 100:
-            result = {
-                "score": None,
-                "status": "unavailable",
-                "source": "unavailable",
-                "httpStatus": status_code,
-                "message": "Parliament Hansard portal returned insufficient content.",
-            }
-            HANSARD_CACHE["data"] = result
-            HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
-            return result
+    sources_status = []
+    scores = []
+    tracked_topics = []
+    total_chars = 0
+    blocked_count = 0
 
-        score = score_hansard_text(stripped_text)
-        if score is None:
-            result = {
-                "score": None,
-                "status": "unavailable",
-                "source": "unavailable",
-                "httpStatus": status_code,
-                "message": "Parliament Hansard page contained no indexable debate tokens.",
-            }
-            HANSARD_CACHE["data"] = result
-            HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
-            return result
+    for category, portal_url in _get_parlzim_portals():
+        try:
+            status_code, body, resp_headers, transport = _fetch_portal_response(portal_url, timeout=10)
+            cf_mitigated = resp_headers.get("cf-mitigated", "").lower()
+            is_cloudflare = status_code == 403 and (
+                cf_mitigated == "challenge"
+                or "cloudflare" in str(resp_headers).lower()
+                or "just a moment" in body.lower()
+            )
+            if status_code == 403 and is_cloudflare:
+                blocked_count += 1
+                sources_status.append({
+                    "category": category,
+                    "url": portal_url,
+                    "status": "blocked_by_cloudflare",
+                    "httpStatus": 403,
+                    "score": None,
+                    "transport": transport,
+                    "message": "Protected by Cloudflare challenge (HTTP 403).",
+                })
+                continue
 
+            stripped_text = _strip_html(body)
+            if status_code != 200 or len(stripped_text) < 100:
+                sources_status.append({
+                    "category": category,
+                    "url": portal_url,
+                    "status": "unavailable",
+                    "httpStatus": status_code,
+                    "score": None,
+                    "transport": transport,
+                    "message": (
+                        f"Portal returned HTTP {status_code}."
+                        if status_code != 200
+                        else "Portal returned insufficient content."
+                    ),
+                })
+                continue
+
+            cat_score = score_hansard_text(stripped_text)
+            if cat_score is None:
+                sources_status.append({
+                    "category": category,
+                    "url": portal_url,
+                    "status": "unavailable",
+                    "httpStatus": status_code,
+                    "score": None,
+                    "transport": transport,
+                    "message": "Portal contained no indexable legislative tokens.",
+                })
+                continue
+
+            total_chars += len(stripped_text)
+            scores.append(cat_score)
+            topics = extract_legislative_topics(body, category, portal_url)
+            tracked_topics.extend(topics)
+            sources_status.append({
+                "category": category,
+                "url": portal_url,
+                "status": "available",
+                "httpStatus": status_code,
+                "score": cat_score,
+                "charCount": len(stripped_text),
+                "topicCount": len(topics),
+                "transport": transport,
+            })
+        except urllib.error.HTTPError as error:
+            cf_mitigated = error.headers.get("cf-mitigated", "").lower() if error.headers else ""
+            is_cloudflare = error.code == 403 and (
+                cf_mitigated == "challenge" or "cloudflare" in str(error.headers).lower()
+            )
+            if is_cloudflare:
+                blocked_count += 1
+            sources_status.append({
+                "category": category,
+                "url": portal_url,
+                "status": "blocked_by_cloudflare" if is_cloudflare else "unavailable",
+                "httpStatus": error.code,
+                "score": None,
+                "message": (
+                    "Protected by Cloudflare challenge (HTTP 403)."
+                    if is_cloudflare
+                    else f"Portal returned HTTP {error.code}."
+                ),
+            })
+        except Exception as error:
+            sources_status.append({
+                "category": category,
+                "url": portal_url,
+                "status": "unavailable",
+                "score": None,
+                "message": str(error),
+            })
+
+    total_sources = len(sources_status)
+    accessible_sources = len(scores)
+    if accessible_sources > 0:
+        avg_score = round(sum(scores) / accessible_sources, 2)
+        hansard_ok = any(s["category"] == "Hansards" and s["status"] == "available" for s in sources_status)
         result = {
-            "score": score,
+            "score": avg_score,
             "status": "available",
-            "source": "parlzim_hansards",
-            "httpStatus": status_code,
-            "charCount": len(stripped_text),
+            "source": "parlzim_hansards" if hansard_ok else "parlzim_portals",
+            "httpStatus": 200,
+            "charCount": total_chars,
+            "accessibleSources": accessible_sources,
+            "totalSources": total_sources,
+            "sources": sources_status,
+            "tracked_topics": tracked_topics[:15],
         }
         HANSARD_CACHE["data"] = result
         HANSARD_CACHE["expires_at"] = now + HANSARD_TTL_SECONDS
         return result
-    except urllib.error.HTTPError as error:
-        cf_mitigated = error.headers.get("cf-mitigated", "").lower() if error.headers else ""
-        is_cloudflare = error.code == 403 and (cf_mitigated == "challenge" or "cloudflare" in str(error.headers).lower())
-        result = {
-            "score": None,
-            "status": "blocked_by_cloudflare" if is_cloudflare else "unavailable",
-            "source": "unavailable",
-            "httpStatus": error.code,
-            "message": (
-                "Parliament Hansard portal is protected by a Cloudflare challenge (HTTP 403)."
-                if is_cloudflare
-                else f"Parliament Hansard portal returned HTTP {error.code}."
-            ),
-        }
-        HANSARD_CACHE["data"] = result
-        HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
-        return result
-    except Exception as error:
-        result = {
-            "score": None,
-            "status": "unavailable",
-            "source": "unavailable",
-            "message": str(error),
-        }
-        HANSARD_CACHE["data"] = result
-        HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
-        return result
+
+    all_cf = blocked_count > 0
+    result = {
+        "score": None,
+        "status": "blocked_by_cloudflare" if all_cf else "unavailable",
+        "source": "unavailable",
+        "httpStatus": 403 if all_cf else None,
+        "accessibleSources": 0,
+        "totalSources": total_sources,
+        "sources": sources_status,
+        "tracked_topics": [],
+        "message": (
+            f"All {blocked_count}/{total_sources} Parliament portals are currently protected by a Cloudflare challenge (HTTP 403)."
+            if all_cf
+            else "Parliamentary & Policy portals are currently unreachable."
+        ),
+    }
+    HANSARD_CACHE["data"] = result
+    HANSARD_CACHE["expires_at"] = now + HANSARD_ERROR_TTL_SECONDS
+    return result
+
+
+def fetch_semantic_hansard_telemetry(use_cache=True):
+    """Alias wrapper delegating to the 5-portal Parliamentary & Policy Tracker."""
+    return fetch_parliamentary_policy_tracker(use_cache=use_cache)
 
 
 def compute_fragility_state_index(phi, markov_crisis_prob, macro_volatility, hansard_friction=None):
@@ -410,7 +581,8 @@ def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None, han
     macro_stress_proxy = compute_macro_stress_proxy(layer2_macro)
     hansard_score = (
         hansard_telemetry.get("score")
-        if isinstance(hansard_telemetry, dict) and hansard_telemetry.get("source") == "parlzim_hansards"
+        if isinstance(hansard_telemetry, dict)
+        and hansard_telemetry.get("source") in ("parlzim_hansards", "parlzim_portals")
         else None
     )
     entry = {
@@ -425,6 +597,8 @@ def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None, han
     }
     if hansard_score is not None:
         entry["hansard_friction"] = hansard_score
+    if isinstance(hansard_telemetry, dict) and hansard_telemetry.get("tracked_topics"):
+        entry["tracked_topics"] = list(hansard_telemetry["tracked_topics"])
     LATEST_HANSARD_STATUS = (
         dict(hansard_telemetry)
         if isinstance(hansard_telemetry, dict)
@@ -484,9 +658,9 @@ def get_dual_engine_timeline():
                 else "Awaiting sourced World Bank macro data"
             ),
             "hansard_status": (
-                f"Active (ParlZim TF-IDF cosine score {hansard_status['score']})"
+                f"Active ({hansard_status.get('accessibleSources', 1)}/{hansard_status.get('totalSources', 5)} ParlZim portals · score {hansard_status['score']})"
                 if hansard_status.get("status") == "available"
-                else hansard_status.get("message") or "Awaiting Parliament Hansard portal access"
+                else hansard_status.get("message") or "Awaiting Parliament portal access"
             ),
         },
         "inputStatus": "updated" if LATEST_DUAL_ENGINE_INPUTS else "awaiting_social_sample",

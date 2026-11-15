@@ -53,17 +53,99 @@ class StreamServerTests(unittest.TestCase):
         self.assertLessEqual(high_friction, 100.0)
 
         cf_error = stream_server.urllib.error.HTTPError(
-            "https://e-portal.parlzim.gov.zw/hansards",
+            "https://e-portal.parlzim.gov.zw/",
             403,
             "Forbidden",
             {"cf-mitigated": "challenge", "server": "cloudflare"},
             None,
         )
-        with patch("stream_server.urllib.request.urlopen", side_effect=cf_error):
+        with patch.object(stream_server, "cureq", None), patch("stream_server.urllib.request.urlopen", side_effect=cf_error):
             blocked = stream_server.fetch_semantic_hansard_telemetry(use_cache=False)
         self.assertIsNone(blocked["score"])
         self.assertEqual(blocked["status"], "blocked_by_cloudflare")
         self.assertEqual(blocked["source"], "unavailable")
+        self.assertEqual(blocked["totalSources"], 5)
+        self.assertEqual(blocked["accessibleSources"], 0)
+        self.assertEqual(blocked["tracked_topics"], [])
+        self.assertEqual(len(blocked["sources"]), 5)
+
+    def test_parliamentary_policy_tracker_extracts_real_topics_across_mixed_portals(self):
+        bill_html = """
+        <html><body>
+          <h2>Public Procurement Corruption Amendment Bill</h2>
+          <p>Committee debate on corruption, tender embezzlement, and illicit financial flows accountability.</p>
+          <a href="/bill-digest/exchange-rate-stability">Exchange Rate Currency Stabilization Digest 2026</a>
+        </body></html>
+        """.encode("utf-8")
+        hansard_html = """
+        <html><body>
+          <h3>Parliamentary Order Paper: Rural Irrigation Maintenance Motion</h3>
+          <p>The honorable committee approved routine agricultural irrigation maintenance minutes for rural schools.</p>
+        </body></html>
+        """.encode("utf-8")
+
+        def fake_urlopen(request, timeout=5):
+            url = request.full_url if hasattr(request, "full_url") else str(request)
+            if "bill-digest" in url:
+                cm = MagicMock()
+                cm.__enter__.return_value.status = 200
+                cm.__enter__.return_value.read.return_value = bill_html
+                cm.__exit__.return_value = False
+                return cm
+            if "e-portal.parlzim.gov.zw" in url:
+                cm = MagicMock()
+                cm.__enter__.return_value.status = 200
+                cm.__enter__.return_value.read.return_value = hansard_html
+                cm.__exit__.return_value = False
+                return cm
+            raise stream_server.urllib.error.HTTPError(
+                url, 403, "Forbidden", {"cf-mitigated": "challenge", "server": "cloudflare"}, None
+            )
+
+        with patch.object(stream_server, "cureq", None), patch("stream_server.urllib.request.urlopen", side_effect=fake_urlopen):
+            tracker = stream_server.fetch_parliamentary_policy_tracker(use_cache=False)
+
+        self.assertEqual(tracker["status"], "available")
+        self.assertEqual(tracker["source"], "parlzim_hansards")
+        self.assertEqual(tracker["accessibleSources"], 2)
+        self.assertEqual(tracker["totalSources"], 5)
+        self.assertEqual(len(tracker["sources"]), 5)
+        self.assertIsNotNone(tracker["score"])
+        topics = [t["topic"] for t in tracker["tracked_topics"]]
+        self.assertIn("Public Procurement Corruption Amendment Bill", topics)
+        self.assertNotIn("National Energy & Power Amendment Bill", topics)
+
+    def test_parliamentary_policy_tracker_uses_curl_cffi_chrome_impersonation(self):
+        fake_cureq = MagicMock()
+
+        def fake_get(url, impersonate=None, timeout=None):
+            self.assertEqual(impersonate, "chrome")
+            self.assertEqual(timeout, 10)
+            resp = MagicMock()
+            if "e-portal.parlzim.gov.zw" in url:
+                resp.status_code = 200
+                resp.headers = {"content-type": "text/html"}
+                resp.text = (
+                    "<html><body><h2>Audit Discrepancy & Public Funds Committee Report</h2>"
+                    "<p>Parliament reviewed audit discrepancy, tender embezzlement, and currency depreciation.</p>"
+                    "</body></html>"
+                )
+            else:
+                resp.status_code = 403
+                resp.headers = {"cf-mitigated": "challenge", "server": "cloudflare"}
+                resp.text = "Just a moment..."
+            return resp
+
+        fake_cureq.get.side_effect = fake_get
+        with patch.object(stream_server, "cureq", fake_cureq):
+            tracker = stream_server.fetch_parliamentary_policy_tracker(use_cache=False)
+
+        self.assertEqual(fake_cureq.get.call_count, 5)
+        self.assertEqual(tracker["status"], "available")
+        self.assertEqual(tracker["accessibleSources"], 1)
+        self.assertEqual(tracker["totalSources"], 5)
+        self.assertEqual(tracker["sources"][-1]["transport"], "curl_cffi_chrome")
+        self.assertEqual(tracker["tracked_topics"][0]["topic"], "Audit Discrepancy & Public Funds Committee Report")
 
     def test_macro_stress_proxy_requires_sourced_world_bank_data(self):
         macro = {

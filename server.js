@@ -888,6 +888,13 @@ const HANSARD_TTL_MS = 6 * 60 * 60 * 1000;
 const HANSARD_ERROR_TTL_MS = 15 * 60 * 1000;
 let hansardCache = { expiresAt: 0, data: null };
 const HANSARD_PORTAL_URL = process.env.HANSARD_PORTAL_URL || 'https://e-portal.parlzim.gov.zw/hansards';
+const PARLZIM_PORTAL_SOURCES = [
+  { category: 'Bill Digests', url: process.env.PARLZIM_BILL_DIGEST_URL || 'https://www.parlzim.gov.zw/bill-digest/' },
+  { category: 'Enacted Acts', url: process.env.PARLZIM_ACTS_URL || 'https://www.parlzim.gov.zw/acts/' },
+  { category: 'Policy Briefs', url: process.env.PARLZIM_POLICY_BRIEFS_URL || 'https://www.parlzim.gov.zw/policy-briefs/' },
+  { category: 'Fact Sheets', url: process.env.PARLZIM_FACT_SHEETS_URL || 'https://www.parlzim.gov.zw/fact-sheets/' },
+  { category: 'Hansards', url: HANSARD_PORTAL_URL }
+];
 const HANSARD_RISK_CORPUS = [
   'corruption tender embezzlement illicit financial flows asset recovery graft scandal looting',
   'inflation parallel market currency depreciation exchange rate foreign currency shortage devaluation',
@@ -970,78 +977,196 @@ function scoreHansardText(liveText) {
   return Number(Math.min(100, Math.max(40, (meanSimilarity * 250) + 42)).toFixed(2));
 }
 
-async function fetchSemanticHansardTelemetry() {
+function extractLegislativeTopics(rawHtml, category, baseUrl, limit = 4) {
+  if (!rawHtml) return [];
+  const categoryStatus = {
+    'Bill Digests': 'Legislative Pipeline',
+    'Enacted Acts': 'Enacted / Gazetted',
+    'Policy Briefs': 'Policy Review',
+    'Fact Sheets': 'Briefing Published',
+    'Hansards': 'Parliamentary Debate'
+  }[category] || 'Tracked';
+
+  const skipPhrases = new Set([
+    'skip to content', 'home', 'about us', 'contact us', 'read more',
+    'menu', 'search', 'login', 'register', 'privacy policy', 'parliament of zimbabwe'
+  ]);
+  const candidates = [];
+  const seen = new Set();
+
+  const patterns = [
+    /<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi,
+    /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+  ];
+
+  for (let pIdx = 0; pIdx < patterns.length; pIdx++) {
+    const regex = patterns[pIdx];
+    let match;
+    while ((match = regex.exec(rawHtml)) !== null) {
+      let href = baseUrl;
+      let rawTitle;
+      if (pIdx === 0) {
+        rawTitle = match[1];
+      } else {
+        href = decodeXmlEntities(match[1]).trim();
+        rawTitle = match[2];
+        if (!href || href.startsWith('#') || href.toLowerCase().startsWith('javascript:')) continue;
+        try {
+          href = new URL(href, baseUrl).href;
+        } catch {
+          href = baseUrl;
+        }
+      }
+      const title = stripHtmlToText(rawTitle);
+      const lowerTitle = title.toLowerCase();
+      if (
+        title.length < 12 ||
+        title.length > 160 ||
+        skipPhrases.has(lowerTitle) ||
+        seen.has(lowerTitle) ||
+        !/[a-zA-Z]{4,}/.test(title)
+      ) {
+        continue;
+      }
+      seen.add(lowerTitle);
+      const friction = scoreHansardText(title);
+      candidates.push({
+        topic: title,
+        category,
+        status: categoryStatus,
+        friction: friction !== null ? friction : 42.0,
+        url: href
+      });
+      if (candidates.length >= limit) return candidates;
+    }
+  }
+  return candidates;
+}
+
+async function fetchParliamentaryPolicyTracker() {
   const now = Date.now();
   if (hansardCache.data && hansardCache.expiresAt > now) {
     return hansardCache.data;
   }
-  try {
-    const response = await fetch(HANSARD_PORTAL_URL, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) KUVHURA-Observatory/1.0' },
-      signal: AbortSignal.timeout(5000)
-    });
-    const cfMitigated = (response.headers.get('cf-mitigated') || '').toLowerCase();
-    if (response.status === 403 && (cfMitigated === 'challenge' || (response.headers.get('server') || '').toLowerCase().includes('cloudflare'))) {
-      const blocked = {
-        score: null,
-        status: 'blocked_by_cloudflare',
-        source: 'unavailable',
-        httpStatus: 403,
-        message: 'Parliament Hansard portal is protected by a Cloudflare challenge (HTTP 403).'
-      };
-      hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: blocked };
-      return blocked;
-    }
-    if (!response.ok) {
-      const failed = {
-        score: null,
-        status: 'unavailable',
-        source: 'unavailable',
+
+  const results = await Promise.all(PARLZIM_PORTAL_SOURCES.map(async ({ category, url }) => {
+    try {
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) KUVHURA-Observatory/1.0' },
+        signal: AbortSignal.timeout(5000)
+      });
+      const cfMitigated = (response.headers.get('cf-mitigated') || '').toLowerCase();
+      const serverHeader = (response.headers.get('server') || '').toLowerCase();
+      if (response.status === 403 && (cfMitigated === 'challenge' || serverHeader.includes('cloudflare'))) {
+        return {
+          category,
+          url,
+          status: 'blocked_by_cloudflare',
+          httpStatus: 403,
+          score: null,
+          topics: [],
+          message: 'Protected by Cloudflare challenge (HTTP 403).'
+        };
+      }
+      if (!response.ok) {
+        return {
+          category,
+          url,
+          status: 'unavailable',
+          httpStatus: response.status,
+          score: null,
+          topics: [],
+          message: `Portal returned HTTP ${response.status}.`
+        };
+      }
+      const rawHtml = await response.text();
+      const cleanText = stripHtmlToText(rawHtml);
+      const catScore = cleanText.length >= 100 ? scoreHansardText(cleanText) : null;
+      if (catScore === null) {
+        return {
+          category,
+          url,
+          status: 'unavailable',
+          httpStatus: response.status,
+          score: null,
+          topics: [],
+          message: 'Portal returned insufficient legislative content.'
+        };
+      }
+      const topics = extractLegislativeTopics(rawHtml, category, url);
+      return {
+        category,
+        url,
+        status: 'available',
         httpStatus: response.status,
-        message: `Parliament Hansard portal returned HTTP ${response.status}.`
+        score: catScore,
+        charCount: cleanText.length,
+        topicCount: topics.length,
+        topics
       };
-      hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: failed };
-      return failed;
-    }
-    const rawHtml = await response.text();
-    const cleanText = stripHtmlToText(rawHtml);
-    const score = cleanText.length >= 100 ? scoreHansardText(cleanText) : null;
-    if (score === null) {
-      const emptyResult = {
-        score: null,
+    } catch (error) {
+      return {
+        category,
+        url,
         status: 'unavailable',
-        source: 'unavailable',
-        httpStatus: response.status,
-        message: 'Parliament Hansard portal returned insufficient content.'
+        httpStatus: null,
+        score: null,
+        topics: [],
+        message: error.message || 'Portal request failed.'
       };
-      hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: emptyResult };
-      return emptyResult;
     }
+  }));
+
+  const available = results.filter(item => item.status === 'available' && Number.isFinite(item.score));
+  const blockedCount = results.filter(item => item.status === 'blocked_by_cloudflare').length;
+  const sourcesStatus = results.map(({ topics, ...rest }) => rest);
+
+  if (available.length > 0) {
+    const avgScore = Number((available.reduce((sum, item) => sum + item.score, 0) / available.length).toFixed(2));
+    const hansardOk = available.some(item => item.category === 'Hansards');
+    const trackedTopics = available.flatMap(item => item.topics).slice(0, 15);
+    const totalChars = available.reduce((sum, item) => sum + (item.charCount || 0), 0);
     const okResult = {
-      score,
+      score: avgScore,
       status: 'available',
-      source: 'parlzim_hansards',
-      httpStatus: response.status,
-      charCount: cleanText.length
+      source: hansardOk ? 'parlzim_hansards' : 'parlzim_portals',
+      httpStatus: 200,
+      charCount: totalChars,
+      accessibleSources: available.length,
+      totalSources: results.length,
+      sources: sourcesStatus,
+      tracked_topics: trackedTopics
     };
     hansardCache = { expiresAt: now + HANSARD_TTL_MS, data: okResult };
     return okResult;
-  } catch (error) {
-    const errResult = {
-      score: null,
-      status: 'unavailable',
-      source: 'unavailable',
-      message: error.message || 'Parliament Hansard portal request failed.'
-    };
-    hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: errResult };
-    return errResult;
   }
+
+  const allCf = blockedCount > 0;
+  const unavailableResult = {
+    score: null,
+    status: allCf ? 'blocked_by_cloudflare' : 'unavailable',
+    source: 'unavailable',
+    httpStatus: allCf ? 403 : null,
+    accessibleSources: 0,
+    totalSources: results.length,
+    sources: sourcesStatus,
+    tracked_topics: [],
+    message: allCf
+      ? `All ${blockedCount}/${results.length} Parliament portals are currently protected by a Cloudflare challenge (HTTP 403).`
+      : 'Parliamentary & Policy portals are currently unreachable.'
+  };
+  hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: unavailableResult };
+  return unavailableResult;
+}
+
+async function fetchSemanticHansardTelemetry() {
+  return fetchParliamentaryPolicyTracker();
 }
 
 function getDualEngineTimelineResponse() {
   const hansardStatus = latestHansardStatus
     ? { ...latestHansardStatus }
-    : { score: null, status: 'awaiting_check', source: 'unavailable' };
+    : { score: null, status: 'awaiting_check', source: 'unavailable', sources: [], tracked_topics: [] };
   return {
     timeline: TELEMETRY_TIMELINE.map(entry => ({ ...entry })),
     engines: {
@@ -1051,8 +1176,8 @@ function getDualEngineTimelineResponse() {
         ? 'Active (World Bank macro-stress proxy)'
         : 'Awaiting sourced World Bank macro data',
       hansard_status: hansardStatus.status === 'available'
-        ? `Active (ParlZim TF-IDF cosine score ${hansardStatus.score})`
-        : hansardStatus.message || 'Awaiting Parliament Hansard portal access'
+        ? `Active (${hansardStatus.accessibleSources || 1}/${hansardStatus.totalSources || 5} ParlZim portals · score ${hansardStatus.score})`
+        : hansardStatus.message || 'Awaiting Parliament portal access'
     },
     inputStatus: latestDualEngineInputs ? 'updated' : 'awaiting_social_sample',
     latestInputs: latestDualEngineInputs ? { ...latestDualEngineInputs } : null,
@@ -1060,7 +1185,7 @@ function getDualEngineTimelineResponse() {
       ? { ...latestFsiInputs }
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
     hansardStatus,
-    historyNote: 'Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Hansard Friction is reachable). Macro stress scaling and TF-IDF cosine weighting are experimental assumptions.'
+    historyNote: 'Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable). Macro stress scaling and TF-IDF cosine weighting are experimental assumptions.'
   };
 }
 
@@ -1184,7 +1309,7 @@ async function refreshDualEngineTimelineData() {
     const currentPhi = computeBayesianPosterior(timelineBaseline.phi, socialVolume, engagementProxy);
     const projectedCrisisProb = computeMarkovPathProjection(timelineBaseline.markov_crisis_prob);
     const macroStressProxy = computeMacroStressProxy(layer2Macro);
-    const hansardScore = hansardTelemetry?.source === 'parlzim_hansards' && Number.isFinite(hansardTelemetry.score)
+    const hansardScore = (hansardTelemetry?.source === 'parlzim_hansards' || hansardTelemetry?.source === 'parlzim_portals') && Number.isFinite(hansardTelemetry.score)
       ? hansardTelemetry.score
       : null;
     const updatedAt = socialPayload.updatedAt || new Date().toISOString();
@@ -1201,6 +1326,9 @@ async function refreshDualEngineTimelineData() {
     };
     if (hansardScore !== null) {
       entry.hansard_friction = hansardScore;
+    }
+    if (Array.isArray(hansardTelemetry?.tracked_topics) && hansardTelemetry.tracked_topics.length > 0) {
+      entry.tracked_topics = hansardTelemetry.tracked_topics;
     }
 
     if (macroStressProxy !== null) {
