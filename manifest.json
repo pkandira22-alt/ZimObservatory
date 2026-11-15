@@ -10,10 +10,16 @@
   "theme_color": "#072B13",
   "icons": [
     {
+      "src": "./public/assets/aistudio/Code_Generated_Image_eb225bc7.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
       "src": "./icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

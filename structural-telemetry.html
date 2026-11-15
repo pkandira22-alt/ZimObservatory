@@ -6,6 +6,15 @@
     <meta name="theme-color" content="#030712">
     <meta name="description" content="KUVHURA Political Economy & Resistance Observatory — Advanced Structural Predictors and Adjusted Regime Durability.">
     <title>KUVHURA | Political Economy &amp; Resistance Observatory</title>
+    <link rel="icon" type="image/png" href="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
+    <link rel="shortcut icon" type="image/png" href="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
+    <link rel="apple-touch-icon" href="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
+    <meta property="og:title" content="KUVHURA | Political Economy &amp; Resistance Observatory">
+    <meta property="og:description" content="KUVHURA Political Economy &amp; Resistance Observatory — Advanced Structural Predictors and Adjusted Regime Durability.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:image" content="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
@@ -20,6 +29,7 @@
         }
         * { box-sizing: border-box; }
         body {
+            position: relative;
             background-color: var(--bg-primary);
             color: var(--text-main);
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -29,11 +39,30 @@
             margin-left: auto;
             margin-right: auto;
         }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: url("./public/assets/aistudio/Code_Generated_Image_eb225bc7.png");
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-size: min(56vw, 480px);
+            opacity: 0.14;
+            mix-blend-mode: lighten;
+            -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,1) min(26vw, 220px), transparent min(29vw, 245px));
+            mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,1) min(26vw, 220px), transparent min(29vw, 245px));
+            pointer-events: none;
+            z-index: 0;
+        }
+        .header, main {
+            position: relative;
+            z-index: 1;
+        }
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: var(--bg-card);
+            background: rgba(11, 15, 25, 0.9);
             border: 1px solid var(--border-panel);
             padding: 12px 20px;
             border-radius: 12px;
@@ -61,7 +90,8 @@
             border-color: #38bdf8;
         }
         .card-panel {
-            background: var(--bg-card);
+            background: rgba(11, 15, 25, 0.88);
+            backdrop-filter: blur(4px);
             border: 1px solid var(--border-panel);
             border-radius: 12px;
             padding: 16px;
@@ -99,10 +129,13 @@
 
     <!-- TOP NAVIGATION HEADER -->
     <header class="header">
-        <div>
-            <div style="font-size: 10px; font-weight: 800; background: var(--zim-gold); color: black; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px;">KUVHURA</div>
-            <div style="font-size: 14px; font-weight: 800;">Privilege Kandira</div>
-            <div style="font-size: 10px; color: var(--text-muted);">POLITICAL ECONOMY &amp; RESISTANCE OBSERVATORY</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <img src="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png" alt="KUVHURA Crest" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(245, 158, 11, 0.55); flex-shrink: 0;">
+            <div>
+                <div style="font-size: 10px; font-weight: 800; background: var(--zim-gold); color: black; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px;">KUVHURA</div>
+                <div style="font-size: 14px; font-weight: 800;">Privilege Kandira</div>
+                <div style="font-size: 10px; color: var(--text-muted);">POLITICAL ECONOMY &amp; RESISTANCE OBSERVATORY</div>
+            </div>
         </div>
         <div class="header-actions">
             <a class="nav-back" href="./index.html#observatory">&larr; Main Observatory</a>

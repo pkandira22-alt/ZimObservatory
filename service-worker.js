@@ -1,5 +1,5 @@
-const CACHE_NAME = 'kuvhura-shell-v1';
-const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
+const CACHE_NAME = 'kuvhura-shell-v2';
+const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg', './public/assets/aistudio/Code_Generated_Image_eb225bc7.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

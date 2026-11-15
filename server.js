@@ -1037,8 +1037,14 @@ const PUBLIC_FRONTEND_FILES = new Set([
   '/icon.svg'
 ]);
 
+const APP_THUMBNAIL_PATH = path.join(__dirname, 'public', 'assets', 'aistudio', 'Code_Generated_Image_eb225bc7.png');
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get(['/public/assets/aistudio/Code_Generated_Image_eb225bc7.png', '/assets/aistudio/Code_Generated_Image_eb225bc7.png'], (req, res) => {
+  res.sendFile(APP_THUMBNAIL_PATH);
 });
 
 app.get(Array.from(PUBLIC_FRONTEND_FILES), (req, res) => {

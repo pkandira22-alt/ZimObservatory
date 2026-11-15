@@ -630,6 +630,15 @@ class AppHandler(BaseHTTPRequestHandler):
             serve_file(self, INDEX_PATH)
             return
 
+        if path in (
+            "/public/assets/aistudio/Code_Generated_Image_eb225bc7.png",
+            "/assets/aistudio/Code_Generated_Image_eb225bc7.png",
+        ):
+            asset_path = os.path.join(BASE_DIR, "public", "assets", "aistudio", "Code_Generated_Image_eb225bc7.png")
+            if os.path.isfile(asset_path):
+                serve_file(self, asset_path)
+                return
+
         public_files = {
             "/index.html",
             "/structural-telemetry.html",

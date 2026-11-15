@@ -11,8 +11,15 @@
   <meta name="theme-color" content="#072B13">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="icon" type="image/svg+xml" href="./icon.svg">
-  <link rel="apple-touch-icon" href="./icon.svg">
+  <link rel="icon" type="image/png" href="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
+  <link rel="shortcut icon" type="image/png" href="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
+  <link rel="apple-touch-icon" href="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
+  <meta property="og:title" content="Privilege Kandira | KUVHURA Political Economy &amp; Civic Resistance Observatory">
+  <meta property="og:description" content="Official platform of Privilege Kandira and KUVHURA: Real-time political economy, state captivity, and civic agency observatory for Zimbabwe.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:image" content="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png">
   <script src="./api-config.js"></script>
 
   <!-- Chart.js -->
@@ -44,7 +51,23 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    body { background-color: var(--bg-dark); color: var(--text-main); line-height: 1.6; overflow-x: hidden; }
+    body { position: relative; background-color: var(--bg-dark); color: var(--text-main); line-height: 1.6; overflow-x: hidden; }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: url("./public/assets/aistudio/Code_Generated_Image_eb225bc7.png");
+      background-repeat: no-repeat;
+      background-position: center center;
+      background-size: min(56vw, 520px);
+      opacity: 0.14;
+      mix-blend-mode: lighten;
+      -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,1) min(26vw, 240px), transparent min(29vw, 265px));
+      mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,1) min(26vw, 240px), transparent min(29vw, 265px));
+      pointer-events: none;
+      z-index: 0;
+    }
+    .top-ribbon, .hero, .section-block, footer { position: relative; z-index: 1; }
 
     /* Top Ribbon */
     .top-ribbon {
@@ -71,6 +94,15 @@
       gap: 12px;
       text-decoration: none;
       color: white;
+    }
+    .brand-thumb {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid rgba(212, 175, 55, 0.55);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+      flex-shrink: 0;
     }
     .brand-crest {
       background: linear-gradient(135deg, var(--zim-gold) 0%, #B45309 100%);
@@ -371,7 +403,8 @@
     @media (max-width: 850px) { .main-trio-grid { grid-template-columns: 1fr; } }
 
     .card-panel {
-      background: var(--bg-surface);
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(4px);
       border: 1px solid var(--border-panel);
       border-radius: 12px;
       padding: 20px;
@@ -606,6 +639,7 @@
   <!-- Navigation -->
   <nav>
     <a href="#home" class="nav-brand">
+      <img class="brand-thumb" src="./public/assets/aistudio/Code_Generated_Image_eb225bc7.png" alt="KUVHURA Crest">
       <div class="brand-crest">KUVHURA</div>
       <div>
         <div class="brand-name">Privilege Kandira</div>
