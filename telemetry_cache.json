@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "timestamp": "2026-11-16T08:37:27.987755Z",
-  "updated_at": "2026-11-16T08:37:27.987755Z",
+  "timestamp": "2026-11-17T07:10:28.477744Z",
+  "updated_at": "2026-11-17T07:10:28.477744Z",
   "runner": "github-actions",
-  "accessible_sources": 5,
+  "accessible_sources": 4,
   "total_sources": 5,
-  "hansard_friction": 48.64,
+  "hansard_friction": 49.15,
   "tracked_topics": [
     {
       "topic": "Deeds Registries Regulations, 2025",
@@ -64,13 +64,6 @@
       "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
     },
     {
-      "topic": "Deputy Energy Minister Yeukai Simbanegavi opens ZimZam with a target to end Zimbabwe\u2019s power imports by 2027 - Energy News Network",
-      "category": "Policy Briefs",
-      "status": "Policy Review",
-      "friction": 42.0,
-      "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPT0tUcnFSWktUTnhoOGtPZEd6SThiNFpJLUZYRUFRck9GZTMwSWdoQmxubGJfOUY2QkV5RFZ2XzJVX050R3RLZ0Y1Y015TWtjblBfOTM2OHd2U24xWUtWMGpTSTVHbGRNX0poT1YxckpNYXBnNXRnUVdJMkZ5d2J0RGpqV0xtbksz?oc=5"
-    },
-    {
       "topic": "Zimbabwe - Elections, New Government, Democracy - Britannica",
       "category": "Policy Briefs",
       "status": "Policy Review",
@@ -78,11 +71,11 @@
       "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPNzZqVGVYNzF6UVpVeFEybnRkVEJzNHJ4YTJnVEYxSm1wNGdicjU4cE8xMnE4T0JidGxOT2Fpb1pUaE51NFIyVDhCejNFOEtiTV9OTUNmUVVlNEw2TUo4MmwyZEZocXBpS1BnQlVKdUlTSURzWl8wRkdLOFNfZ05MSzNqWQ?oc=5"
     },
     {
-      "topic": "Zimbabwe's Zanu-PF to Discipline MPs For Missed Amendment Vote - allAfrica.com",
+      "topic": "Zimbabwe portfolio committee proposes annual levy on idle farms - Farmer's Weekly SA",
       "category": "Policy Briefs",
       "status": "Policy Review",
       "friction": 42.0,
-      "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE93ZlV1YzNRWUZheDE0c1hNTEVNTXVYNXJqRnRJSjllQmhlbXVzU2lwWU5wODV0WllHaTFleVNya3FmRkNJckw5ZllnSHJYejc4Tjg4SXNNYjZTUy1UdGsybUNDNUtNclZVbF93?oc=5"
+      "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxPTEZvdFgyOEU0eksyZU5Ld2htZFYwVG5JblVDRmJWR0xZekRkVGlVMy1jYllIbkV6SUgwdTNpOTBXR0k1bnloaHE2bTl6OVVJQ2xncUFTM0tRWXpXdzFGUjlfTWtLVEFjUExQSjBuN3dFbjFFNDFEZGMwM2VGQVV1bFpTSF8zMjR2ODJkdERKRFlaSF9tWjllQjhBZllmQTFqYWU3V2JvNE9FMldyRWo0a21VVQ?oc=5"
     },
     {
       "topic": "Autocracy by legal means - civicus lens",
@@ -90,6 +83,13 @@
       "status": "Policy Review",
       "friction": 42.0,
       "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE10YjZLb1BlYUVBdkJYc19ITUF1c0xEWlg5LUVXYTRNOWdOdmJVVmRfX2Y2Ylg5dXQwR3d1VTJxMzJoNlc5Nk1mc3MtTl9pRG5XU2hzVDhwRVhqYzM4VGpR?oc=5"
+    },
+    {
+      "topic": "Zimbabwe: Zanu-PF to Punish Constitutional Amendment Bill Rebels - allAfrica.com",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
+      "friction": 42.0,
+      "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFBkTkttX0hXRktRaXM5bExlSlFXemFSd3BEMXBRVVZFaGROZnNUd3p6QnR5anhUYjJfRXZrWnh2YkxVYlRDbm1xUVRqckZ2UjI5RGticlk3cG12WkE?oc=5"
     },
     {
       "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
@@ -113,14 +113,14 @@
       "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
     }
   ],
-  "status": "Resolved 5/5 via CF-free mirrors/live",
+  "status": "Resolved 4/5 via CF-free mirrors/live",
   "parlzim": {
-    "score": 48.64,
+    "score": 49.15,
     "status": "available",
-    "source": "parlzim_hansards",
+    "source": "parlzim_portals",
     "httpStatus": 200,
-    "charCount": 25969,
-    "accessibleSources": 5,
+    "charCount": 23868,
+    "accessibleSources": 4,
     "totalSources": 5,
     "sources": [
       {
@@ -158,8 +158,8 @@
         "url": "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
         "status": "available",
         "httpStatus": 200,
-        "score": 45.57,
-        "charCount": 5099,
+        "score": 45.53,
+        "charCount": 4877,
         "topicCount": 4,
         "transport": "curl_cffi_chrome",
         "viaFallbackMirror": true,
@@ -185,18 +185,11 @@
       },
       {
         "category": "Hansards",
-        "url": "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
-        "status": "available",
-        "httpStatus": 200,
-        "score": 46.56,
-        "charCount": 1879,
-        "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "Parliament Debates RSS (30d)",
-        "primaryUrl": "https://e-portal.parlzim.gov.zw/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "url": "https://e-portal.parlzim.gov.zw/",
+        "status": "blocked_by_cloudflare",
+        "httpStatus": 403,
+        "score": null,
+        "message": "Protected by Cloudflare challenge (HTTP 403)."
       }
     ],
     "tracked_topics": [
@@ -257,13 +250,6 @@
         "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
       },
       {
-        "topic": "Deputy Energy Minister Yeukai Simbanegavi opens ZimZam with a target to end Zimbabwe\u2019s power imports by 2027 - Energy News Network",
-        "category": "Policy Briefs",
-        "status": "Policy Review",
-        "friction": 42.0,
-        "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPT0tUcnFSWktUTnhoOGtPZEd6SThiNFpJLUZYRUFRck9GZTMwSWdoQmxubGJfOUY2QkV5RFZ2XzJVX050R3RLZ0Y1Y015TWtjblBfOTM2OHd2U24xWUtWMGpTSTVHbGRNX0poT1YxckpNYXBnNXRnUVdJMkZ5d2J0RGpqV0xtbksz?oc=5"
-      },
-      {
         "topic": "Zimbabwe - Elections, New Government, Democracy - Britannica",
         "category": "Policy Briefs",
         "status": "Policy Review",
@@ -271,11 +257,11 @@
         "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPNzZqVGVYNzF6UVpVeFEybnRkVEJzNHJ4YTJnVEYxSm1wNGdicjU4cE8xMnE4T0JidGxOT2Fpb1pUaE51NFIyVDhCejNFOEtiTV9OTUNmUVVlNEw2TUo4MmwyZEZocXBpS1BnQlVKdUlTSURzWl8wRkdLOFNfZ05MSzNqWQ?oc=5"
       },
       {
-        "topic": "Zimbabwe's Zanu-PF to Discipline MPs For Missed Amendment Vote - allAfrica.com",
+        "topic": "Zimbabwe portfolio committee proposes annual levy on idle farms - Farmer's Weekly SA",
         "category": "Policy Briefs",
         "status": "Policy Review",
         "friction": 42.0,
-        "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE93ZlV1YzNRWUZheDE0c1hNTEVNTXVYNXJqRnRJSjllQmhlbXVzU2lwWU5wODV0WllHaTFleVNya3FmRkNJckw5ZllnSHJYejc4Tjg4SXNNYjZTUy1UdGsybUNDNUtNclZVbF93?oc=5"
+        "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxPTEZvdFgyOEU0eksyZU5Ld2htZFYwVG5JblVDRmJWR0xZekRkVGlVMy1jYllIbkV6SUgwdTNpOTBXR0k1bnloaHE2bTl6OVVJQ2xncUFTM0tRWXpXdzFGUjlfTWtLVEFjUExQSjBuN3dFbjFFNDFEZGMwM2VGQVV1bFpTSF8zMjR2ODJkdERKRFlaSF9tWjllQjhBZllmQTFqYWU3V2JvNE9FMldyRWo0a21VVQ?oc=5"
       },
       {
         "topic": "Autocracy by legal means - civicus lens",
@@ -283,6 +269,13 @@
         "status": "Policy Review",
         "friction": 42.0,
         "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE10YjZLb1BlYUVBdkJYc19ITUF1c0xEWlg5LUVXYTRNOWdOdmJVVmRfX2Y2Ylg5dXQwR3d1VTJxMzJoNlc5Nk1mc3MtTl9pRG5XU2hzVDhwRVhqYzM4VGpR?oc=5"
+      },
+      {
+        "topic": "Zimbabwe: Zanu-PF to Punish Constitutional Amendment Bill Rebels - allAfrica.com",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFBkTkttX0hXRktRaXM5bExlSlFXemFSd3BEMXBRVVZFaGROZnNUd3p6QnR5anhUYjJfRXZrWnh2YkxVYlRDbm1xUVRqckZ2UjI5RGticlk3cG12WkE?oc=5"
       },
       {
         "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
@@ -308,12 +301,12 @@
     ]
   },
   "last_available_parlzim": {
-    "score": 48.64,
+    "score": 49.15,
     "status": "available",
-    "source": "parlzim_hansards",
+    "source": "parlzim_portals",
     "httpStatus": 200,
-    "charCount": 25969,
-    "accessibleSources": 5,
+    "charCount": 23868,
+    "accessibleSources": 4,
     "totalSources": 5,
     "sources": [
       {
@@ -351,8 +344,8 @@
         "url": "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
         "status": "available",
         "httpStatus": 200,
-        "score": 45.57,
-        "charCount": 5099,
+        "score": 45.53,
+        "charCount": 4877,
         "topicCount": 4,
         "transport": "curl_cffi_chrome",
         "viaFallbackMirror": true,
@@ -378,18 +371,11 @@
       },
       {
         "category": "Hansards",
-        "url": "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
-        "status": "available",
-        "httpStatus": 200,
-        "score": 46.56,
-        "charCount": 1879,
-        "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "Parliament Debates RSS (30d)",
-        "primaryUrl": "https://e-portal.parlzim.gov.zw/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "url": "https://e-portal.parlzim.gov.zw/",
+        "status": "blocked_by_cloudflare",
+        "httpStatus": 403,
+        "score": null,
+        "message": "Protected by Cloudflare challenge (HTTP 403)."
       }
     ],
     "tracked_topics": [
@@ -450,13 +436,6 @@
         "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
       },
       {
-        "topic": "Deputy Energy Minister Yeukai Simbanegavi opens ZimZam with a target to end Zimbabwe\u2019s power imports by 2027 - Energy News Network",
-        "category": "Policy Briefs",
-        "status": "Policy Review",
-        "friction": 42.0,
-        "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxPT0tUcnFSWktUTnhoOGtPZEd6SThiNFpJLUZYRUFRck9GZTMwSWdoQmxubGJfOUY2QkV5RFZ2XzJVX050R3RLZ0Y1Y015TWtjblBfOTM2OHd2U24xWUtWMGpTSTVHbGRNX0poT1YxckpNYXBnNXRnUVdJMkZ5d2J0RGpqV0xtbksz?oc=5"
-      },
-      {
         "topic": "Zimbabwe - Elections, New Government, Democracy - Britannica",
         "category": "Policy Briefs",
         "status": "Policy Review",
@@ -464,11 +443,11 @@
         "url": "https://news.google.com/rss/articles/CBMigwFBVV95cUxPNzZqVGVYNzF6UVpVeFEybnRkVEJzNHJ4YTJnVEYxSm1wNGdicjU4cE8xMnE4T0JidGxOT2Fpb1pUaE51NFIyVDhCejNFOEtiTV9OTUNmUVVlNEw2TUo4MmwyZEZocXBpS1BnQlVKdUlTSURzWl8wRkdLOFNfZ05MSzNqWQ?oc=5"
       },
       {
-        "topic": "Zimbabwe's Zanu-PF to Discipline MPs For Missed Amendment Vote - allAfrica.com",
+        "topic": "Zimbabwe portfolio committee proposes annual levy on idle farms - Farmer's Weekly SA",
         "category": "Policy Briefs",
         "status": "Policy Review",
         "friction": 42.0,
-        "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE93ZlV1YzNRWUZheDE0c1hNTEVNTXVYNXJqRnRJSjllQmhlbXVzU2lwWU5wODV0WllHaTFleVNya3FmRkNJckw5ZllnSHJYejc4Tjg4SXNNYjZTUy1UdGsybUNDNUtNclZVbF93?oc=5"
+        "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxPTEZvdFgyOEU0eksyZU5Ld2htZFYwVG5JblVDRmJWR0xZekRkVGlVMy1jYllIbkV6SUgwdTNpOTBXR0k1bnloaHE2bTl6OVVJQ2xncUFTM0tRWXpXdzFGUjlfTWtLVEFjUExQSjBuN3dFbjFFNDFEZGMwM2VGQVV1bFpTSF8zMjR2ODJkdERKRFlaSF9tWjllQjhBZllmQTFqYWU3V2JvNE9FMldyRWo0a21VVQ?oc=5"
       },
       {
         "topic": "Autocracy by legal means - civicus lens",
@@ -476,6 +455,13 @@
         "status": "Policy Review",
         "friction": 42.0,
         "url": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE10YjZLb1BlYUVBdkJYc19ITUF1c0xEWlg5LUVXYTRNOWdOdmJVVmRfX2Y2Ylg5dXQwR3d1VTJxMzJoNlc5Nk1mc3MtTl9pRG5XU2hzVDhwRVhqYzM4VGpR?oc=5"
+      },
+      {
+        "topic": "Zimbabwe: Zanu-PF to Punish Constitutional Amendment Bill Rebels - allAfrica.com",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 42.0,
+        "url": "https://news.google.com/rss/articles/CBMiW0FVX3lxTFBkTkttX0hXRktRaXM5bExlSlFXemFSd3BEMXBRVVZFaGROZnNUd3p6QnR5anhUYjJfRXZrWnh2YkxVYlRDbm1xUVRqckZ2UjI5RGticlk3cG12WkE?oc=5"
       },
       {
         "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
@@ -499,12 +485,12 @@
         "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
       }
     ],
-    "captured_at": "2026-11-16T08:37:27.987755Z"
+    "captured_at": "2026-11-17T07:10:28.477744Z"
   },
   "layer2_macro": {
-    "GDP_Growth": 8.10671343048909,
+    "GDP_Growth": 8.3,
     "Inflation": 104.705170628667,
     "Debt_GNI": 31.5941416031795,
-    "source": "world_bank_v2"
+    "source": "fallback_baseline"
   }
 }
