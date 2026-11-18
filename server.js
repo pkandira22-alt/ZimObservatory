@@ -8,6 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -458,6 +459,8 @@ const SOCIAL_SOURCE_CACHE_MS = {
 
 function decodeXmlEntities(value) {
   return String(value || '')
+    .replace(/&#(\d+);/g, (_m, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
@@ -896,17 +899,32 @@ const PARLZIM_PORTAL_SOURCES = [
   { category: 'Hansards', url: HANSARD_PORTAL_URL }
 ];
 const PARLZIM_FALLBACK_MIRRORS = {
-  'Bill Digests': { label: 'ZimLII Uncommenced Legislation', url: 'https://zimlii.org/legislation/uncommenced' },
+  'Bill Digests': { label: 'ZimLII Uncommenced & OpenParly Bills', url: 'https://zimlii.org/legislation/uncommenced' },
   'Enacted Acts': { label: 'ZimLII Recent Legislation', url: 'https://zimlii.org/legislation/recent' },
   'Policy Briefs': {
-    label: 'Parliament Oversight RSS (30d)',
-    url: 'https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en'
+    label: 'OpenParly Policy & Committee PDFs',
+    url: 'https://openparly.com/wp-json/wp/v2/posts?categories=13,1719,3777&per_page=8&_fields=id,date,title,link,content,excerpt,author&_embed=author'
   },
   'Fact Sheets': { label: 'ZimLII Subsidiary Legislation', url: 'https://zimlii.org/legislation/subsidiary' },
   'Hansards': {
-    label: 'Parliament Debates RSS (30d)',
-    url: 'https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en'
+    label: 'OpenParly ParlZim Hansard Archive',
+    url: 'https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=hansard&per_page=8&_fields=id,date,title,source_url'
   }
+};
+const OPENPARLY_SUPPLEMENT_QUERIES = {
+  'Bill Digests': [
+    'https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=bill&per_page=8&_fields=id,date,title,source_url'
+  ],
+  'Policy Briefs': [
+    'https://openparly.com/wp-json/wp/v2/posts?categories=13,1719,3777&per_page=8&_fields=id,date,title,link,content,excerpt,author&_embed=author',
+    'https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=policy&per_page=6&_fields=id,date,title,source_url',
+    'https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=analysis&per_page=4&_fields=id,date,title,source_url'
+  ],
+  'Hansards': [
+    'https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=hansard&per_page=8&_fields=id,date,title,source_url',
+    'https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=NATIONAL-ASSEMBLY&per_page=6&_fields=id,date,title,source_url',
+    'https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=Vol.&per_page=8&_fields=id,date,title,source_url'
+  ]
 };
 const HANSARD_RISK_CORPUS = [
   'corruption tender embezzlement illicit financial flows asset recovery graft scandal looting',
@@ -998,7 +1016,10 @@ const PARLZIM_MONTH_NAMES = {
 };
 
 function cleanIssueTitle(rawTitle) {
-  let title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
+  let title = decodeXmlEntities(rawTitle)
+    .replace(/\s+(?:First|Second|Third|Fourth|Fifth)\s+Ses\s*sion\s*:?.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!title) return '';
   const underscoreCount = (title.match(/_/g) || []).length;
   const hyphenCount = (title.match(/-/g) || []).length;
@@ -1051,8 +1072,13 @@ function stripNavigationChrome(rawHtml) {
 }
 
 function parseIsoDateString(rawDate) {
-  const value = String(rawDate || '').trim();
-  if (!value) return null;
+  const raw = String(rawDate || '').trim();
+  if (!raw) return null;
+  const value = raw
+    .replace(/\b(\d{1,2})\s+(st|nd|rd|th)\b/gi, '$1$2')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\bJ\s*U\s*L\s*Y\b/gi, 'July')
+    .replace(/\bJ\s*U\s*N\s*E\b/gi, 'June');
   const isoMatch = value.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
   if (isoMatch) {
     const y = Number(isoMatch[1]);
@@ -1062,7 +1088,7 @@ function parseIsoDateString(rawDate) {
       return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
   }
-  const dmy = value.match(/\b(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(20\d{2})\b/i);
+  const dmy = value.match(/\b(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?),?\s+(20\d{2})\b/i);
   if (dmy) {
     const day = Number(dmy[1]);
     const month = PARLZIM_MONTH_NAMES[dmy[2].toLowerCase()];
@@ -1099,6 +1125,23 @@ function parseIsoDateString(rawDate) {
   return null;
 }
 
+function parsePdfInfoDate(rawPdfDate) {
+  const val = String(rawPdfDate || '').trim();
+  const match = val.match(/^(?:D:)?(\d{4})(\d{2})?(\d{2})?/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  if (year < 1980 || year > 2099) return null;
+  const month = Number(match[2] || 0);
+  const day = Number(match[3] || 0);
+  if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+  if (month >= 1 && month <= 12) {
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
+  }
+  return String(year).padStart(4, '0');
+}
+
 function extractSubmissionDate({ texts = [], pubDate = '', url = '' } = {}) {
   if (pubDate) {
     const p = parseIsoDateString(pubDate);
@@ -1115,32 +1158,82 @@ function extractSubmissionDate({ texts = [], pubDate = '', url = '' } = {}) {
   return null;
 }
 
+const GENERIC_PDF_AUTHORS_RE = /^(?:microsoft|adobe|libreoffice|writer|pypdf|unknown|admin|user|usr|poz|nn|tatenda|mzilikazi|hansard|parliament(?:\s+of\s+zimbabwe)?|windows\s*user|zimuser\d*)$/i;
+
 function extractResponsiblePerson({ texts = [], author = '', sourceName = '', title = '' } = {}) {
   const cleanAuthor = String(author || '').replace(/\s+/g, ' ').trim();
-  if (cleanAuthor && !cleanAuthor.includes('@') && cleanAuthor.length >= 3) {
+  if (
+    cleanAuthor &&
+    !cleanAuthor.includes('@') &&
+    cleanAuthor.length >= 3 &&
+    !GENERIC_PDF_AUTHORS_RE.test(cleanAuthor)
+  ) {
     return cleanAuthor.slice(0, 120);
   }
   const combined = [title, ...texts].filter(Boolean).join(' ');
-  const ministerMatch = combined.match(/\b(Minister of [A-Z][A-Za-z,&/\- ]{3,75}?)(?=\)|\]|;|\s+Notice\b|\s+Regulations\b|\s+Bill\b|\s+Act\b|,?\s+20\d{2}|$)/);
+  const namedAuthorRoleMatch = combined.match(/\b((?:Mr\.?|Mrs\.?|Ms\.?|Dr\.?|Prof\.?)\s+[A-Z]\.?\s*[A-Za-z.'\- ]{2,45},\s+(?:Principal|Senior|Chief|Acting|Deputy)?\s*[A-Za-z ]{3,40}?(?:Officer|Director|Researcher|Clerk|Secretary|Analyst|Counsel))\b/);
+  if (namedAuthorRoleMatch) {
+    return namedAuthorRoleMatch[1].replace(/\s+/g, ' ').trim();
+  }
+  const byOrgMatch = combined.match(/\bBY:\s*([A-Z][A-Za-z0-9 ,.&'\-]{4,65}?)(?=\s+(?:BACKGROUND|INTRODUCTION|EXECUTIVE|SUMMARY|1\.|ABSTRACT)\b|\n|$)/);
+  if (byOrgMatch) {
+    const orgCand = byOrgMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
+    if (orgCand) {
+      return orgCand === orgCand.toUpperCase()
+        ? orgCand.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
+        : orgCand;
+    }
+  }
+  const ministerMatch = combined.match(/\b((?:The\s+)?Ministr?y?\s+of\s+[A-Z][A-Za-z,&/\- ]{3,85}?|Minister of [A-Z][A-Za-z,&/\- ]{3,75}?)(?=\)|\]|;|\(|\s+Notice\b|\s+Regulations\b|\s+Bill\b|\s+Act\b|,?\s+20\d{2}|$)/);
   if (ministerMatch) {
-    return ministerMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
+    return ministerMatch[1].replace(/^The\s+/, '').replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
   }
   const submitMatch = combined.match(/\b(?:tabled by|submitted by|presented by|moved by|sponsored by|prepared by|authored by)\s+([A-Z][A-Za-z.'\- ]{2,65}?)(?=[;,\n]|(?:\.(?!\s*[A-Z]))|$)/i);
   if (submitMatch) {
     return submitMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
   }
-  const honMatch = combined.match(/\b((?:Hon\.?|Honourable|Sen\.?|Senator)\s+[A-Z][A-Za-z.'\-]+(?:\s+[A-Z][A-Za-z.'\-]+){1,3})\b/);
+  const honMatch = combined.match(/\b((?:Hon\.?|Honourable|Sen\.?|Senator)\s+(?:Sen\.?\s+|Prof\.?\s+|Dr\.?\s+)?[A-Z][A-Za-z.'\-]+(?:\s+[A-Z][A-Za-z.'\-]+){0,3})\b/);
   if (honMatch) {
-    return honMatch[1].replace(/\s+/g, ' ').trim();
+    const candHon = honMatch[1].replace(/\s+/g, ' ').trim();
+    if (!/^(?:Hon\.?|Honourable)\s+(?:Members?|Deputy|Minister)\b/i.test(candHon)) {
+      return candHon;
+    }
   }
-  const committeeMatch = combined.match(/\b((?:(?:[Pp]arliamentary|[Jj]oint|[Ss]tanding|[Pp]ortfolio|[Tt]hematic|[Pp]ublic\s+[Aa]ccounts)\s+)*[Cc]ommittee(?:\s+[Oo]n\s+[A-Z][A-Za-z,&/\-]+(?:\s+(?:and|of|for|&|[A-Z][A-Za-z,&/\-]+)){0,5})?)\b/);
+  const committeeMatch = combined.match(
+    /\b((?:Parliamentary\s+Legal\s+Committee|Public\s+Accounts\s+Committee)|(?:(?:Parliamentary|Joint|Standing|Portfolio|Thematic|Public\s+Accounts)\s+)*Committee\s+on\s+(?:the\s+)?[A-Z][A-Za-z,&/\-]+(?:\s+(?:(?:and|of|for|the|&)\s+)?[A-Z][A-Za-z,&/\-]+){0,6}|(?:PARLIAMENTARY|JOINT|STANDING|PORTFOLIO|THEMATIC|PUBLIC\s+ACCOUNTS)\s+COMMITT?EE(?:\s+ON\s+[A-Z,&/\-]+(?:\s+(?:(?:AND|OF|FOR|THE|&)\s+)?[A-Z,&/\-]+){0,6})?)/
+  );
   if (committeeMatch) {
-    const candidate = committeeMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
-    if (candidate.toLowerCase() !== 'committee') return candidate;
+    const rawCand = committeeMatch[1]
+      .replace(/\bCOMMITTTEE\b/gi, 'Committee')
+      .replace(/\s+(?:on\s+the\s+(?:preparedness|state)|Bill|Act|Report|Motion|regarding|shall|may|is|was|are|to|under|conducted)\b.*$/i, '')
+      .replace(/\s+/g, ' ')
+      .replace(/[.,;:\- ]+$/, '');
+    if (rawCand.toLowerCase() !== 'committee' && rawCand.length >= 12 && !/Standing\s+Rules/i.test(rawCand)) {
+      const letters = rawCand.replace(/[^a-zA-Z]/g, '');
+      const upperCount = (rawCand.match(/[A-Z]/g) || []).length;
+      if (letters && upperCount / letters.length > 0.7) {
+        return rawCand.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
+          .replace(/\b(On|Of|And|For|The|In)\b/g, w => w.toLowerCase())
+          .replace(/^./, ch => ch.toUpperCase());
+      }
+      return rawCand;
+    }
   }
-  const institutionMatch = combined.match(/\b(Office of the Auditor[\s\-]General|Auditor[\s\-]General|Reserve Bank of Zimbabwe|Constitutional Court|ZIMRA|Parliament of Zimbabwe)\b/i);
+  const chairMatch = combined.match(/\b((?:The\s+)?(?:Acting\s+President\s+of\s+Senate|Speaker\s+of\s+the\s+National\s+Assembly|Hon\.?\s+Deputy\s+Speaker|The\s+Speaker\s+in\s+the\s+Chair))\b/i);
+  if (chairMatch) {
+    const candChair = chairMatch[1].replace(/\s+/g, ' ').trim();
+    if (candChair.toLowerCase().includes('speaker in the chair')) {
+      return 'Speaker of the National Assembly';
+    }
+    const stripped = candChair.replace(/^The\s+/i, '');
+    return stripped === stripped.toUpperCase()
+      ? stripped.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
+      : stripped;
+  }
+  const institutionMatch = combined.match(/\b(Zimbabwe Lawyers for Human Rights|Office of the Auditor[\s\-]General|Auditor[\s\-]General|Reserve Bank of Zimbabwe|Constitutional Court|ZIMRA|Parliament of Zimbabwe)\b/i);
   if (institutionMatch) {
-    return institutionMatch[1].replace(/\s+/g, ' ').trim();
+    const inst = institutionMatch[1].replace(/\s+/g, ' ').trim();
+    return inst.toUpperCase() === 'PARLIAMENT OF ZIMBABWE' ? 'Parliament of Zimbabwe' : inst;
   }
   let cleanSource = String(sourceName || '').replace(/\s+/g, ' ').trim();
   if (!cleanSource && String(title || '').includes(' - ')) {
@@ -1253,7 +1346,7 @@ function enrichAndRankTrackedTopics(topics) {
 
     const enriched = {
       ...raw,
-      topic: title.slice(0, 160),
+      topic: title.slice(0, 200),
       category,
       status,
       friction,
@@ -1454,6 +1547,684 @@ function extractLegislativeTopics(rawHtml, category, baseUrl, limit = 4) {
   return candidates;
 }
 
+const pdfDocumentCache = new Map();
+const PDF_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+function normalizePdfUrl(rawUrl) {
+  const s = String(rawUrl || '').trim();
+  if (!s) return '';
+  try {
+    return encodeURI(decodeURI(s));
+  } catch {
+    return encodeURI(s);
+  }
+}
+
+function buildPdfSubstantiveSummary(pages, fullText, maxChars = 1100) {
+  const nonTocLines = pages.map(p => p.text).join('\n\n')
+    .replace(/[\uF0B7\u2022]/g, '•')
+    .replace(/[_=\-]{4,}/g, ' ')
+    .split(/\n+/)
+    .map(l => l.replace(/[ \t]+/g, ' ').trim())
+    .filter(l => l && !/(?:\.{4,}|(?:\.\s){4,})/.test(l) && !/^(?:table of contents|contents|arrangement of sections)$/i.test(l));
+  const joined = nonTocLines.join('\n');
+
+  const sectionPatterns = [
+    /\b(?:Explanatory\s+)?M\s*E?\s*M\s*o\s*r\s*a\s*n\s*d\s*u\s*M\b/i,
+    /(?:^|\n)\s*(?:EXECUTIVE SUMMARY|BACKGROUND|\d+(?:\.\d+)?\s+INTRODUCTION|INTRODUCTION)\b/g,
+    /(?:^|\n)\s*(?:KEY FINDINGS|MAJOR FINDINGS|OVERVIEW)\b/g,
+    /\b(?:\d+\.\s+Reports from the Parliamentary Legal Committee|PETITIONS RECEIVED FROM|ANNOUNCEMENT BY THE|MINISTERIAL STATEMENT|THE MINISTER OF [A-Z][A-Z ,]+)\b/,
+    /\bAN\s+ACT\s+to\b/
+  ];
+
+  let bodySlice = '';
+  for (const pat of sectionPatterns) {
+    let m;
+    while ((m = pat.exec(joined)) !== null) {
+      let candidate = joined.slice(m.index).replace(/\s+/g, ' ').trim();
+      candidate = candidate
+        .replace(/^Explanatory\s+M\s*e?\s*M\s*o\s*r\s*a\s*n\s*d\s*u\s*M\b/i, 'Explanatory Memorandum:')
+        .replace(/^M\s*e?\s*M\s*o\s*r\s*a\s*n\s*d\s*u\s*M\b/i, 'Memorandum:')
+        .replace(/\bExplanatory\s+M\s*E?\s*M\s*o\s*r\s*a\s*n\s*d\s*u\s*M\b/gi, 'Explanatory Memorandum:');
+      const headChunk = candidate.slice(0, 200);
+      if (candidate.length >= 120 && !/(?:\.{3,}|(?:\.\s){3,})/.test(headChunk)) {
+        bodySlice = candidate;
+        break;
+      }
+      if (!pat.global) break;
+    }
+    if (bodySlice) break;
+  }
+
+  if (!bodySlice) {
+    const cleanParagraphs = nonTocLines
+      .filter(line => (
+        line.length >= 35 &&
+        !/^(?:page\s*\d+|\d+|arrangement of sections|table of contents|contents|ordered in terms of standing order|terms of reference of portfolio committees|to top page|title \d+|chapter \d+:\d+|distributed by veritas)/i.test(line)
+      ));
+    bodySlice = cleanParagraphs.join(' ').trim() || String(fullText || '').replace(/(?:\.\s*){4,}/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  if (!bodySlice) return '';
+  if (bodySlice.length <= maxChars) return bodySlice;
+  const trimmed = bodySlice.slice(0, maxChars);
+  const lastPeriod = Math.max(trimmed.lastIndexOf('. '), trimmed.lastIndexOf('? '), trimmed.lastIndexOf('! '));
+  if (lastPeriod > maxChars * 0.55) {
+    return `${trimmed.slice(0, lastPeriod + 1).trim()}`;
+  }
+  const lastSpace = trimmed.lastIndexOf(' ');
+  return `${(lastSpace > maxChars * 0.7 ? trimmed.slice(0, lastSpace) : trimmed).trimEnd()}...`;
+}
+
+function extractPdfTrueTitleFromPages(info, pages, fallbackTitle = '') {
+  const rawMetaTitle = String(info?.Title || '').replace(/\s+/g, ' ').trim();
+  if (
+    rawMetaTitle.length >= 12 &&
+    rawMetaTitle.length <= 140 &&
+    !/^(?:file:|untitled|document|microsoft|adobe|libreoffice|slide|vote\s+\d+)|\.(?:pdf|html?|docx?|pptx?|indd)$/i.test(rawMetaTitle) &&
+    !isNonIssueLink(rawMetaTitle) &&
+    /[a-zA-Z]{4,}/.test(rawMetaTitle)
+  ) {
+    return cleanIssueTitle(rawMetaTitle);
+  }
+  const page1Lines = (pages[0]?.lines || [])
+    .map(l => l.replace(/[_=\-]{4,}/g, '').replace(/\s+/g, ' ').trim())
+    .filter(l => l.length >= 4 && !/^(?:\d+|page\s*\d+|1\s*\|\s*p\s*a\s*g\s*e|title\s+\d+|chapter\s+[\d:]+(?:\s+to top page)?|to top page|acts?\s+[\d/,.; ]+|(?:first|second|third)\s+session.*)$/i.test(l));
+
+  const joinedHead = page1Lines.slice(0, 10).join(' ');
+  if (/VOTES AND PROCEEDINGS OF\s+THE NATIONAL ASSEMBLY/i.test(joinedHead)) {
+    const d = parseIsoDateString(joinedHead);
+    const noMatch = joinedHead.match(/\bNo\.?\s*(\d+)\b/i);
+    return `National Assembly Votes and Proceedings${d ? ` — ${d}` : ''}${noMatch ? ` (No. ${noMatch[1]})` : ''}`;
+  }
+
+  if (/PARLIAMENT OF ZIMBABWE/i.test(joinedHead) && /(The National Assembly met|The Senate met)/i.test(joinedHead)) {
+    const chamber = /The Senate met/i.test(joinedHead) ? 'Senate Hansard' : 'National Assembly Hansard';
+    const d = parseIsoDateString(joinedHead);
+    const fbVol = String(fallbackTitle || '').match(/\bVol\.?\s*(\d+)\s*No\.?\s*(\d+)\b/i);
+    const volStr = fbVol ? ` Vol. ${fbVol[1]} No. ${fbVol[2]}` : '';
+    return `${chamber}${volStr}${d ? ` (${d})` : ''}`;
+  }
+
+  for (const line of page1Lines.slice(0, 8)) {
+    if (/\b(?:Blo\s+W\s+ers|a\s+mendment)\b/.test(line) && fallbackTitle) {
+      return fallbackTitle;
+    }
+    if (/\b(?:GBV|Act|Bill|Analysis|National Gender Policy)\b/i.test(line) && line.length >= 14 && line.length <= 140 && !/^AN\s+ACT\b/i.test(line) && !/^DISTRIBUTED\b/i.test(line)) {
+      const normalized = line === line.toUpperCase()
+        ? line.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
+        : line;
+      return cleanIssueTitle(normalized).slice(0, 160);
+    }
+  }
+
+  const reportBlock = page1Lines.slice(0, 7).join(' ');
+  if (/^(?:first|second|third|joint)?\s*report of the/i.test(reportBlock) && reportBlock.length >= 20) {
+    const cleanedReport = reportBlock
+      .replace(/\bCOMMITTTEE\b/gi, 'Committee')
+      .replace(/\bEIGTH\b/gi, 'Eighth')
+      .replace(/\s+\bS\.?\s*C\.?\s*\d+.*$/i, '')
+      .replace(/\b(?:THIRD SESSION|PRESENTED TO PARLIAMENT|JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JU LY|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\b.*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cleanedReport.length >= 20) {
+      const letters = cleanedReport.replace(/[^a-zA-Z]/g, '');
+      const upperCount = (cleanedReport.match(/[A-Z]/g) || []).length;
+      const normalized = letters && upperCount / letters.length > 0.7
+        ? cleanedReport.toLowerCase()
+            .replace(/\b\w/g, ch => ch.toUpperCase())
+            .replace(/\b(On|Of|And|For|The|In)\b/g, w => w.toLowerCase())
+            .replace(/\bGmb\b/g, 'GMB')
+            .replace(/^./, ch => ch.toUpperCase())
+        : cleanedReport;
+      return cleanIssueTitle(normalized).slice(0, 200);
+    }
+  }
+  return fallbackTitle;
+}
+
+async function extractTruePdfTopicAndText(pdfBytes, fallbackTitle = '', pdfUrl = '') {
+  if (!pdfBytes || pdfBytes.length < 16) {
+    return { topic: fallbackTitle, submissionDate: null, responsiblePerson: 'Not stated in PDF', summary: '', contentExcerpt: '', fullContent: '', pageCount: 0, flatText: '' };
+  }
+  try {
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes), verbosity: 0 });
+    const doc = await loadingTask.promise;
+    const meta = await doc.getMetadata().catch(() => ({}));
+    const info = meta?.info || {};
+    const pages = [];
+    const pagesToRead = Math.min(doc.numPages, 48);
+
+    for (let p = 1; p <= pagesToRead; p++) {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      const lines = [];
+      let currentY = null;
+      let currentParts = [];
+      for (const item of tc.items) {
+        if (!item?.str) continue;
+        const y = Array.isArray(item.transform) ? Math.round(item.transform[5]) : null;
+        if (currentY !== null && y !== null && Math.abs(y - currentY) > 3) {
+          const joined = currentParts.join(' ').replace(/\s+/g, ' ').trim();
+          if (joined) lines.push(joined);
+          currentParts = [];
+        }
+        currentY = y;
+        currentParts.push(item.str);
+      }
+      const tail = currentParts.join(' ').replace(/\s+/g, ' ').trim();
+      if (tail) lines.push(tail);
+      const cleanPage = lines.join('\n');
+      if (cleanPage) {
+        pages.push({ pageNumber: p, lines, text: cleanPage });
+      }
+    }
+
+    const fullStructured = pages.map(p => `--- Page ${p.pageNumber} ---\n${p.text}`).join('\n\n');
+    const flatText = pages.map(p => p.text).join(' ').replace(/\s+/g, ' ').trim();
+    const headText = pages.slice(0, 4).map(p => p.text).join(' ').replace(/\s+/g, ' ').trim();
+
+    const trueTopic = extractPdfTrueTitleFromPages(info, pages, fallbackTitle);
+    const submissionDate = extractSubmissionDate({ texts: [headText], pubDate: '' })
+      || parsePdfInfoDate(info.CreationDate || info.ModDate)
+      || extractSubmissionDate({ url: pdfUrl });
+    let responsiblePerson = extractResponsiblePerson({
+      texts: [headText],
+      author: '',
+      title: trueTopic
+    });
+    if (!responsiblePerson || responsiblePerson === 'Not stated in portal index') {
+      const cleanAuthor = String(info.Author || '').replace(/\s+/g, ' ').trim();
+      if (cleanAuthor && !cleanAuthor.includes('@') && cleanAuthor.length >= 3 && !GENERIC_PDF_AUTHORS_RE.test(cleanAuthor)) {
+        responsiblePerson = cleanAuthor.slice(0, 120);
+      }
+    }
+    const summary = buildPdfSubstantiveSummary(pages, flatText, 1200);
+    const contentExcerpt = summary.length > 520 ? `${summary.slice(0, 517).trimEnd()}...` : summary;
+    const fullContent = fullStructured.length > 60000
+      ? `${fullStructured.slice(0, 60000)}\n\n[Truncated after 60,000 characters]`
+      : fullStructured;
+
+    return {
+      topic: trueTopic || fallbackTitle,
+      submissionDate,
+      responsiblePerson: responsiblePerson === 'Not stated in portal index' ? 'Not stated in PDF' : responsiblePerson,
+      summary,
+      contentExcerpt,
+      fullContent,
+      pageCount: doc.numPages,
+      flatText
+    };
+  } catch (error) {
+    console.warn(`PDF extraction error for ${pdfUrl}: ${error.message}`);
+    return { topic: fallbackTitle, submissionDate: null, responsiblePerson: 'Not stated in PDF', summary: '', contentExcerpt: '', fullContent: '', pageCount: 0, flatText: '' };
+  }
+}
+
+async function fetchTruePdfDocument(pdfUrl, fallbackTitle = '') {
+  const safeUrl = normalizePdfUrl(pdfUrl);
+  if (!safeUrl) return null;
+  const now = Date.now();
+  const cached = pdfDocumentCache.get(safeUrl);
+  if (cached && cached.expiresAt > now) {
+    return cached.data;
+  }
+
+  let pdfBytes = null;
+  try {
+    const resp = await fetch(safeUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'application/pdf,*/*;q=0.8'
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (resp.ok) {
+      const buf = Buffer.from(await resp.arrayBuffer());
+      if (buf.length > 16 && buf.subarray(0, 5).toString('latin1') === '%PDF-') {
+        pdfBytes = buf;
+      }
+    }
+  } catch {
+    // Fall back to proxy if direct download fails
+  }
+
+  if (!pdfBytes && (process.env.SCRAPER_API_KEY || '').trim()) {
+    try {
+      const proxyUrl = new URL('https://api.scraperapi.com/');
+      proxyUrl.searchParams.set('api_key', process.env.SCRAPER_API_KEY.trim());
+      proxyUrl.searchParams.set('url', safeUrl);
+      proxyUrl.searchParams.set('render', 'false');
+      const resp = await fetch(proxyUrl.toString(), { signal: AbortSignal.timeout(25000) });
+      if (resp.ok) {
+        const buf = Buffer.from(await resp.arrayBuffer());
+        if (buf.length > 16 && buf.subarray(0, 5).toString('latin1') === '%PDF-') {
+          pdfBytes = buf;
+        }
+      }
+    } catch {
+      // Ignore proxy failure
+    }
+  }
+
+  if (!pdfBytes) return null;
+  const parsed = await extractTruePdfTopicAndText(pdfBytes, fallbackTitle, safeUrl);
+  if (parsed.fullContent) {
+    pdfDocumentCache.set(safeUrl, { expiresAt: now + PDF_CACHE_TTL_MS, data: parsed });
+  }
+  return parsed;
+}
+
+function extractPdfLinksFromHtml(rawHtml, baseUrl, limit = 4) {
+  const contentHtml = stripNavigationChrome(rawHtml);
+  const links = [];
+  const seenUrls = new Set();
+  const genericLabels = new Set(['download', 'view', 'pdf', 'open', 'read more', 'click here', 'full text', 'document']);
+
+  const anchors = [];
+  for (const m of contentHtml.matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    anchors.push([decodeXmlEntities(m[1]).trim(), stripHtmlToText(m[2])]);
+  }
+  for (const em of contentHtml.matchAll(/<(?:iframe|embed|object)[^>]+(?:src|data)=["']([^"']*\.pdf[^"']*)["']/gi)) {
+    anchors.push([decodeXmlEntities(em[1]).trim(), '']);
+  }
+
+  for (const [href, anchorText] of anchors) {
+    if (!href || href.startsWith('#') || href.toLowerCase().startsWith('javascript:')) continue;
+    let resolved;
+    try {
+      resolved = new URL(href, baseUrl).href;
+    } catch {
+      continue;
+    }
+    if (!resolved.toLowerCase().includes('.pdf')) continue;
+    if (seenUrls.has(resolved) || isNonIssueLink('', resolved)) continue;
+    seenUrls.add(resolved);
+    let label = cleanIssueTitle(anchorText);
+    if (!label || genericLabels.has(label.toLowerCase()) || label.length < 6) {
+      const filePart = decodeURIComponent(new URL(resolved).pathname.split('/').pop() || '').replace(/\.pdf$/i, '');
+      label = cleanIssueTitle(filePart) || 'Parliamentary PDF Document';
+    }
+    links.push({ url: resolved, title: label.slice(0, 160) });
+    if (links.length >= limit) break;
+  }
+  return links;
+}
+
+function extractWpJsonTopicsAndPdfs(rawJson, category, baseUrl, limit = 4) {
+  let items;
+  try {
+    items = JSON.parse(rawJson);
+  } catch {
+    return { topics: [], pdfLinks: [], text: '' };
+  }
+  if (!Array.isArray(items)) return { topics: [], pdfLinks: [], text: '' };
+
+  const categoryStatus = {
+    'Bill Digests': 'Legislative Pipeline',
+    'Enacted Acts': 'Enacted / Gazetted',
+    'Policy Briefs': 'Policy Review',
+    'Fact Sheets': 'Briefing Published',
+    'Hansards': 'Parliamentary Debate'
+  }[category] || 'Tracked';
+
+  const skipTitleRe = /^(?:Document\s*\d+|MEDIA RELEASE|33RD POST-CABINET|31ST-POST-CABINET|UK MPs|How to|OpenParlyZW.*AI|Geza Faces)/i;
+  const topics = [];
+  const pdfLinks = [];
+  const seenPdfs = new Set();
+  const textParts = [];
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const rawTitle = typeof item.title === 'object' ? (item.title?.rendered || '') : String(item.title || '');
+    const title = cleanIssueTitle(decodeXmlEntities(stripHtmlToText(rawTitle)));
+    if (!title || title.length < 8 || skipTitleRe.test(title)) continue;
+
+    const sourceUrl = String(item.source_url || '').trim();
+    const link = String(item.link || sourceUrl || baseUrl).trim();
+    const pubDate = String(item.date || '').trim().slice(0, 10);
+    const authorName = String(item._embedded?.author?.[0]?.name || '').trim();
+
+    const rawContent = typeof item.content === 'object' ? (item.content?.rendered || '') : '';
+    const rawExcerpt = typeof item.excerpt === 'object' ? (item.excerpt?.rendered || '') : '';
+    const snippet = decodeXmlEntities(stripHtmlToText(rawContent || rawExcerpt));
+
+    if (category === 'Hansards') {
+      const hay = `${title} ${sourceUrl}`.toLowerCase();
+      if (!/(hansard|votes|vol\.?\s*\d+|senate|national[\s_-]assembly)/i.test(hay)) continue;
+    } else if (category === 'Bill Digests') {
+      const hay = `${title} ${sourceUrl}`.toLowerCase();
+      if (!/(bill|h\.?b\.?|amendment|constitution)/i.test(hay)) continue;
+    } else if (category === 'Policy Briefs') {
+      if (/2026-National-Budget-25-November-2025-final\.pdf/i.test(sourceUrl)) continue;
+    }
+
+    if (title) textParts.push(title);
+    if (snippet) textParts.push(snippet.slice(0, 900));
+
+    const itemPdfs = [];
+    if (sourceUrl.toLowerCase().split('?')[0].endsWith('.pdf')) {
+      itemPdfs.push(sourceUrl);
+    }
+    for (const m of rawContent.matchAll(/https?:\/\/[^"'\s<>]+\.pdf/gi)) {
+      itemPdfs.push(m[0]);
+    }
+
+    for (const pdfU of itemPdfs) {
+      if (seenPdfs.has(pdfU) || isNonIssueLink(title, pdfU)) continue;
+      seenPdfs.add(pdfU);
+      const cleanLabel = title.replace(/\s*\[(?:Download|Explanation)\]\s*/gi, '').trim();
+      pdfLinks.push({ url: pdfU, title: cleanLabel.slice(0, 160), pubDate });
+      if (pdfLinks.length >= limit) break;
+    }
+
+    if (
+      itemPdfs.length === 0 &&
+      topics.length < limit &&
+      (!baseUrl.includes('openparly.com') || /\b(zimbabwe|bill|parliament|budget|constitution|prison|gender|fuel|radio)\b/i.test(`${title} ${snippet}`))
+    ) {
+      const cleanLabel = title.replace(/\s*\[(?:Download|Explanation)\]\s*/gi, '').trim();
+      const friction = scoreHansardText(`${cleanLabel} ${snippet}`);
+      const submissionDate = extractSubmissionDate({ texts: [cleanLabel, snippet], pubDate, url: link });
+      const responsiblePerson = extractResponsiblePerson({ texts: [snippet], author: authorName, title: cleanLabel });
+      const { summary, content_excerpt } = buildIssueSummaryAndExcerpt({
+        title: cleanLabel,
+        category,
+        status: categoryStatus,
+        rawSnippet: snippet.slice(0, 900),
+        url: link,
+        submissionDate
+      });
+      topics.push({
+        topic: cleanLabel.slice(0, 160),
+        category,
+        status: categoryStatus,
+        friction: friction !== null ? friction : 42.0,
+        url: link,
+        submission_date: submissionDate,
+        responsible_person: responsiblePerson,
+        responsible: responsiblePerson,
+        summary,
+        content_excerpt
+      });
+    }
+  }
+
+  return {
+    topics: topics.slice(0, limit),
+    pdfLinks: pdfLinks.slice(0, limit),
+    text: textParts.join(' ')
+  };
+}
+
+function discoverPortalSubroutes(category, portalUrl, rawHtml) {
+  const candidates = [];
+  let origin = portalUrl.replace(/\/+$/, '');
+  try {
+    origin = new URL(portalUrl).origin;
+  } catch {
+    // Keep trimmed url
+  }
+
+  for (const m of String(rawHtml || '').matchAll(/<(?:iframe|frame|a)[^>]+(?:src|href)=["']([^"']+)["']/gi)) {
+    const href = decodeXmlEntities(m[1]).trim();
+    if (/hansard|bill-digest|policy-brief|publication|document|wp-json|\/api\//i.test(href)) {
+      try {
+        const full = new URL(href, portalUrl).href;
+        if (full !== portalUrl && !candidates.includes(full)) candidates.push(full);
+      } catch {
+        // Ignore invalid url
+      }
+    }
+  }
+
+  if (category === 'Hansards') {
+    for (const p of ['/hansards', '/hansard', '/publications', '/documents', '/national-assembly-hansard', '/senate-hansard', '/api/hansards', '/wp-json/wp/v2/media?mime_type=application/pdf&per_page=10']) {
+      const full = `${origin}${p}`;
+      if (full !== portalUrl && !candidates.includes(full)) candidates.push(full);
+    }
+  } else if (category === 'Bill Digests' || category === 'Policy Briefs') {
+    const slug = category === 'Bill Digests' ? 'bill' : 'policy';
+    for (const p of [`/wp-json/wp/v2/media?mime_type=application/pdf&search=${slug}&per_page=10`, `/wp-json/wp/v2/posts?search=${slug}&per_page=8`]) {
+      const full = `${origin}${p}`;
+      if (!candidates.includes(full)) candidates.push(full);
+    }
+  }
+
+  return candidates.slice(0, 6);
+}
+
+async function ingestPdfLinksForCategory(pdfLinks, category, existingTopics, cleanText) {
+  const pdfTopics = [];
+  const pdfTexts = [];
+  let pdfCount = 0;
+
+  const parsedDocs = await Promise.all(
+    pdfLinks.map(async pdfLink => {
+      const pdfDoc = await fetchTruePdfDocument(pdfLink.url, pdfLink.title);
+      return { pdfLink, pdfDoc };
+    })
+  );
+
+  for (const { pdfLink, pdfDoc } of parsedDocs) {
+    if (!pdfDoc || !pdfDoc.flatText || pdfDoc.flatText.length < 80) continue;
+    pdfCount += 1;
+    pdfTexts.push(pdfDoc.flatText);
+    const friction = scoreHansardText(pdfDoc.flatText);
+    const resolvedTopic = pdfDoc.topic || pdfLink.title;
+    const subDate = pdfDoc.submissionDate || pdfLink.pubDate || extractSubmissionDate({ texts: [resolvedTopic], url: pdfLink.url });
+    let respPerson = pdfDoc.responsiblePerson;
+    if (!respPerson || respPerson === 'Not stated in PDF' || respPerson === 'Not stated in portal index') {
+      respPerson = extractResponsiblePerson({ texts: [resolvedTopic], title: resolvedTopic });
+    }
+    pdfTopics.push({
+      topic: resolvedTopic,
+      category,
+      status: 'PDF Downloaded & Ingested',
+      friction: friction !== null ? friction : 46.0,
+      url: pdfLink.url,
+      submission_date: subDate,
+      responsible_person: respPerson,
+      responsible: respPerson,
+      summary: pdfDoc.summary,
+      content_excerpt: pdfDoc.contentExcerpt,
+      full_content: pdfDoc.fullContent,
+      page_count: pdfDoc.pageCount,
+      pdf_ingested: true
+    });
+  }
+
+  if (pdfTexts.length > 0) {
+    const mergedText = `${cleanText} ${pdfTexts.join(' ')}`.trim();
+    const seenUrls = new Set(pdfTopics.map(t => t.url));
+    const mergedTopics = [...pdfTopics, ...existingTopics.filter(t => !seenUrls.has(t.url))];
+    return { topics: mergedTopics, cleanText: mergedText, pdfCount };
+  }
+  return { topics: existingTopics, cleanText, pdfCount };
+}
+
+async function parseCategoryBodyWithPdfs(rawBody, category, sourceUrl) {
+  const trimmed = String(rawBody || '').trimStart();
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    const wp = extractWpJsonTopicsAndPdfs(rawBody, category, sourceUrl, 4);
+    return ingestPdfLinksForCategory(wp.pdfLinks, category, wp.topics, wp.text);
+  }
+  if (trimmed.startsWith('<?xml') || trimmed.slice(0, 300).toLowerCase().includes('<rss')) {
+    const parsedRss = extractRssLegislativeTopics(rawBody, category, sourceUrl);
+    return { topics: parsedRss.candidates, cleanText: parsedRss.text, pdfCount: 0 };
+  }
+  const cleanText = stripHtmlToText(rawBody);
+  const htmlTopics = extractLegislativeTopics(rawBody, category, sourceUrl);
+  const pdfLinks = extractPdfLinksFromHtml(rawBody, sourceUrl, 4);
+  return ingestPdfLinksForCategory(pdfLinks, category, htmlTopics, cleanText);
+}
+
+async function fetchSupplementTopicsForCategory(category) {
+  const browserHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/json,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9'
+  };
+  const candidateUrls = [...(OPENPARLY_SUPPLEMENT_QUERIES[category] || [])];
+  const mirror = PARLZIM_FALLBACK_MIRRORS[category];
+  if (mirror && !candidateUrls.includes(mirror.url)) {
+    if (OPENPARLY_SUPPLEMENT_QUERIES[category]?.length) {
+      candidateUrls.push(mirror.url);
+    } else {
+      candidateUrls.unshift(mirror.url);
+    }
+  }
+  if (!candidateUrls.length) return null;
+
+  let collectedTopics = [];
+  let collectedText = '';
+  let totalPdfs = 0;
+  let primarySelectedUrl = candidateUrls[0];
+
+  for (const supUrl of candidateUrls) {
+    if (collectedTopics.length >= 4 && (totalPdfs > 0 || !OPENPARLY_SUPPLEMENT_QUERIES[category])) break;
+    if (collectedTopics.length >= 6) break;
+    try {
+      const resp = await fetch(supUrl, { headers: browserHeaders, signal: AbortSignal.timeout(9000) });
+      if (!resp.ok) continue;
+      const body = await resp.text();
+      if (!body) continue;
+      const parsed = await parseCategoryBodyWithPdfs(body, category, supUrl);
+      if (parsed.topics.length > 0) {
+        const seen = new Set(collectedTopics.map(t => t.url));
+        const perSourceCap = supUrl.includes('zimlii.org') && OPENPARLY_SUPPLEMENT_QUERIES[category] ? 2 : 4;
+        let addedFromSource = 0;
+        for (const item of parsed.topics) {
+          if (addedFromSource >= perSourceCap) break;
+          if (!seen.has(item.url)) {
+            collectedTopics.push(item);
+            seen.add(item.url);
+            addedFromSource += 1;
+          }
+        }
+        collectedText = `${collectedText} ${parsed.cleanText}`.trim();
+        totalPdfs += parsed.pdfCount;
+        if (collectedTopics.length === addedFromSource) {
+          primarySelectedUrl = supUrl;
+        }
+      }
+    } catch {
+      // Try next supplement source
+    }
+  }
+
+  if (!collectedTopics.length) return null;
+  const catScore = collectedText.length >= 80 ? scoreHansardText(collectedText) : null;
+  return {
+    url: primarySelectedUrl,
+    mirrorLabel: mirror?.label || 'OpenParly Parliamentary Archive',
+    topics: collectedTopics.slice(0, 5),
+    charCount: collectedText.length,
+    pdfCount: totalPdfs,
+    score: catScore !== null ? catScore : 46.5
+  };
+}
+
+async function hydratePdfTopicsInSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' || !Array.isArray(snapshot.tracked_topics)) {
+    return snapshot;
+  }
+  const updatedTopics = await Promise.all(snapshot.tracked_topics.map(async entry => {
+    const url = String(entry?.url || '').trim();
+    if (!url.toLowerCase().includes('.pdf') || (entry.full_content && entry.page_count > 0)) {
+      return entry;
+    }
+    const pdfDoc = await fetchTruePdfDocument(url, entry.topic || '');
+    if (!pdfDoc || !pdfDoc.fullContent) {
+      return entry;
+    }
+    const scored = pdfDoc.flatText.length >= 80 ? scoreHansardText(pdfDoc.flatText) : null;
+    return {
+      ...entry,
+      topic: pdfDoc.topic || entry.topic,
+      submission_date: pdfDoc.submissionDate || entry.submission_date,
+      responsible_person: (pdfDoc.responsiblePerson && pdfDoc.responsiblePerson !== 'Not stated in PDF')
+        ? pdfDoc.responsiblePerson
+        : (entry.responsible_person || 'Not stated in PDF'),
+      responsible: (pdfDoc.responsiblePerson && pdfDoc.responsiblePerson !== 'Not stated in PDF')
+        ? pdfDoc.responsiblePerson
+        : (entry.responsible || 'Not stated in PDF'),
+      summary: pdfDoc.summary || entry.summary,
+      content_excerpt: pdfDoc.contentExcerpt || entry.content_excerpt,
+      full_content: pdfDoc.fullContent,
+      page_count: pdfDoc.pageCount || entry.page_count || 0,
+      friction: scored !== null ? scored : entry.friction,
+      pdf_ingested: true
+    };
+  }));
+
+  let baseTopics = enrichAndRankTrackedTopics(updatedTopics);
+  let hydratedSources = Array.isArray(snapshot.sources) ? snapshot.sources.map(s => ({ ...s })) : [];
+
+  if (process.env.PARLZIM_DISABLE_MIRROR_FALLBACK !== '1' && hydratedSources.length > 0) {
+    const countsByCat = new Map();
+    for (const t of baseTopics) {
+      const k = String(t.category || '').trim().toLowerCase();
+      countsByCat.set(k, (countsByCat.get(k) || 0) + 1);
+    }
+
+    const emptyPortals = hydratedSources.filter(s => (countsByCat.get(String(s.category || '').trim().toLowerCase()) || 0) === 0);
+    if (emptyPortals.length > 0) {
+      const supplements = await Promise.all(
+        emptyPortals.map(async src => ({
+          category: src.category,
+          data: await fetchSupplementTopicsForCategory(src.category)
+        }))
+      );
+      for (const { category, data } of supplements) {
+        if (!data || !data.topics.length) continue;
+        baseTopics.push(...data.topics);
+        const idx = hydratedSources.findIndex(s => s.category === category);
+        if (idx !== -1) {
+          const prev = hydratedSources[idx];
+          hydratedSources[idx] = {
+            ...prev,
+            primaryUrl: prev.url,
+            primaryStatus: prev.httpStatus || 200,
+            primaryBlockedByCloudflare: Boolean(prev.primaryBlockedByCloudflare),
+            url: data.url,
+            score: data.score,
+            charCount: data.charCount,
+            pdfCount: data.pdfCount,
+            viaFallbackMirror: true,
+            mirrorLabel: data.mirrorLabel
+          };
+        }
+      }
+    }
+  }
+
+  const rankedTopics = enrichAndRankTrackedTopics(baseTopics).slice(0, 25);
+  const sourcesWithTopics = attachTopicsToSources(hydratedSources, rankedTopics);
+  const scoredList = sourcesWithTopics.filter(s => s.status === 'available' && Number.isFinite(s.score));
+  const avgScore = scoredList.length > 0
+    ? Number((scoredList.reduce((sum, s) => sum + s.score, 0) / scoredList.length).toFixed(2))
+    : (Number.isFinite(snapshot.score) ? Number(snapshot.score.toFixed(2)) : null);
+  const totalChars = sourcesWithTopics.reduce((sum, s) => sum + (Number.isFinite(s.charCount) ? s.charCount : 0), 0);
+
+  return {
+    ...snapshot,
+    score: avgScore,
+    charCount: totalChars || snapshot.charCount,
+    sources: sourcesWithTopics,
+    tracked_topics: rankedTopics,
+    summary_briefing: buildSummaryBriefing({
+      sources: sourcesWithTopics,
+      rankedTopics,
+      avgScore,
+      accessibleSources: snapshot.accessibleSources,
+      totalSources: snapshot.totalSources,
+      status: snapshot.status || 'available',
+      capturedAt: snapshot.cacheUpdatedAt || null
+    })
+  };
+}
+
 async function fetchParliamentaryPolicyTracker() {
   const now = Date.now();
   if (hansardCache.data && hansardCache.expiresAt > now) {
@@ -1470,11 +2241,12 @@ async function fetchParliamentaryPolicyTracker() {
   if (!hasPortalOverrides) {
     const diskCache = readVerifiedTelemetryCache({ allowFreshBlocked: true });
     if (diskCache) {
+      const hydratedCache = await hydratePdfTopicsInSnapshot(diskCache);
       hansardCache = {
-        expiresAt: now + (diskCache.status === 'available' ? HANSARD_TTL_MS : HANSARD_ERROR_TTL_MS),
-        data: diskCache
+        expiresAt: now + (hydratedCache.status === 'available' ? HANSARD_TTL_MS : HANSARD_ERROR_TTL_MS),
+        data: hydratedCache
       };
-      return diskCache;
+      return hydratedCache;
     }
   }
 
@@ -1602,17 +2374,48 @@ async function fetchParliamentaryPolicyTracker() {
       };
     }
 
-    const trimmedStart = rawBody.trimStart();
-    const isRss = trimmedStart.startsWith('<?xml') || trimmedStart.slice(0, 300).toLowerCase().includes('<rss');
-    let cleanText;
-    let topics;
-    if (isRss) {
-      const parsedRss = extractRssLegislativeTopics(rawBody, category, selectedUrl);
-      cleanText = parsedRss.text;
-      topics = parsedRss.candidates;
-    } else {
-      cleanText = stripHtmlToText(rawBody);
-      topics = extractLegislativeTopics(rawBody, category, selectedUrl);
+    let parsed = await parseCategoryBodyWithPdfs(rawBody, category, selectedUrl);
+    let cleanText = parsed.cleanText;
+    let topics = parsed.topics;
+    let pdfCount = parsed.pdfCount;
+
+    if (topics.length === 0 && !viaFallback && finalStatus === 200) {
+      for (const subUrl of discoverPortalSubroutes(category, url, rawBody)) {
+        try {
+          const sResp = await fetch(subUrl, { headers: browserHeaders, signal: AbortSignal.timeout(5000) });
+          if (sResp.ok) {
+            const subBody = await sResp.text();
+            const subParsed = await parseCategoryBodyWithPdfs(subBody, category, subUrl);
+            if (subParsed.topics.length > 0) {
+              topics = subParsed.topics;
+              cleanText = `${cleanText} ${subParsed.cleanText}`.trim();
+              pdfCount += subParsed.pdfCount;
+              selectedUrl = subUrl;
+              break;
+            }
+          }
+        } catch {
+          // Continue probing next subroute
+        }
+      }
+    }
+
+    if (process.env.PARLZIM_DISABLE_MIRROR_FALLBACK !== '1' && topics.length < 2) {
+      const sup = await fetchSupplementTopicsForCategory(category);
+      if (sup && sup.topics.length > 0) {
+        const seenUrls = new Set(topics.map(t => t.url));
+        for (const item of sup.topics) {
+          if (!seenUrls.has(item.url)) {
+            topics.push(item);
+            seenUrls.add(item.url);
+          }
+        }
+        cleanText = `${cleanText} ${sup.charCount > 0 ? sup.topics.map(t => t.summary || t.topic).join(' ') : ''}`.trim();
+        pdfCount += sup.pdfCount;
+        viaFallback = true;
+        mirrorLabel = mirrorLabel || sup.mirrorLabel;
+        if (selectedUrl === url) selectedUrl = sup.url;
+      }
     }
 
     const catScore = cleanText.length >= 80 ? scoreHansardText(cleanText) : null;
@@ -1635,13 +2438,14 @@ async function fetchParliamentaryPolicyTracker() {
       httpStatus: finalStatus,
       score: catScore,
       charCount: cleanText.length,
-      topicCount: topics.length,
-      topics,
+      topicCount: topics.slice(0, 4).length,
+      pdfCount,
+      topics: topics.slice(0, 4),
       ...(viaFallback ? {
         viaFallbackMirror: true,
         mirrorLabel,
         primaryUrl: url,
-        primaryStatus: primaryHttpStatus,
+        primaryStatus: primaryHttpStatus || finalStatus,
         primaryBlockedByCloudflare: primaryBlockedCf
       } : {})
     };
@@ -1654,8 +2458,9 @@ async function fetchParliamentaryPolicyTracker() {
   if (available.length > 0) {
     const avgScore = Number((available.reduce((sum, item) => sum + item.score, 0) / available.length).toFixed(2));
     const hansardOk = available.some(item => item.category === 'Hansards');
-    const trackedTopics = enrichAndRankTrackedTopics(available.flatMap(item => item.topics)).slice(0, 20);
+    const trackedTopics = enrichAndRankTrackedTopics(available.flatMap(item => item.topics)).slice(0, 25);
     const totalChars = available.reduce((sum, item) => sum + (item.charCount || 0), 0);
+    const sourcesWithTopics = attachTopicsToSources(sourcesStatus, trackedTopics);
     const okResult = {
       score: avgScore,
       status: 'available',
@@ -1664,8 +2469,16 @@ async function fetchParliamentaryPolicyTracker() {
       charCount: totalChars,
       accessibleSources: available.length,
       totalSources: results.length,
-      sources: sourcesStatus,
-      tracked_topics: trackedTopics
+      sources: sourcesWithTopics,
+      tracked_topics: trackedTopics,
+      summary_briefing: buildSummaryBriefing({
+        sources: sourcesWithTopics,
+        rankedTopics: trackedTopics,
+        avgScore,
+        accessibleSources: available.length,
+        totalSources: results.length,
+        status: 'available'
+      })
     };
     hansardCache = { expiresAt: now + HANSARD_TTL_MS, data: okResult };
     return okResult;
@@ -1673,20 +2486,30 @@ async function fetchParliamentaryPolicyTracker() {
 
   const cachedSnapshot = readVerifiedTelemetryCache();
   if (cachedSnapshot) {
-    hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: cachedSnapshot };
-    return cachedSnapshot;
+    const hydratedCache = await hydratePdfTopicsInSnapshot(cachedSnapshot);
+    hansardCache = { expiresAt: now + HANSARD_ERROR_TTL_MS, data: hydratedCache };
+    return hydratedCache;
   }
 
   const allCf = blockedCount > 0;
+  const unavailableStatus = allCf ? 'blocked_by_cloudflare' : 'unavailable';
   const unavailableResult = {
     score: null,
-    status: allCf ? 'blocked_by_cloudflare' : 'unavailable',
+    status: unavailableStatus,
     source: 'unavailable',
     httpStatus: allCf ? 403 : null,
     accessibleSources: 0,
     totalSources: results.length,
     sources: sourcesStatus,
     tracked_topics: [],
+    summary_briefing: buildSummaryBriefing({
+      sources: sourcesStatus,
+      rankedTopics: [],
+      avgScore: null,
+      accessibleSources: 0,
+      totalSources: results.length,
+      status: unavailableStatus
+    }),
     message: allCf
       ? `All ${blockedCount}/${results.length} Parliament portals are currently protected by a Cloudflare challenge (HTTP 403).`
       : 'Parliamentary & Policy portals are currently unreachable.'
@@ -1701,6 +2524,151 @@ function isFreshIsoTimestamp(tsValue, maxAgeMs = HANSARD_TTL_MS) {
   if (!Number.isFinite(parsed)) return false;
   const age = Date.now() - parsed;
   return age >= -300000 && age <= maxAgeMs;
+}
+
+function attachTopicsToSources(sources, rankedTopics) {
+  if (!Array.isArray(sources)) return [];
+  const grouped = new Map();
+  for (const item of rankedTopics || []) {
+    const cat = String(item?.category || '').trim().toLowerCase();
+    if (!grouped.has(cat)) grouped.set(cat, []);
+    if (item?.topic) grouped.get(cat).push(item.topic);
+  }
+  return sources
+    .filter(src => src && typeof src === 'object')
+    .map(src => {
+      const cat = String(src.category || '').trim().toLowerCase();
+      const names = grouped.get(cat) || [];
+      return {
+        ...src,
+        topics: names.slice(0, 4),
+        topicCount: names.length
+      };
+    });
+}
+
+function buildSummaryBriefing({
+  sources = [],
+  rankedTopics = [],
+  avgScore = null,
+  accessibleSources = null,
+  totalSources = null,
+  status = 'available',
+  capturedAt = null
+} = {}) {
+  const sourcesList = Array.isArray(sources) ? sources.filter(s => s && typeof s === 'object') : [];
+  const topicsList = Array.isArray(rankedTopics) ? rankedTopics.filter(t => t && typeof t === 'object') : [];
+  const total = Number.isInteger(totalSources) && totalSources > 0 ? totalSources : (sourcesList.length || 5);
+  const accessible = Number.isInteger(accessibleSources)
+    ? accessibleSources
+    : sourcesList.filter(s => s.status === 'available').length;
+
+  const scoredPortals = sourcesList.filter(s => s.status === 'available' && Number.isFinite(s.score));
+  const highestPortal = scoredPortals.reduce((best, item) => (!best || item.score > best.score ? item : best), null);
+  const topIssue = topicsList[0] || null;
+  const topFriction = topIssue ? (topIssue.friction ?? topIssue.friction_score) : null;
+
+  let riskPosture = 'Unavailable';
+  if (Number.isFinite(avgScore)) {
+    riskPosture = (avgScore >= 50 || (Number.isFinite(topFriction) && topFriction >= 50)) ? 'Elevated' : 'Moderate';
+  } else if (topicsList.length > 0) {
+    riskPosture = (Number.isFinite(topFriction) && topFriction >= 50) ? 'Elevated' : 'Moderate';
+  }
+
+  const dates = [...new Set(topicsList.map(t => String(t.submission_date || '').trim()).filter(Boolean))].sort();
+  const dateWindow = dates.length === 1 ? dates[0] : (dates.length > 1 ? `${dates[0]} to ${dates[dates.length - 1]}` : null);
+
+  const activeCategories = [];
+  for (const t of topicsList) {
+    const cat = String(t.category || '').trim();
+    if (cat && !activeCategories.includes(cat)) activeCategories.push(cat);
+  }
+
+  const coverageGaps = sourcesList
+    .filter(s => s.status === 'available' && !s.topicCount && s.category)
+    .map(s => String(s.category));
+
+  const sponsors = [];
+  for (const t of topicsList) {
+    const person = String(t.responsible_person || t.responsible || '').trim();
+    if (person && person !== 'Not stated in portal index' && person !== 'Not stated in PDF' && !sponsors.includes(person)) {
+      sponsors.push(person);
+    }
+  }
+
+  let headline;
+  let executiveSummary;
+  if (accessible > 0) {
+    const avgText = Number.isFinite(avgScore) ? `${avgScore.toFixed(1)} / 100` : '--';
+    headline = topIssue
+      ? `${accessible}/${total} portals live (Avg Fparl ${avgText}) · Lead issue: ${topIssue.topic} (${Number(topFriction || 0).toFixed(1)} / 100)`
+      : `${accessible}/${total} portals scanned live (Avg Fparl ${avgText}) · No bill or PDF links exposed in current index`;
+
+    const parts = [
+      `Semantic TF-IDF telemetry across ${accessible} of ${total} Parliament of Zimbabwe portals records a composite friction score of ${avgText} (${riskPosture} posture)${
+        highestPortal ? `, highest on ${highestPortal.category} (${highestPortal.score.toFixed(1)} / 100).` : '.'
+      }`
+    ];
+    if (topicsList.length > 0) {
+      const catSummary = activeCategories.length ? activeCategories.join(', ') : 'active portals';
+      const countWord = topicsList.length === 1 ? 'submission' : 'submissions';
+      const datePhrase = dateWindow ? ` spanning ${dateWindow}` : '';
+      parts.push(
+        `${topicsList.length} ranked ${countWord} extracted from ${catSummary}${datePhrase}, led by #${topIssue.rank || 1} ${topIssue.topic} (${Number(topFriction || 0).toFixed(1)} / 100).`
+      );
+      parts.push(
+        sponsors.length
+          ? `Identified sponsoring authorities: ${sponsors.slice(0, 4).join(', ')}.`
+          : 'Portal index records omit individual MP or committee sponsor attribution.'
+      );
+    } else {
+      parts.push('Portal HTML indexes responded HTTP 200 without exposing downloadable bill digests or PDF attachments on this crawl.');
+    }
+    if (coverageGaps.length > 0) {
+      parts.push(`Index-only portals with no bill or PDF links in this snapshot: ${coverageGaps.join(', ')}.`);
+    }
+    executiveSummary = parts.join(' ');
+  } else if (status === 'blocked_by_cloudflare') {
+    headline = `0/${total} portals accessible — Cloudflare HTTP 403 challenge active`;
+    executiveSummary = `All ${total} Parliament of Zimbabwe portals returned Cloudflare HTTP 403 challenges on this poll; no synthetic briefing items are generated.`;
+  } else {
+    headline = `0/${total} portals reachable — awaiting repository poll`;
+    executiveSummary = 'Parliament of Zimbabwe portals are currently unreachable; the summary briefing will populate once HTTP 200 HTML or PDF feeds are ingested.';
+  }
+
+  const fullPdfCount = topicsList.filter(t => Boolean(t.full_content)).length;
+  const totalPages = topicsList.reduce((sum, t) => sum + (Number.isFinite(t.page_count) ? t.page_count : 0), 0);
+
+  const keyFindings = topicsList.slice(0, 4).map((entry, idx) => {
+    const rawSummary = String(entry.summary || entry.content_excerpt || '').replace(/\s+/g, ' ').trim();
+    const takeaway = rawSummary.length > 360 ? `${rawSummary.slice(0, 357).trimEnd()}...` : rawSummary;
+    return {
+      rank: entry.rank || (idx + 1),
+      category: entry.category || 'Parliament',
+      topic: entry.topic || 'Parliamentary record',
+      friction: entry.friction ?? entry.friction_score ?? null,
+      submission_date: entry.submission_date || null,
+      responsible_person: entry.responsible_person || entry.responsible || 'Not stated in portal index',
+      page_count: Number.isFinite(entry.page_count) ? entry.page_count : null,
+      pdf_ingested: Boolean(entry.full_content),
+      takeaway
+    };
+  });
+
+  return {
+    headline,
+    executive_summary: executiveSummary,
+    risk_posture: riskPosture,
+    date_window: dateWindow,
+    issue_count: topicsList.length,
+    full_pdf_count: fullPdfCount,
+    total_pages: totalPages,
+    accessible_portals: accessible,
+    total_portals: total,
+    coverage_gaps: coverageGaps,
+    key_findings: keyFindings,
+    captured_at: capturedAt
+  };
 }
 
 function readVerifiedTelemetryCache(options = {}) {
@@ -1718,11 +2686,24 @@ function readVerifiedTelemetryCache(options = {}) {
         snapshot.status === 'available' &&
         Number.isFinite(snapshot.score)
       ) {
+        const rankedTopics = enrichAndRankTrackedTopics(snapshot.tracked_topics || []).slice(0, 20);
+        const sourcesWithTopics = attachTopicsToSources(snapshot.sources || [], rankedTopics);
+        const capturedAt = raw.updated_at || raw.timestamp || snapshot.captured_at || null;
         return {
           ...snapshot,
-          tracked_topics: enrichAndRankTrackedTopics(snapshot.tracked_topics || []).slice(0, 20),
+          sources: sourcesWithTopics,
+          tracked_topics: rankedTopics,
           fromCache: true,
-          cacheUpdatedAt: raw.updated_at || raw.timestamp || snapshot.captured_at || null
+          cacheUpdatedAt: capturedAt,
+          summary_briefing: buildSummaryBriefing({
+            sources: sourcesWithTopics,
+            rankedTopics,
+            avgScore: Number(snapshot.score.toFixed(2)),
+            accessibleSources: snapshot.accessibleSources,
+            totalSources: snapshot.totalSources,
+            status: 'available',
+            capturedAt
+          })
         };
       }
     }
@@ -1731,17 +2712,30 @@ function readVerifiedTelemetryCache(options = {}) {
       raw.accessible_sources > 0 &&
       Number.isFinite(raw.hansard_friction)
     ) {
+      const rankedTopics = enrichAndRankTrackedTopics(Array.isArray(raw.tracked_topics) ? raw.tracked_topics : []).slice(0, 20);
+      const capturedAt = raw.timestamp || raw.updated_at || null;
+      const totalSrc = raw.total_sources || 5;
+      const avgScore = Number(raw.hansard_friction.toFixed(2));
       return {
-        score: Number(raw.hansard_friction.toFixed(2)),
+        score: avgScore,
         status: 'available',
         source: 'parlzim_portals',
         httpStatus: 200,
         accessibleSources: raw.accessible_sources,
-        totalSources: raw.total_sources || 5,
+        totalSources: totalSrc,
         sources: [],
-        tracked_topics: enrichAndRankTrackedTopics(Array.isArray(raw.tracked_topics) ? raw.tracked_topics : []).slice(0, 20),
+        tracked_topics: rankedTopics,
         fromCache: true,
-        cacheUpdatedAt: raw.timestamp || raw.updated_at || null
+        cacheUpdatedAt: capturedAt,
+        summary_briefing: buildSummaryBriefing({
+          sources: [],
+          rankedTopics,
+          avgScore,
+          accessibleSources: raw.accessible_sources,
+          totalSources: totalSrc,
+          status: 'available',
+          capturedAt
+        })
       };
     }
     if (allowFreshBlocked && isFreshIsoTimestamp(raw.timestamp || raw.updated_at)) {
@@ -2461,5 +3455,8 @@ server.on('upgrade', async (req, socket) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
+  refreshDualEngineTimelineData().catch(err => {
+    console.warn(`Initial timeline warmup warning: ${err.message}`);
+  });
 });
 

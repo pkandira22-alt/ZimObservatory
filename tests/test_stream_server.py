@@ -2,7 +2,70 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from aiohttp.test_utils import TestClient, TestServer
+try:
+    from aiohttp.test_utils import TestClient, TestServer
+except ImportError:
+    import asyncio as _asyncio
+    import http.client as _http_client
+
+    class TestServer:
+        def __init__(self, app):
+            self.app = app
+            self._runner = None
+            self._site = None
+
+        async def start_server(self):
+            self._runner = stream_server.web.AppRunner(self.app)
+            await self._runner.setup()
+            self._site = stream_server.web.TCPSite(self._runner, "127.0.0.1", 0)
+            await self._site.start()
+
+        async def close(self):
+            if self._runner is not None:
+                await self._runner.cleanup()
+                self._runner = None
+            self._site = None
+
+        @property
+        def port(self):
+            return self._site.port if self._site is not None else 0
+
+    class _StdlibTestResponse:
+        def __init__(self, status, headers, raw_body):
+            self.status = status
+            self.headers = headers
+            self._raw_body = raw_body
+
+        async def json(self):
+            return json.loads(self._raw_body.decode("utf-8"))
+
+        async def text(self):
+            return self._raw_body.decode("utf-8", errors="ignore")
+
+    class TestClient:
+        def __init__(self, server):
+            self.server = server
+
+        async def start_server(self):
+            await self.server.start_server()
+
+        async def close(self):
+            await self.server.close()
+
+        async def get(self, path):
+            def _do_request():
+                conn = _http_client.HTTPConnection("127.0.0.1", self.server.port, timeout=5)
+                try:
+                    conn.request("GET", path)
+                    resp = conn.getresponse()
+                    raw = resp.read()
+                    hdrs = {k: v for k, v in resp.getheaders()}
+                    return resp.status, hdrs, raw
+                finally:
+                    conn.close()
+
+            status, hdrs, raw = await _asyncio.to_thread(_do_request)
+            return _StdlibTestResponse(status, hdrs, raw)
 
 import stream_server
 
@@ -119,6 +182,8 @@ class StreamServerTests(unittest.TestCase):
         topics = [t["topic"] for t in tracker["tracked_topics"]]
         self.assertIn("Public Procurement Corruption Amendment Bill", topics)
         self.assertNotIn("National Energy & Power Amendment Bill", topics)
+        bill_src = next(s for s in tracker["sources"] if s["category"] == "Bill Digests")
+        self.assertTrue(any("Public Procurement" in name or "Exchange Rate" in name for name in bill_src.get("topics", [])))
 
     def test_parliamentary_policy_tracker_uses_curl_cffi_chrome_impersonation(self):
         fake_cureq = MagicMock()
@@ -169,19 +234,45 @@ class StreamServerTests(unittest.TestCase):
         </channel></rss>
         """.encode("utf-8")
 
+        wp_posts_json = json.dumps([
+            {
+                "id": 501,
+                "date": "2026-10-18T08:00:00",
+                "title": {"rendered": "Parliament portfolio committee debates 2027 National Budget and audit discrepancies"},
+                "link": "https://openparly.com/2026/10/budget-audit-debates/",
+                "excerpt": {"rendered": "<p>Parliamentary committee oversight on expenditure, debt, and exchange rate friction.</p>"},
+                "_embedded": {"author": [{"name": "Committee on Budget & Finance"}]},
+            }
+        ]).encode("utf-8")
+        wp_hansard_media_json = json.dumps([]).encode("utf-8")
+
         def fake_urlopen(request, timeout=8):
             url = request.full_url if hasattr(request, "full_url") else str(request)
             if "zimlii.org" in url:
                 cm = MagicMock()
                 cm.__enter__.return_value.status = 200
-                cm.__enter__.return_value.headers = {}
+                cm.__enter__.return_value.headers = {"Content-Type": "text/html"}
                 cm.__enter__.return_value.read.return_value = zimlii_html
+                cm.__exit__.return_value = False
+                return cm
+            if "openparly.com/wp-json/wp/v2/posts" in url:
+                cm = MagicMock()
+                cm.__enter__.return_value.status = 200
+                cm.__enter__.return_value.headers = {"Content-Type": "application/json"}
+                cm.__enter__.return_value.read.return_value = wp_posts_json
+                cm.__exit__.return_value = False
+                return cm
+            if "openparly.com/wp-json/wp/v2/media" in url:
+                cm = MagicMock()
+                cm.__enter__.return_value.status = 200
+                cm.__enter__.return_value.headers = {"Content-Type": "text/html"}
+                cm.__enter__.return_value.read.return_value = rss_xml
                 cm.__exit__.return_value = False
                 return cm
             if "news.google.com" in url:
                 cm = MagicMock()
                 cm.__enter__.return_value.status = 200
-                cm.__enter__.return_value.headers = {}
+                cm.__enter__.return_value.headers = {"Content-Type": "application/xml"}
                 cm.__enter__.return_value.read.return_value = rss_xml
                 cm.__exit__.return_value = False
                 return cm
@@ -821,6 +912,130 @@ class StreamServerTests(unittest.TestCase):
         self.assertEqual(result["Inflation"], 5.2)
         self.assertEqual(result["Debt_GNI"], 37.9)
         self.assertEqual(result["source"], "fallback_baseline")
+
+    def test_summary_briefing_synthesizes_portal_posture_findings_and_gaps(self):
+        sources = [
+            {"category": "Bill Digests", "status": "available", "score": 51.2, "topicCount": 0},
+            {"category": "Enacted Acts", "status": "available", "score": 54.3, "topicCount": 1},
+            {"category": "Fact Sheets", "status": "available", "score": 48.0, "topicCount": 1},
+        ]
+        ranked_topics = [
+            {
+                "rank": 1,
+                "category": "Enacted Acts",
+                "topic": "Public Bodies Private Bill Procedure Act 2 09",
+                "friction": 52.7,
+                "submission_date": "2025-06",
+                "responsible_person": "Committee on Legal Affairs",
+                "summary": "Establishes parliamentary procedure for private bills affecting public bodies.",
+            },
+            {
+                "rank": 2,
+                "category": "Fact Sheets",
+                "topic": "Zimbabwes GBV Crisis 2020–2024",
+                "friction": 48.0,
+                "submission_date": "2026-02",
+                "responsible_person": "Not stated in portal index",
+                "summary": "Review of statutory prevalence and response gaps.",
+            },
+        ]
+        briefing = stream_server._build_summary_briefing(
+            sources,
+            ranked_topics,
+            avg_score=51.17,
+            accessible_sources=3,
+            total_sources=5,
+            status="available",
+            captured_at="2026-11-18T07:10:49Z",
+        )
+        self.assertEqual(briefing["risk_posture"], "Elevated")
+        self.assertEqual(briefing["date_window"], "2025-06 to 2026-02")
+        self.assertEqual(briefing["coverage_gaps"], ["Bill Digests"])
+        self.assertEqual(len(briefing["key_findings"]), 2)
+        self.assertIn("Public Bodies Private Bill Procedure Act 2 09", briefing["executive_summary"])
+        self.assertIn("Committee on Legal Affairs", briefing["executive_summary"])
+        self.assertIn("Bill Digests", briefing["executive_summary"])
+
+    def test_eportal_empty_shell_failover_and_hansard_pdf_parsing(self):
+        self.assertEqual(stream_server._parse_iso_date_str("TUESDAY, 6 TH MAY, 2025"), "2025-05-06")
+        self.assertEqual(stream_server._parse_iso_date_str("Tuesday , 15 th October , 2024"), "2024-10-15")
+
+        subroutes = stream_server._discover_portal_subroutes(
+            "Hansards",
+            "https://e-portal.parlzim.gov.zw/",
+            "<html><body><div id='app'></div><a href='/hansards'>Hansards</a></body></html>",
+        )
+        self.assertIn("https://e-portal.parlzim.gov.zw/hansards", subroutes)
+
+        wp_hansard_json = json.dumps([
+            {
+                "id": 101,
+                "date": "2025-05-07T10:00:00",
+                "title": {"rendered": "NATIONAL-ASSEMBLY-VOTES-06-MAY-2025-NO-43"},
+                "source_url": "https://openparly.com/wp-content/uploads/2025/05/NATIONAL-ASSEMBLY-VOTES-06-MAY-2025-NO-43.pdf",
+            },
+            {
+                "id": 102,
+                "date": "2025-04-11T10:00:00",
+                "title": {"rendered": "Private Voluntary Org. Amendment Act"},
+                "source_url": "https://openparly.com/wp-content/uploads/2025/04/PVO.pdf",
+            },
+        ])
+        wp_topics, wp_pdfs, _ = stream_server._extract_wp_json_topics_and_pdfs(
+            wp_hansard_json,
+            "Hansards",
+            "https://openparly.com/wp-json/wp/v2/media",
+        )
+        self.assertEqual(wp_topics, [])
+        self.assertEqual(len(wp_pdfs), 1)
+        self.assertTrue(wp_pdfs[0]["url"].endswith("NATIONAL-ASSEMBLY-VOTES-06-MAY-2025-NO-43.pdf"))
+
+        fake_hansard_page = MagicMock()
+        fake_hansard_page.extract_text.return_value = (
+            "1225 6th May, 2025 No. 43\n"
+            "PARLIAMENT OF ZIMBABWE\n"
+            "VOTES AND PROCEEDINGS OF THE NATIONAL ASSEMBLY\n"
+            "TUESDAY, 6 TH MAY, 2025\n"
+            "The Speaker in the Chair.\n"
+            "2. Reports from the Parliamentary Legal Committee on Persons with Disabilities Bill "
+            "regarding audit discrepancies, public debt ceilings, and parliamentary oversight."
+        )
+        fake_reader = MagicMock()
+        fake_reader.return_value.pages = [fake_hansard_page]
+        fake_reader.return_value.metadata = {"/Title": "vote 43 08-04-2025 NA TS.indd", "/Author": "Windows User"}
+
+        def fake_fetch_portal(url, timeout=10):
+            if url.startswith("https://e-portal.parlzim.gov.zw"):
+                return 200, "<html><body><div id='app'>Parliament e-Portal loading parliamentary debates</div></body></html>", {"content-type": "text/html"}, "urllib"
+            if "openparly.com" in url:
+                return 200, wp_hansard_json, {"content-type": "application/json"}, "urllib"
+            return 404, "", {}, "urllib"
+
+        with (
+            patch.object(stream_server, "HANSARD_CACHE", {"expires_at": 0.0, "data": None}),
+            patch.object(stream_server, "_get_parlzim_portals", return_value=(("Hansards", "https://e-portal.parlzim.gov.zw/"),)),
+            patch.object(stream_server, "_fetch_portal_response", side_effect=fake_fetch_portal),
+            patch.object(stream_server, "PdfReader", fake_reader),
+            patch.object(
+                stream_server,
+                "fetch_true_pdf_document",
+                return_value=stream_server.extract_true_pdf_topic_and_text(
+                    b"%PDF-1.7 hansard",
+                    fallback_title="National Assembly Votes",
+                    pdf_url="https://openparly.com/wp-content/uploads/2025/05/NATIONAL-ASSEMBLY-VOTES-06-MAY-2025-NO-43.pdf",
+                ),
+            ),
+        ):
+            tracker = stream_server.fetch_parliamentary_policy_tracker(use_cache=False, allow_mirror_fallback=True)
+
+        self.assertEqual(tracker["status"], "available")
+        self.assertTrue(tracker["sources"][0]["viaFallbackMirror"])
+        self.assertEqual(tracker["sources"][0]["topicCount"], 1)
+        item = tracker["tracked_topics"][0]
+        self.assertEqual(item["topic"], "National Assembly Votes and Proceedings — 2025-05-06 (No. 43)")
+        self.assertEqual(item["submission_date"], "2025-05-06")
+        self.assertIn("Parliamentary Legal Committee", item["responsible_person"])
+        self.assertIn("Persons with Disabilities Bill", item["summary"])
 
 
 class TimelineApiTests(unittest.IsolatedAsyncioTestCase):

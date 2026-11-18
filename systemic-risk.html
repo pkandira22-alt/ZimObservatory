@@ -224,6 +224,8 @@
 
             <div id="portal-status-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"></div>
 
+            <div id="policy-briefing-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 space-y-3"></div>
+
             <div id="tracked-topics-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4"></div>
         </section>
 
@@ -419,9 +421,59 @@
             renderChart(timeline);
         }
 
+        function buildClientSummaryBriefing(hansard, sources, rawTopics) {
+            if (hansard && hansard.summary_briefing && typeof hansard.summary_briefing === 'object') {
+                return hansard.summary_briefing;
+            }
+            const accessible = Number.isFinite(hansard?.accessibleSources)
+                ? hansard.accessibleSources
+                : sources.filter(s => s.status === 'available').length;
+            const total = Number.isFinite(hansard?.totalSources) ? hansard.totalSources : (sources.length || 5);
+            const avgScore = Number.isFinite(hansard?.score) ? hansard.score : null;
+            const topIssue = rawTopics[0] || null;
+            const topFriction = topIssue ? (topIssue.friction ?? topIssue.friction_score) : null;
+            const posture = Number.isFinite(avgScore)
+                ? (avgScore >= 50 || (Number.isFinite(topFriction) && topFriction >= 50) ? 'Elevated' : 'Moderate')
+                : (rawTopics.length ? (Number.isFinite(topFriction) && topFriction >= 50 ? 'Elevated' : 'Moderate') : 'Unavailable');
+            const dates = [...new Set(rawTopics.map(t => String(t.submission_date || '').trim()).filter(Boolean))].sort();
+            const dateWindow = dates.length === 1 ? dates[0] : (dates.length > 1 ? `${dates[0]} to ${dates[dates.length - 1]}` : null);
+            const coverageGaps = sources.filter(s => s.status === 'available' && !(s.topicCount > 0) && s.category).map(s => s.category);
+            let executiveSummary = '';
+            if (accessible > 0) {
+                const avgTxt = avgScore !== null ? `${avgScore.toFixed(1)} / 100` : '--';
+                executiveSummary = `Semantic TF-IDF telemetry across ${accessible} of ${total} Parliament of Zimbabwe portals records a composite friction score of ${avgTxt} (${posture} posture).` +
+                    (topIssue
+                        ? ` ${rawTopics.length} ranked submission${rawTopics.length === 1 ? '' : 's'} extracted${dateWindow ? ` spanning ${dateWindow}` : ''}, led by #${topIssue.rank || 1} ${topIssue.topic} (${Number(topFriction || 0).toFixed(1)} / 100).`
+                        : ' Portal HTML indexes responded HTTP 200 without exposing downloadable bill digests or PDF attachments.');
+            } else {
+                executiveSummary = hansard?.message || 'Parliament of Zimbabwe portals are currently unreachable; summary briefing will populate once HTTP 200 feeds are ingested.';
+            }
+            return {
+                headline: topIssue ? `${accessible}/${total} portals live · Lead issue: ${topIssue.topic}` : `${accessible}/${total} portals checked`,
+                executive_summary: executiveSummary,
+                risk_posture: posture,
+                date_window: dateWindow,
+                issue_count: rawTopics.length,
+                accessible_portals: accessible,
+                total_portals: total,
+                coverage_gaps: coverageGaps,
+                key_findings: rawTopics.slice(0, 4).map((entry, idx) => ({
+                    rank: entry.rank || (idx + 1),
+                    category: entry.category || 'Parliament',
+                    topic: entry.topic || 'Legislative record',
+                    friction: entry.friction ?? entry.friction_score ?? null,
+                    submission_date: entry.submission_date || null,
+                    responsible_person: entry.responsible_person || entry.responsible || 'Not stated in portal index',
+                    takeaway: String(entry.summary || '').trim()
+                })),
+                captured_at: hansard?.cacheUpdatedAt || null
+            };
+        }
+
         function renderLegislativePolicyTracker(hansard) {
             const badge = document.getElementById('policy-tracker-badge');
             const grid = document.getElementById('portal-status-grid');
+            const briefingPanel = document.getElementById('policy-briefing-panel');
             const topicsPanel = document.getElementById('tracked-topics-panel');
             if (!badge || !grid || !topicsPanel) return;
 
@@ -452,15 +504,40 @@
                 badge.className = 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 self-start sm:self-auto';
             }
 
+            const rawTopics = Array.isArray(hansard?.tracked_topics) ? hansard.tracked_topics : [];
+            if (!window.__sysRiskTrackerState) {
+                window.__sysRiskTrackerState = { sortBy: 'rank', category: 'All' };
+            }
+            window.__latestSysRiskHansard = hansard;
+            const state = window.__sysRiskTrackerState;
+
             grid.replaceChildren();
             sources.forEach(item => {
                 const isOk = item.status === 'available' && Number.isFinite(item.score);
                 const isCf = item.status === 'blocked_by_cloudflare';
+                const portalEntries = rawTopics.filter(t => (t.category || '').toLowerCase() === (item.category || '').toLowerCase());
+                const topicTitles = portalEntries.length
+                    ? portalEntries.map(t => ({ topic: t.topic, rank: t.rank }))
+                    : (Array.isArray(item.topics) ? item.topics.map(t => ({ topic: t, rank: null })) : []);
+                const isSelected = state.category === item.category;
 
                 const card = document.createElement('div');
                 card.className = `p-3 rounded-lg border bg-slate-900/70 ${
-                    isOk ? 'border-emerald-500/40' : isCf ? 'border-amber-500/35' : 'border-slate-800'
-                }`;
+                    isSelected
+                        ? 'border-sky-400/80'
+                        : isOk
+                            ? 'border-emerald-500/40'
+                            : isCf
+                                ? 'border-amber-500/35'
+                                : 'border-slate-800'
+                }${topicTitles.length ? ' cursor-pointer hover:border-sky-500/60 transition-colors' : ''}`;
+                if (topicTitles.length) {
+                    card.title = `Click to ${isSelected ? 'show all portals' : `filter issues to ${item.category}`}`;
+                    card.addEventListener('click', () => {
+                        state.category = isSelected ? 'All' : item.category;
+                        renderLegislativePolicyTracker(window.__latestSysRiskHansard);
+                    });
+                }
 
                 const top = document.createElement('div');
                 top.className = 'flex items-center justify-between gap-2';
@@ -481,26 +558,225 @@
                             : 'WAIT';
                 top.append(cat, val);
 
-                const desc = document.createElement('p');
-                desc.className = 'text-[11px] text-slate-400 mt-1 truncate';
-                desc.textContent = isOk
-                    ? (item.viaFallbackMirror
-                        ? `${item.topicCount || 0} topics · ${item.mirrorLabel || 'CF-free mirror'} (CF 403)`
-                        : `${item.topicCount || 0} extracted · HTTP ${item.httpStatus || 200}`)
-                    : item.message || 'Awaiting poll';
+                const descWrap = document.createElement('div');
+                descWrap.className = 'text-[11px] text-slate-400 mt-1.5 space-y-1';
+                if (isOk) {
+                    if (topicTitles.length > 0) {
+                        topicTitles.slice(0, 3).forEach(entry => {
+                            const line = document.createElement('div');
+                            line.className = 'text-slate-200 truncate';
+                            line.title = entry.topic;
+                            line.textContent = `${Number.isFinite(entry.rank) ? `#${entry.rank} ` : '• '}${entry.topic}`;
+                            descWrap.append(line);
+                        });
+                        const metaLine = document.createElement('div');
+                        metaLine.className = 'text-[10px] text-slate-400';
+                        metaLine.textContent = item.viaFallbackMirror
+                            ? (item.primaryBlockedByCloudflare
+                                ? `${item.mirrorLabel || 'CF-free mirror'} (CF 403)`
+                                : `${item.mirrorLabel || 'Verified archive'} · ${topicTitles.length} tracked`)
+                            : `HTTP ${item.httpStatus || 200}${topicTitles.length > 3 ? ` · +${topicTitles.length - 3} more` : ''}`;
+                        descWrap.append(metaLine);
+                    } else {
+                        const emptyLine = document.createElement('p');
+                        emptyLine.className = 'text-[11px] text-slate-400 leading-snug';
+                        emptyLine.textContent = item.viaFallbackMirror
+                            ? `${item.mirrorLabel || 'CF-free mirror'} · Index scanned (no bill/PDF items)`
+                            : `HTTP ${item.httpStatus || 200} · Index scanned (no specific bill/PDF links found)`;
+                        descWrap.append(emptyLine);
+                    }
+                } else {
+                    const errLine = document.createElement('p');
+                    errLine.className = 'text-[11px] text-slate-400 truncate';
+                    errLine.textContent = item.message || 'Awaiting poll';
+                    descWrap.append(errLine);
+                }
 
-                card.append(top, desc);
+                card.append(top, descWrap);
                 grid.append(card);
             });
 
-            topicsPanel.replaceChildren();
-            const rawTopics = Array.isArray(hansard?.tracked_topics) ? hansard.tracked_topics : [];
-            if (rawTopics.length > 0) {
-                if (!window.__sysRiskTrackerState) {
-                    window.__sysRiskTrackerState = { sortBy: 'rank', category: 'All' };
+            if (briefingPanel) {
+                const briefing = buildClientSummaryBriefing(hansard, sources, rawTopics);
+                const allFindings = Array.isArray(briefing.key_findings) ? briefing.key_findings : [];
+                const activeFindings = state.category === 'All'
+                    ? allFindings
+                    : rawTopics
+                        .filter(t => t.category === state.category)
+                        .slice(0, 4)
+                        .map((entry, idx) => ({
+                            rank: entry.rank || (idx + 1),
+                            category: entry.category || 'Parliament',
+                            topic: entry.topic || 'Legislative record',
+                            friction: entry.friction ?? entry.friction_score ?? null,
+                            submission_date: entry.submission_date || null,
+                            responsible_person: entry.responsible_person || entry.responsible || 'Not stated in portal index',
+                            takeaway: String(entry.summary || '').trim()
+                        }));
+
+                briefingPanel.replaceChildren();
+
+                const bHeader = document.createElement('div');
+                bHeader.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2';
+
+                const bTitleGroup = document.createElement('div');
+                bTitleGroup.className = 'space-y-0.5';
+
+                const bTitle = document.createElement('h4');
+                bTitle.className = 'text-sm font-semibold text-white';
+                bTitle.textContent = state.category === 'All'
+                    ? 'Summary Briefing'
+                    : `Summary Briefing · ${state.category}`;
+
+                const bMeta = document.createElement('div');
+                bMeta.className = 'flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400 font-mono tabular-nums';
+                const postureColor = briefing.risk_posture === 'Elevated'
+                    ? 'text-amber-400'
+                    : briefing.risk_posture === 'Moderate'
+                        ? 'text-emerald-400'
+                        : 'text-slate-400';
+                const postureSpan = document.createElement('span');
+                postureSpan.className = postureColor;
+                postureSpan.textContent = `${briefing.risk_posture || 'Unavailable'} posture`;
+                const sep1 = document.createElement('span');
+                sep1.setAttribute('aria-hidden', 'true');
+                sep1.textContent = '·';
+                const countSpan = document.createElement('span');
+                countSpan.textContent = `${briefing.issue_count ?? rawTopics.length} ranked submission${(briefing.issue_count ?? rawTopics.length) === 1 ? '' : 's'}`;
+                bMeta.append(postureSpan, sep1, countSpan);
+
+                if (briefing.date_window) {
+                    const sep2 = document.createElement('span');
+                    sep2.setAttribute('aria-hidden', 'true');
+                    sep2.textContent = '·';
+                    const dateMetaSpan = document.createElement('span');
+                    dateMetaSpan.textContent = `Dates ${briefing.date_window}`;
+                    bMeta.append(sep2, dateMetaSpan);
                 }
-                window.__latestSysRiskHansard = hansard;
-                const state = window.__sysRiskTrackerState;
+                if (Number.isFinite(briefing.full_pdf_count) && briefing.full_pdf_count > 0) {
+                    const sepPdf = document.createElement('span');
+                    sepPdf.setAttribute('aria-hidden', 'true');
+                    sepPdf.textContent = '·';
+                    const pdfSpan = document.createElement('span');
+                    pdfSpan.className = 'text-emerald-300';
+                    const pagePart = Number.isFinite(briefing.total_pages) && briefing.total_pages > 0 ? ` (${briefing.total_pages} pages)` : '';
+                    pdfSpan.textContent = `${briefing.full_pdf_count} full PDF${briefing.full_pdf_count === 1 ? '' : 's'} read${pagePart}`;
+                    bMeta.append(sepPdf, pdfSpan);
+                }
+                if (briefing.captured_at) {
+                    const sep3 = document.createElement('span');
+                    sep3.setAttribute('aria-hidden', 'true');
+                    sep3.textContent = '·';
+                    const capSpan = document.createElement('span');
+                    capSpan.textContent = `Snapshot ${String(briefing.captured_at).slice(0, 10)}`;
+                    bMeta.append(sep3, capSpan);
+                }
+
+                bTitleGroup.append(bTitle, bMeta);
+
+                const bActions = document.createElement('div');
+                bActions.className = 'flex items-center gap-2 shrink-0';
+
+                if (state.category !== 'All') {
+                    const resetBtn = document.createElement('button');
+                    resetBtn.type = 'button';
+                    resetBtn.className = 'px-3 py-1.5 text-xs font-medium text-sky-300 hover:text-white bg-slate-950 border border-slate-700 rounded whitespace-nowrap shrink-0 transition-colors';
+                    resetBtn.textContent = 'Show All Portals';
+                    resetBtn.addEventListener('click', () => {
+                        state.category = 'All';
+                        renderLegislativePolicyTracker(window.__latestSysRiskHansard);
+                    });
+                    bActions.append(resetBtn);
+                }
+
+                const copyBtn = document.createElement('button');
+                copyBtn.type = 'button';
+                copyBtn.className = 'px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded whitespace-nowrap shrink-0 transition-colors';
+                copyBtn.textContent = 'Copy Briefing';
+                copyBtn.addEventListener('click', async () => {
+                    const lines = [
+                        `KUVHURA Parliamentary & Policy Summary Briefing`,
+                        `Headline: ${briefing.headline || ''}`,
+                        `Posture: ${briefing.risk_posture || 'Unavailable'} | Submissions: ${briefing.issue_count ?? rawTopics.length}${briefing.date_window ? ` | Dates: ${briefing.date_window}` : ''}`,
+                        '',
+                        briefing.executive_summary || '',
+                        '',
+                        ...activeFindings.map(f => `- #${f.rank} ${f.topic} [${f.category}] (${Number.isFinite(f.friction) ? f.friction.toFixed(1) : '--'}/100, Dated: ${f.submission_date || 'Unstated'}): ${f.takeaway || ''}`)
+                    ].filter(Boolean);
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(lines.join('\n'));
+                            copyBtn.textContent = 'Copied';
+                            setTimeout(() => { copyBtn.textContent = 'Copy Briefing'; }, 1800);
+                        }
+                    } catch {
+                        copyBtn.textContent = 'Copy Failed';
+                        setTimeout(() => { copyBtn.textContent = 'Copy Briefing'; }, 1800);
+                    }
+                });
+                bActions.append(copyBtn);
+
+                bHeader.append(bTitleGroup, bActions);
+                briefingPanel.append(bHeader);
+
+                const execP = document.createElement('p');
+                execP.className = 'text-xs sm:text-sm text-slate-200 leading-relaxed';
+                execP.textContent = briefing.executive_summary || '';
+                briefingPanel.append(execP);
+
+                if (activeFindings.length > 0) {
+                    const findingsWrap = document.createElement('div');
+                    findingsWrap.className = 'border-t border-slate-800/80 pt-3 space-y-2';
+
+                    const findingsLabel = document.createElement('p');
+                    findingsLabel.className = 'text-xs font-semibold text-slate-300';
+                    findingsLabel.textContent = state.category === 'All' ? 'Key Findings' : `Key Findings · ${state.category}`;
+                    findingsWrap.append(findingsLabel);
+
+                    const ul = document.createElement('ul');
+                    ul.className = 'space-y-2';
+                    activeFindings.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'text-xs text-slate-300 leading-relaxed';
+
+                        const lineTop = document.createElement('div');
+                        lineTop.className = 'flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5';
+
+                        const itemTitle = document.createElement('span');
+                        itemTitle.className = 'font-medium text-white';
+                        itemTitle.textContent = `#${item.rank} ${item.topic}`;
+
+                        const itemMeta = document.createElement('span');
+                        itemMeta.className = 'font-mono tabular-nums text-[11px] text-slate-400';
+                        const fricTxt = Number.isFinite(item.friction) ? `${item.friction.toFixed(1)} / 100` : '--';
+                        const pagesTxt = Number.isFinite(item.page_count) && item.page_count > 0 ? ` · ${item.page_count} pp.` : '';
+                        itemMeta.textContent = `${item.category} · ${fricTxt}${pagesTxt}${item.submission_date ? ` · ${item.submission_date}` : ''}`;
+
+                        lineTop.append(itemTitle, itemMeta);
+                        li.append(lineTop);
+
+                        if (item.takeaway) {
+                            const takeP = document.createElement('p');
+                            takeP.className = 'text-slate-400 mt-0.5';
+                            takeP.textContent = item.takeaway;
+                            li.append(takeP);
+                        }
+                        ul.append(li);
+                    });
+                    findingsWrap.append(ul);
+                    briefingPanel.append(findingsWrap);
+                }
+
+                if (Array.isArray(briefing.coverage_gaps) && briefing.coverage_gaps.length > 0) {
+                    const gapP = document.createElement('p');
+                    gapP.className = 'text-[11px] text-slate-400 border-t border-slate-800/60 pt-2';
+                    gapP.textContent = `Coverage note: ${briefing.coverage_gaps.join(', ')} returned HTTP 200 HTML without downloadable bill or PDF attachments in this snapshot.`;
+                    briefingPanel.append(gapP);
+                }
+            }
+
+            topicsPanel.replaceChildren();
+            if (rawTopics.length > 0) {
 
                 const headerBar = document.createElement('div');
                 headerBar.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3';
@@ -641,7 +917,12 @@
                         details.className = 'text-xs text-slate-400 pt-0.5';
                         const sumToggle = document.createElement('summary');
                         sumToggle.className = 'cursor-pointer text-sky-400 hover:text-sky-300 select-none';
-                        sumToggle.textContent = fullBodyText ? 'Read full extracted PDF contents & record details' : 'View extracted contents & record details';
+                        if (fullBodyText) {
+                            const pageBadge = Number.isFinite(entry.page_count) && entry.page_count > 0 ? `${entry.page_count} pages · ` : '';
+                            sumToggle.textContent = `Read full extracted PDF contents (${pageBadge}${fullBodyText.length.toLocaleString()} chars)`;
+                        } else {
+                            sumToggle.textContent = 'View extracted contents & record details';
+                        }
 
                         const excerptBox = document.createElement('div');
                         excerptBox.className = 'mt-1.5 p-2.5 rounded bg-slate-950/80 border border-slate-800 text-slate-300 leading-relaxed space-y-2 max-h-72 overflow-y-auto';

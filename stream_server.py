@@ -17,7 +17,129 @@ from email.utils import parsedate_to_datetime
 try:
     from aiohttp import web
 except ImportError:
-    web = None
+    class _StdlibWebResponse:
+        def __init__(self, text="", body=None, status=200, headers=None, content_type="text/plain"):
+            self.status = status
+            self.headers = dict(headers or {})
+            if content_type and "Content-Type" not in self.headers:
+                self.headers["Content-Type"] = content_type
+            if body is not None:
+                self.body = body if isinstance(body, (bytes, bytearray)) else str(body).encode("utf-8")
+            else:
+                self.body = str(text or "").encode("utf-8")
+
+    class _StdlibRouter:
+        def __init__(self):
+            self.routes = []
+
+        def add_get(self, path, handler):
+            self.routes.append(("GET", path, handler))
+
+        def add_route(self, method, path, handler):
+            self.routes.append((str(method or "*").upper(), path, handler))
+
+        def resolve(self, method, path):
+            req_method = str(method or "GET").upper()
+            clean_path = (path or "/").split("?", 1)[0]
+            for route_method, route_path, handler in self.routes:
+                if route_path == clean_path and (route_method == "*" or route_method == req_method):
+                    return handler
+            return None
+
+    class _StdlibApplication:
+        def __init__(self):
+            self.router = _StdlibRouter()
+
+    class _StdlibAppRunner:
+        def __init__(self, app):
+            self.app = app
+            self._sites = []
+
+        async def setup(self):
+            return None
+
+        async def cleanup(self):
+            for site in list(self._sites):
+                await site.stop()
+            self._sites.clear()
+
+    class _StdlibTCPSite:
+        def __init__(self, runner, host="127.0.0.1", port=8765):
+            self.runner = runner
+            self.host = host
+            self.port = port
+            self._server = None
+            self._thread = None
+            runner._sites.append(self)
+
+        async def start(self):
+            import http.server
+            import threading
+
+            app = self.runner.app
+
+            class _Handler(http.server.BaseHTTPRequestHandler):
+                def _dispatch(handler_self):
+                    handler_fn = app.router.resolve(handler_self.command, handler_self.path)
+                    if handler_fn is None:
+                        handler_self.send_response(404)
+                        handler_self.end_headers()
+                        handler_self.wfile.write(b"Not Found")
+                        return
+                    resp = asyncio.run(handler_fn(handler_self))
+                    handler_self.send_response(getattr(resp, "status", 200))
+                    for k, v in (getattr(resp, "headers", None) or {}).items():
+                        handler_self.send_header(k, v)
+                    body_bytes = getattr(resp, "body", b"") or b""
+                    handler_self.send_header("Content-Length", str(len(body_bytes)))
+                    handler_self.end_headers()
+                    handler_self.wfile.write(body_bytes)
+
+                def do_GET(handler_self):
+                    handler_self._dispatch()
+
+                def do_POST(handler_self):
+                    handler_self._dispatch()
+
+                def log_message(handler_self, _format, *_args):
+                    return
+
+            self._server = http.server.ThreadingHTTPServer((self.host, self.port), _Handler)
+            self.port = self._server.server_port
+            self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+            self._thread.start()
+
+        async def stop(self):
+            if self._server is not None:
+                await asyncio.to_thread(self._server.shutdown)
+                self._server.server_close()
+                self._server = None
+            if self._thread is not None:
+                self._thread.join(timeout=2)
+                self._thread = None
+
+    class _StdlibWebSocketResponse:
+        def can_prepare(self, _request):
+            return type("_CanPrepare", (), {"ok": False})()
+
+    class _StdlibWebModule:
+        Response = _StdlibWebResponse
+        Application = _StdlibApplication
+        AppRunner = _StdlibAppRunner
+        TCPSite = _StdlibTCPSite
+        WebSocketResponse = _StdlibWebSocketResponse
+
+        @staticmethod
+        def json_response(data, status=200, headers=None):
+            return _StdlibWebResponse(
+                body=json.dumps(data).encode("utf-8"),
+                status=status,
+                headers=headers,
+                content_type="application/json; charset=utf-8",
+            )
+
+    web = _StdlibWebModule()
+
 try:
     from curl_cffi import requests as cureq
 except ImportError:
@@ -55,16 +177,31 @@ PARLZIM_STATIC_PORTALS = (
     ("Fact Sheets", "https://www.parlzim.gov.zw/fact-sheets/"),
 )
 PARLZIM_FALLBACK_MIRRORS = {
-    "Bill Digests": ("ZimLII Uncommenced Legislation", "https://zimlii.org/legislation/uncommenced"),
+    "Bill Digests": ("ZimLII Uncommenced & OpenParly Bills", "https://zimlii.org/legislation/uncommenced"),
     "Enacted Acts": ("ZimLII Recent Legislation", "https://zimlii.org/legislation/recent"),
     "Policy Briefs": (
-        "Parliament Oversight RSS (30d)",
-        "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "OpenParly Policy & Committee PDFs",
+        "https://openparly.com/wp-json/wp/v2/posts?categories=13,1719,3777&per_page=8&_fields=id,date,title,link,content,excerpt,author&_embed=author",
     ),
     "Fact Sheets": ("ZimLII Subsidiary Legislation", "https://zimlii.org/legislation/subsidiary"),
     "Hansards": (
-        "Parliament Debates RSS (30d)",
-        "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "OpenParly ParlZim Hansard Archive",
+        "https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=hansard&per_page=8&_fields=id,date,title,source_url",
+    ),
+}
+OPENPARLY_SUPPLEMENT_QUERIES = {
+    "Bill Digests": (
+        "https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=bill&per_page=8&_fields=id,date,title,source_url",
+    ),
+    "Policy Briefs": (
+        "https://openparly.com/wp-json/wp/v2/posts?categories=13,1719,3777&per_page=8&_fields=id,date,title,link,content,excerpt,author&_embed=author",
+        "https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=policy&per_page=6&_fields=id,date,title,source_url",
+        "https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=analysis&per_page=4&_fields=id,date,title,source_url",
+    ),
+    "Hansards": (
+        "https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=hansard&per_page=8&_fields=id,date,title,source_url",
+        "https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=NATIONAL-ASSEMBLY&per_page=6&_fields=id,date,title,source_url",
+        "https://openparly.com/wp-json/wp/v2/media?mime_type=application/pdf&search=Vol.&per_page=6&_fields=id,date,title,source_url",
     ),
 }
 HANSARD_RISK_CORPUS = (
@@ -240,7 +377,9 @@ MONTH_NAME_MAP = {
 
 
 def _clean_issue_title(raw_title):
-    title = " ".join(str(raw_title or "").split())
+    title = html_lib.unescape(str(raw_title or ""))
+    title = re.sub(r"\s+(?:First|Second|Third|Fourth|Fifth)\s+Ses\s*sion\s*:?.*$", "", title, flags=re.IGNORECASE)
+    title = " ".join(title.split())
     if not title:
         return ""
     if title.count("_") >= 2 or (" " not in title and title.count("-") >= 3):
@@ -327,20 +466,24 @@ def _parse_iso_date_str(raw_date):
     value = str(raw_date or "").strip()
     if not value:
         return None
-    iso_match = re.search(r"\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b", value)
+    normalized = re.sub(r"\b(\d{1,2})\s+(st|nd|rd|th)\b", r"\1\2", value, flags=re.IGNORECASE)
+    normalized = re.sub(r"\s*,\s*", ", ", normalized)
+    normalized = re.sub(r"\bJ\s*U\s*L\s*Y\b", "July", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"\bJ\s*U\s*N\s*E\b", "June", normalized, flags=re.IGNORECASE)
+    iso_match = re.search(r"\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b", normalized)
     if iso_match:
         y, m, d = int(iso_match.group(1)), int(iso_match.group(2)), int(iso_match.group(3))
         if 1 <= m <= 12 and 1 <= d <= 31:
             return f"{y:04d}-{m:02d}-{d:02d}"
     try:
-        dt = parsedate_to_datetime(value)
+        dt = parsedate_to_datetime(normalized)
         if dt is not None:
             return dt.date().isoformat()
     except Exception:
         pass
     dmy = re.search(
-        r"\b(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(20\d{2})\b",
-        value,
+        r"\b(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?),?\s+(20\d{2})\b",
+        normalized,
         re.IGNORECASE,
     )
     if dmy:
@@ -350,7 +493,7 @@ def _parse_iso_date_str(raw_date):
             return f"{year:04d}-{month:02d}-{day:02d}"
     mdy = re.search(
         r"\b(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b",
-        value,
+        normalized,
         re.IGNORECASE,
     )
     if mdy:
@@ -360,7 +503,7 @@ def _parse_iso_date_str(raw_date):
             return f"{year:04d}-{month:02d}-{day:02d}"
     my = re.search(
         r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b",
-        value,
+        normalized,
         re.IGNORECASE,
     )
     if my:
@@ -390,19 +533,42 @@ def _extract_submission_date(*texts, pub_date="", url=""):
     return None
 
 
+GENERIC_PDF_AUTHORS_RE = re.compile(
+    r"^(?:microsoft|adobe|libreoffice|writer|pypdf|unknown|admin|user|usr|poz|nn|tatenda|mzilikazi|hansard|parliament(?:\s+of\s+zimbabwe)?|windows\s*user|zimuser\d*)$",
+    re.IGNORECASE,
+)
+
+
 def _extract_responsible_person(*texts, author="", source_name="", title=""):
     """Extract named sponsor, minister, committee, MP, or source desk strictly from real metadata/text."""
     raw_author = " ".join(str(author or "").split())
-    if raw_author and "@" not in raw_author and len(raw_author) >= 3:
+    if raw_author and "@" not in raw_author and len(raw_author) >= 3 and not GENERIC_PDF_AUTHORS_RE.match(raw_author):
         return raw_author[:120]
 
     combined = " ".join(t for t in (title, *texts) if t)
+    named_author_role = re.search(
+        r"\b((?:Mr\.?|Mrs\.?|Ms\.?|Dr\.?|Prof\.?)\s+[A-Z]\.?\s*[A-Za-z.'\- ]{2,45},\s+(?:Principal|Senior|Chief|Acting|Deputy)?\s*[A-Za-z ]{3,40}?(?:Officer|Director|Researcher|Clerk|Secretary|Analyst|Counsel))\b",
+        combined,
+    )
+    if named_author_role:
+        return " ".join(named_author_role.group(1).split())
+
+    by_org_match = re.search(
+        r"\bBY:\s*([A-Z][A-Za-z0-9 ,.&'\-]{4,65}?)(?=\s+(?:BACKGROUND|INTRODUCTION|EXECUTIVE|SUMMARY|1\.|ABSTRACT)\b|\n|$)",
+        combined,
+    )
+    if by_org_match:
+        candidate_org = " ".join(by_org_match.group(1).split()).rstrip(".,;:- ")
+        if candidate_org:
+            return candidate_org.title() if candidate_org.isupper() else candidate_org
+
     minister_match = re.search(
-        r"\b(Minister of [A-Z][A-Za-z,&/\- ]{3,75}?)(?=\)|\]|;|\s+Notice\b|\s+Regulations\b|\s+Bill\b|\s+Act\b|,?\s+20\d{2}|$)",
+        r"\b((?:The\s+)?Ministr?y?\s+of\s+[A-Z][A-Za-z,&/\- ]{3,85}?|Minister of [A-Z][A-Za-z,&/\- ]{3,75}?)(?=\)|\]|;|\(|Notice\b|Regulations\b|Bill\b|Act\b|,?\s+20\d{2}|$)",
         combined,
     )
     if minister_match:
-        return " ".join(minister_match.group(1).split()).rstrip(".,;:- ")
+        cleaned_min = re.sub(r"^The\s+", "", " ".join(minister_match.group(1).split())).rstrip(".,;:- ")
+        return cleaned_min
 
     submit_match = re.search(
         r"\b(?:tabled by|submitted by|presented by|moved by|sponsored by|prepared by|authored by)\s+([A-Z][A-Za-z.'\- ]{2,65}?)(?=[;,\n]|(?:\.(?!\s*[A-Z]))|$)",
@@ -413,28 +579,63 @@ def _extract_responsible_person(*texts, author="", source_name="", title=""):
         return " ".join(submit_match.group(1).split()).rstrip(".,;:- ")
 
     hon_match = re.search(
-        r"\b((?:Hon\.?|Honourable|Sen\.?|Senator)\s+[A-Z][A-Za-z.'\-]+(?:\s+[A-Z][A-Za-z.'\-]+){1,3})\b",
+        r"\b((?:Hon\.?|Honourable|Sen\.?|Senator)\s+(?:Sen\.?\s+|Prof\.?\s+|Dr\.?\s+)?[A-Z][A-Za-z.'\-]+(?:\s+[A-Z][A-Za-z.'\-]+){0,3})\b",
         combined,
     )
     if hon_match:
-        return " ".join(hon_match.group(1).split())
+        cand_hon = " ".join(hon_match.group(1).split())
+        if not re.match(r"^(?:Hon\.?|Honourable)\s+(?:Members?|Deputy|Minister)\b", cand_hon, re.IGNORECASE):
+            return cand_hon
 
     committee_match = re.search(
-        r"\b((?:(?:[Pp]arliamentary|[Jj]oint|[Ss]tanding|[Pp]ortfolio|[Tt]hematic|[Pp]ublic\s+[Aa]ccounts)\s+)*[Cc]ommittee(?:\s+[Oo]n\s+[A-Z][A-Za-z,&/\-]+(?:\s+(?:and|of|for|&|[A-Z][A-Za-z,&/\-]+)){0,5})?)\b",
+        r"\b("
+        r"(?:Parliamentary\s+Legal\s+Committee|Public\s+Accounts\s+Committee)"
+        r"|(?:(?:Parliamentary|Joint|Standing|Portfolio|Thematic|Public\s+Accounts)\s+)*Committee\s+on\s+"
+        r"(?:the\s+)?[A-Z][A-Za-z,&/\-]+(?:\s+(?:(?:and|of|for|the|&)\s+)?[A-Z][A-Za-z,&/\-]+){0,6}"
+        r"|(?:Parliamentary|Joint|Standing|Portfolio|Thematic|Public\s+Accounts)\s+Committee(?:\s+[Oo]n\s+[A-Z,&/\-]+(?:\s+(?:(?:AND|OF|FOR|THE|&)\s+)?[A-Z,&/\-]+){0,6})?"
+        r")",
         combined,
     )
     if committee_match:
-        candidate_committee = " ".join(committee_match.group(1).split()).rstrip(".,;:- ")
-        if candidate_committee.lower() != "committee":
+        candidate_committee = (
+            re.sub(r"\bCOMMITTTEE\b", "Committee", committee_match.group(1), flags=re.IGNORECASE)
+        )
+        candidate_committee = re.sub(
+            r"\s+(?:on\s+the\s+(?:preparedness|state)|Bill|Act|Report|Motion|regarding|shall|may|is|was|are|to|under|conducted)\b.*$",
+            "",
+            candidate_committee,
+            flags=re.IGNORECASE,
+        )
+        candidate_committee = " ".join(candidate_committee.split()).rstrip(".,;:- ")
+        if candidate_committee.lower() != "committee" and len(candidate_committee) >= 12 and not re.search(r"Standing\s+Rules", candidate_committee, re.IGNORECASE):
+            if candidate_committee.isupper():
+                candidate_committee = re.sub(
+                    r"\b(On|Of|And|For|The|In)\b",
+                    lambda m: m.group(1).lower(),
+                    candidate_committee.title(),
+                )
+                candidate_committee = candidate_committee[:1].upper() + candidate_committee[1:]
             return candidate_committee
 
+    chair_match = re.search(
+        r"\b((?:The\s+)?(?:Acting\s+President\s+of\s+Senate|Speaker\s+of\s+the\s+National\s+Assembly|Hon\.?\s+Deputy\s+Speaker|The\s+Speaker\s+in\s+the\s+Chair))\b",
+        combined,
+        re.IGNORECASE,
+    )
+    if chair_match:
+        cand_chair = " ".join(chair_match.group(1).split())
+        if "speaker in the chair" in cand_chair.lower():
+            return "Speaker of the National Assembly"
+        return re.sub(r"^The\s+", "", cand_chair, flags=re.IGNORECASE).title() if cand_chair.isupper() else re.sub(r"^The\s+", "", cand_chair, flags=re.IGNORECASE)
+
     institution_match = re.search(
-        r"\b(Office of the Auditor[\s\-]General|Auditor[\s\-]General|Reserve Bank of Zimbabwe|Constitutional Court|ZIMRA|Parliament of Zimbabwe)\b",
+        r"\b(Zimbabwe Lawyers for Human Rights|Office of the Auditor[\s\-]General|Auditor[\s\-]General|Reserve Bank of Zimbabwe|Constitutional Court|ZIMRA|Parliament of Zimbabwe)\b",
         combined,
         re.IGNORECASE,
     )
     if institution_match:
-        return " ".join(institution_match.group(1).split())
+        inst = " ".join(institution_match.group(1).split())
+        return "Parliament of Zimbabwe" if inst.upper() == "PARLIAMENT OF ZIMBABWE" else inst
 
     clean_source = " ".join(str(source_name or "").split())
     if not clean_source and " - " in str(title or ""):
@@ -542,7 +743,7 @@ def _enrich_and_rank_topics(topics):
 
         enriched = {
             **raw,
-            "topic": title[:160],
+            "topic": title[:200],
             "category": category,
             "status": status,
             "friction": friction,
@@ -923,42 +1124,137 @@ def _extract_pdf_true_title(info, full_structured, fallback_title=""):
     raw_meta_title = " ".join(str((info or {}).get("title") or "").split())
     if (
         12 <= len(raw_meta_title) <= 140
-        and not re.search(r"\b(?:untitled|document\s*\d*|microsoft|adobe|libreoffice|slide)\b|\.(?:pdf|docx?|pptx?)$", raw_meta_title, re.IGNORECASE)
+        and not re.search(r"\b(?:untitled|document\s*\d*|microsoft|adobe|libreoffice|slide|vote\s+\d+)\b|\.(?:pdf|docx?|pptx?|indd)$", raw_meta_title, re.IGNORECASE)
         and not _is_non_issue_link(raw_meta_title)
         and re.search(r"[a-zA-Z]{4,}", raw_meta_title)
     ):
         return _clean_issue_title(raw_meta_title)
 
     first_page = str(full_structured or "").split("--- Page 2 ---", 1)[0]
-    for raw_line in first_page.splitlines():
-        line = " ".join(raw_line.split()).strip(" :-–—|")
-        if not line or line.startswith("--- Page "):
+    first_lines = [
+        " ".join(raw_line.split()).strip(" :-–—|")
+        for raw_line in first_page.splitlines()
+        if " ".join(raw_line.split()).strip(" :-–—|")
+    ]
+    joined_head = " ".join(first_lines[:8])
+
+    if re.search(r"VOTES AND PROCEEDINGS OF\s+THE NATIONAL ASSEMBLY", joined_head, re.IGNORECASE):
+        date_hit = _parse_iso_date_str(joined_head)
+        no_match = re.search(r"\bNo\.?\s*(\d+)\b", joined_head, re.IGNORECASE)
+        no_str = f" (No. {no_match.group(1)})" if no_match else ""
+        date_str = f" — {date_hit}" if date_hit else ""
+        return f"National Assembly Votes and Proceedings{date_str}{no_str}"
+
+    if "PARLIAMENT OF ZIMBABWE" in joined_head.upper() and ("The National Assembly met" in joined_head or "The Senate met" in joined_head):
+        chamber = "Senate Hansard" if "The Senate met" in joined_head else "National Assembly Hansard"
+        date_hit = _parse_iso_date_str(joined_head)
+        vol_hint = ""
+        fb_vol = re.search(r"\bVol\.?\s*(\d+)\s*No\.?\s*(\d+)\b", fallback_title or "", re.IGNORECASE)
+        if fb_vol:
+            vol_hint = f" Vol. {fb_vol.group(1)} No. {fb_vol.group(2)}"
+        date_str = f" ({date_hit})" if date_hit else ""
+        return f"{chamber}{vol_hint}{date_str}"
+
+    report_block = " ".join(
+        l for l in first_lines[:7]
+        if not re.match(r"^(?:1\s*\|\s*P\s*a\s*g\s*e|SECOND SESSION.*|FIRST SESSION.*)$", l, re.IGNORECASE)
+    )
+    if re.match(r"^(?:first|second|third|joint)?\s*report of the\b", report_block, re.IGNORECASE):
+        cleaned_report = re.sub(r"\bCOMMITTTEE\b", "Committee", report_block, flags=re.IGNORECASE)
+        cleaned_report = re.sub(r"\s+\bS\.?\s*C\.?\s*\d+.*$", "", cleaned_report, flags=re.IGNORECASE)
+        cleaned_report = " ".join(cleaned_report.split())
+        if len(cleaned_report) >= 20:
+            if cleaned_report.isupper():
+                cleaned_report = re.sub(
+                    r"\b(On|Of|And|For|The|In)\b",
+                    lambda m: m.group(1).lower(),
+                    cleaned_report.title(),
+                )
+                cleaned_report = cleaned_report[:1].upper() + cleaned_report[1:]
+            return _clean_issue_title(cleaned_report)[:200]
+
+    for line in first_lines:
+        if line.startswith("--- Page "):
             continue
         if len(line) < 12 or len(line) > 125:
             continue
         if re.match(
-            r"^(?:page\s*\d*|\d+|zimbabwe|parliament(?:\s+of\s+zimbabwe)?|national\s+assembly|senate|government\s+gazette|table\s+of\s+contents|contents|chapter\s+\d+|act\s+no\.?|bill\s+no\.?|h\.?b\.?\s*\d*|s\.?i\.?\s*\d*)$",
+            r"^(?:page\s*\d*|\d+|zimbabwe|parliament(?:\s+of\s+zimbabwe)?|national\s+assembly|senate|government\s+gazette|table\s+of\s+contents|contents|chapter\s+\d+|act\s+no\.?|bill\s+no\.?|h\.?b\.?\s*\d*|s\.?i\.?\s*\d*|distributed\s+by\s+veritas|prayers|p\s*ra\s*y\s*ers)$",
             line,
             re.IGNORECASE,
         ):
             continue
         if _is_non_issue_link(line):
             continue
+        if re.search(r"\b(?:Blo\s+W\s+ers|a\s+mendment)\b", line) and fallback_title:
+            return fallback_title
         if _is_heading_line(line):
             normalized = line.title() if line.isupper() else line
             return _clean_issue_title(normalized)[:160]
     return fallback_title
 
 
+def _build_pdf_substantive_summary(full_structured, flat_text, max_chars=1200):
+    raw_body = re.sub(r"---\s*Page\s+\d+\s*---", "\n", str(full_structured or ""))
+    raw_body = re.sub(r"[\uf0b7]", "•", raw_body)
+    raw_body = re.sub(r"[_=\-]{4,}", " ", raw_body)
+    non_toc_lines = []
+    for raw_line in raw_body.splitlines():
+        clean_l = " ".join(raw_line.split()).strip()
+        if not clean_l:
+            continue
+        if re.search(r"(?:\.{4,}|(?:\.\s){4,})", clean_l) or re.match(r"^(?:table of contents|contents|arrangement of sections)$", clean_l, re.IGNORECASE):
+            continue
+        non_toc_lines.append(clean_l)
+    body = "\n".join(non_toc_lines)
+    normalized = ""
+    for pat, flags in (
+        (r"\b(?:Explanatory\s+)?M\s*E?\s*M\s*o\s*r\s*a\s*n\s*d\s*u\s*M\b", re.IGNORECASE),
+        (r"(?:^|\n)\s*(?:EXECUTIVE SUMMARY|BACKGROUND|\d+(?:\.\d+)?\s+INTRODUCTION|INTRODUCTION)\b", 0),
+        (r"(?:^|\n)\s*(?:KEY FINDINGS|MAJOR FINDINGS|OVERVIEW)\b", 0),
+        (r"\b(?:\d+\.\s+Reports from the Parliamentary Legal Committee|PETITIONS RECEIVED FROM|ANNOUNCEMENT BY THE|MINISTERIAL STATEMENT|THE MINISTER OF [A-Z][A-Z ,]+)\b", 0),
+        (r"\bAN\s+ACT\s+to\b", 0),
+    ):
+        for match in re.finditer(pat, body, flags):
+            candidate = " ".join(body[match.start():].split()).strip()
+            candidate = re.sub(r"^Explanatory\s+M\s*e?\s*M\s*o\s*r\s*a\s*n\s*d\s*u\s*M\b", "Explanatory Memorandum:", candidate, flags=re.IGNORECASE)
+            candidate = re.sub(r"^M\s*e?\s*M\s*o\s*r\s*a\s*n\s*d\s*u\s*M\b", "Memorandum:", candidate, flags=re.IGNORECASE)
+            candidate = re.sub(r"\bExplanatory\s+M\s*E?\s*M\s*o\s*r\s*a\s*n\s*d\s*u\s*M\b", "Explanatory Memorandum:", candidate, flags=re.IGNORECASE)
+            if len(candidate) >= 120 and not re.search(r"(?:\.{3,}|(?:\.\s){3,})", candidate[:200]):
+                normalized = candidate
+                break
+        if normalized:
+            break
+    if not normalized:
+        clean_lines = [
+            line for line in non_toc_lines
+            if len(line) >= 35 and not re.match(
+                r"^(?:page\s*\d+|\d+|arrangement of sections|table of contents|contents|ordered in terms of standing order|terms of reference of portfolio committees|to top page|title \d+|chapter \d+:\d+|distributed by veritas)",
+                line,
+                re.IGNORECASE,
+            )
+        ]
+        normalized = " ".join(clean_lines).strip() or " ".join(re.sub(r"(?:\.\s*){4,}", " ", str(flat_text or "")).split())
+
+    if len(normalized) <= max_chars:
+        return normalized
+    clipped = normalized[:max_chars]
+    last_period = max(clipped.rfind(". "), clipped.rfind("? "), clipped.rfind("! "))
+    if last_period > max_chars * 0.55:
+        return clipped[:last_period + 1].strip()
+    return clipped.rstrip() + "..."
+
+
 def extract_true_pdf_topic_and_text(pdf_bytes, fallback_title="", max_pages=None, pdf_url=""):
     """Extract true PDF heading/topic, submission date, responsible body/person, summary, and full text."""
-    info, full_structured, flat_text, page_count = _read_pdf_info_and_text(pdf_bytes, max_pages=max_pages)
+    effective_max = max_pages if max_pages is not None else 45
+    info, full_structured, flat_text, page_count = _read_pdf_info_and_text(pdf_bytes, max_pages=effective_max)
     if not flat_text:
         info_date = _parse_pdf_info_date(info.get("creation_date") or info.get("mod_date"))
         fallback_date = info_date or _extract_submission_date(url=pdf_url)
         return fallback_title, fallback_date, "Not stated in PDF", "", ""
     true_topic = _extract_pdf_true_title(info, full_structured, fallback_title=fallback_title)
-    head_text = flat_text[:4000]
+    head_text = flat_text[:5000]
     submission_date = _extract_submission_date(head_text)
     if not submission_date:
         submission_date = _parse_pdf_info_date(info.get("creation_date") or info.get("mod_date"))
@@ -966,12 +1262,12 @@ def extract_true_pdf_topic_and_text(pdf_bytes, fallback_title="", max_pages=None
         submission_date = _extract_submission_date(url=pdf_url)
 
     raw_pdf_author = info.get("author", "")
-    if re.search(r"microsoft|adobe|libreoffice|writer|pypdf|unknown|admin|user", raw_pdf_author, re.IGNORECASE):
+    if GENERIC_PDF_AUTHORS_RE.match(raw_pdf_author.strip()) or re.search(r"microsoft|adobe|libreoffice|writer|pypdf", raw_pdf_author, re.IGNORECASE):
         raw_pdf_author = ""
     responsible_person = _extract_responsible_person(head_text)
     if responsible_person == "Not stated in portal index":
         responsible_person = raw_pdf_author[:120] if raw_pdf_author and "@" not in raw_pdf_author and len(raw_pdf_author) >= 3 else "Not stated in PDF"
-    summary = flat_text[:1200].rstrip() + ("..." if len(flat_text) > 1200 else "")
+    summary = _build_pdf_substantive_summary(full_structured, flat_text, max_chars=1200)
     full_payload = full_structured[:60000] + ("\n\n[Truncated after 60,000 characters]" if len(full_structured) > 60000 else "")
     if page_count:
         info["page_count"] = page_count
@@ -1166,6 +1462,206 @@ def _fetch_portal_response(portal_url, timeout=10):
         raise
 
 
+def _extract_wp_json_topics_and_pdfs(raw_json, category, base_url, limit=4):
+    """Extract real Zimbabwe Parliamentary posts, metadata, and PDF URLs from WP REST JSON."""
+    try:
+        items = json.loads(raw_json)
+    except Exception:
+        return [], [], ""
+    if not isinstance(items, list):
+        return [], [], ""
+
+    category_status = {
+        "Bill Digests": "Legislative Pipeline",
+        "Enacted Acts": "Enacted / Gazetted",
+        "Policy Briefs": "Policy Review",
+        "Fact Sheets": "Briefing Published",
+        "Hansards": "Parliamentary Debate",
+    }.get(category, "Tracked")
+
+    skip_title_re = re.compile(
+        r"^(?:Document\s*\d+|MEDIA RELEASE|33RD POST-CABINET|31ST-POST-CABINET|UK MPs|How to|AI WhatsApp)",
+        re.IGNORECASE,
+    )
+    topics = []
+    pdf_links = []
+    seen_pdfs = set()
+    text_parts = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        raw_title = (item.get("title") or {}).get("rendered", "") if isinstance(item.get("title"), dict) else str(item.get("title") or "")
+        title = _clean_issue_title(_strip_html(raw_title))
+        if not title or len(title) < 8 or skip_title_re.search(title):
+            continue
+
+        source_url = str(item.get("source_url") or "").strip()
+        link = str(item.get("link") or source_url or base_url).strip()
+        pub_date = str(item.get("date") or "").strip()[:10]
+
+        author_name = ""
+        embedded = item.get("_embedded") or {}
+        if isinstance(embedded, dict):
+            authors = embedded.get("author") or []
+            if authors and isinstance(authors[0], dict):
+                author_name = str(authors[0].get("name") or "").strip()
+
+        raw_content = (item.get("content") or {}).get("rendered", "") if isinstance(item.get("content"), dict) else ""
+        raw_excerpt = (item.get("excerpt") or {}).get("rendered", "") if isinstance(item.get("excerpt"), dict) else ""
+        snippet = _strip_html(raw_content or raw_excerpt)
+
+        if category == "Hansards":
+            hay = f"{title} {source_url}".lower()
+            if not re.search(r"(hansard|votes|vol\.?\s*\d+|senate|national[\s_-]assembly)", hay, re.IGNORECASE):
+                continue
+        elif category == "Bill Digests":
+            hay = f"{title} {source_url}".lower()
+            if not re.search(r"(bill|h\.?b\.?|amendment|constitution)", hay, re.IGNORECASE):
+                continue
+        elif category == "Policy Briefs":
+            if re.search(r"2026-National-Budget-25-November-2025-final\.pdf", source_url, re.IGNORECASE):
+                continue
+
+        if title:
+            text_parts.append(title)
+        if snippet:
+            text_parts.append(snippet[:900])
+
+        item_pdfs = []
+        if source_url.lower().split("?")[0].endswith(".pdf"):
+            item_pdfs.append(source_url)
+        for m in re.finditer(r"https?://[^\"'\s<>]+\.pdf", raw_content, re.IGNORECASE):
+            item_pdfs.append(m.group(0))
+
+        for pdf_u in item_pdfs:
+            if pdf_u in seen_pdfs or _is_non_issue_link(title, pdf_u):
+                continue
+            seen_pdfs.add(pdf_u)
+            clean_label = re.sub(r"\s*\[(?:Download|Explanation)\]\s*", "", title, flags=re.IGNORECASE).strip()
+            pdf_links.append({"url": pdf_u, "title": clean_label[:160], "pub_date": pub_date})
+            if len(pdf_links) >= limit:
+                break
+
+        if not item_pdfs and len(topics) < limit and (
+            "openparly.com" not in base_url
+            or any(k in f"{title} {snippet}".lower() for k in ("zimbabwe", "bill", "parliament", "budget"))
+        ):
+            clean_label = re.sub(r"\s*\[(?:Download|Explanation)\]\s*", "", title, flags=re.IGNORECASE).strip()
+            friction = score_hansard_text(f"{clean_label} {snippet}")
+            sub_date = _extract_submission_date(clean_label, snippet, pub_date=pub_date, url=link)
+            person = _extract_responsible_person(snippet, author=author_name, title=clean_label)
+            summary, excerpt = _build_issue_summary_and_excerpt(
+                clean_label, category, category_status, raw_snippet=snippet[:900], url=link, submission_date=sub_date
+            )
+            topics.append({
+                "topic": clean_label[:160],
+                "category": category,
+                "status": category_status,
+                "friction": friction if friction is not None else 42.0,
+                "url": link,
+                "submission_date": sub_date,
+                "responsible_person": person,
+                "responsible": person,
+                "summary": summary,
+                "content_excerpt": excerpt,
+            })
+
+    return topics[:limit], pdf_links[:limit], " ".join(text_parts)
+
+
+def _discover_portal_subroutes(category, portal_url, raw_html):
+    """Find official e-portal Hansard or ParlZim sub-routes/APIs when the landing HTML is an SPA or nav shell."""
+    from urllib.parse import urljoin, urlparse
+    candidates = []
+    parsed_base = urlparse(portal_url)
+    origin = f"{parsed_base.scheme}://{parsed_base.netloc}" if parsed_base.scheme and parsed_base.netloc else portal_url.rstrip("/")
+
+    for m in re.finditer(r'(?is)<(?:iframe|frame|a)[^>]+(?:src|href)=["\']([^"\']+)["\']', raw_html or ""):
+        href = html_lib.unescape(m.group(1)).strip()
+        if any(k in href.lower() for k in ("hansard", "bill-digest", "policy-brief", "publication", "document", "wp-json", "/api/")):
+            full = urljoin(portal_url, href)
+            if full != portal_url and full not in candidates:
+                candidates.append(full)
+
+    if category == "Hansards":
+        for path in (
+            "/hansards",
+            "/hansard",
+            "/publications",
+            "/documents",
+            "/national-assembly-hansard",
+            "/senate-hansard",
+            "/api/hansards",
+            "/wp-json/wp/v2/media?mime_type=application/pdf&per_page=10",
+        ):
+            full = f"{origin}{path}"
+            if full != portal_url and full not in candidates:
+                candidates.append(full)
+    elif category in ("Bill Digests", "Policy Briefs"):
+        slug = "bill" if category == "Bill Digests" else "policy"
+        for path in (
+            f"/wp-json/wp/v2/media?mime_type=application/pdf&search={slug}&per_page=10",
+            f"/wp-json/wp/v2/posts?search={slug}&per_page=8",
+        ):
+            full = f"{origin}{path}"
+            if full not in candidates:
+                candidates.append(full)
+
+    return candidates[:6]
+
+
+def _ingest_pdf_links_for_category(pdf_links, category, existing_topics, stripped_text, timeout=12):
+    pdf_topics = []
+    pdf_text_chunks = []
+    pdf_count = 0
+    for pdf_link in pdf_links:
+        true_topic, pdf_date, pdf_person, raw_pdf_summary, pdf_text = fetch_true_pdf_document(
+            pdf_link["url"], fallback_title=pdf_link["title"], timeout=timeout
+        )
+        if len(pdf_text) >= 80:
+            pdf_count += 1
+            flat_pdf_body = " ".join(re.sub(r"---\s*Page\s+\d+\s*---", " ", pdf_text).split())
+            pdf_score = score_hansard_text(flat_pdf_body)
+            pdf_text_chunks.append(flat_pdf_body)
+            resolved_topic = true_topic or pdf_link["title"]
+            if not pdf_date:
+                pdf_date = pdf_link.get("pub_date") or _extract_submission_date(resolved_topic, url=pdf_link["url"])
+            if not pdf_person or pdf_person in ("Not stated in PDF", "Not stated in portal index"):
+                pdf_person = _extract_responsible_person(resolved_topic, title=resolved_topic)
+            computed_summary, pdf_excerpt = _build_issue_summary_and_excerpt(
+                resolved_topic,
+                category,
+                "PDF Downloaded & Ingested",
+                raw_snippet=flat_pdf_body[:900],
+                url=pdf_link["url"],
+                submission_date=pdf_date,
+            )
+            page_markers = len(re.findall(r"---\s*Page\s+\d+\s*---", pdf_text))
+            topic_item = {
+                "topic": resolved_topic,
+                "category": category,
+                "status": "PDF Downloaded & Ingested",
+                "friction": pdf_score if pdf_score is not None else 42.0,
+                "url": pdf_link["url"],
+                "submission_date": pdf_date,
+                "responsible_person": pdf_person,
+                "responsible": pdf_person,
+                "summary": raw_pdf_summary or computed_summary,
+                "content_excerpt": pdf_excerpt,
+                "full_content": pdf_text,
+            }
+            if page_markers > 0:
+                topic_item["page_count"] = page_markers
+            pdf_topics.append(topic_item)
+    if pdf_text_chunks:
+        stripped_text = f"{stripped_text} {' '.join(pdf_text_chunks)}".strip()
+        seen_pdf_urls = {item["url"] for item in pdf_topics}
+        merged_topics = pdf_topics + [t for t in existing_topics if t.get("url") not in seen_pdf_urls]
+        return merged_topics, stripped_text, pdf_count
+    return existing_topics, stripped_text, pdf_count
+
+
 def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=True):
     """Read verified telemetry_cache.json first when cached; otherwise crawl the 5 ParlZim portals with automatic CF-free legislative mirror failover."""
     now = time.monotonic()
@@ -1249,61 +1745,79 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
             })
             continue
 
-        is_rss = body.lstrip().startswith("<?xml") or "<rss" in body[:300].lower()
-        pdf_count = 0
-        if is_rss:
-            topics, rss_text = _extract_rss_topics(body, category, selected_url)
-            stripped_text = rss_text
-        else:
-            stripped_text = _strip_html(body)
-            topics = extract_legislative_topics(body, category, selected_url)
-            if status_code == 200 and PdfReader is not None and not _is_pdf_payload(selected_url, resp_headers, None):
-                pdf_links = extract_pdf_links(body, selected_url, limit=4)
-                pdf_topics = []
-                pdf_text_chunks = []
-                for pdf_link in pdf_links:
-                    true_topic, pdf_date, pdf_person, raw_pdf_summary, pdf_text = fetch_true_pdf_document(
-                        pdf_link["url"], fallback_title=pdf_link["title"], timeout=12
-                    )
-                    if len(pdf_text) >= 80:
-                        pdf_count += 1
-                        flat_pdf_body = " ".join(re.sub(r"---\s*Page\s+\d+\s*---", " ", pdf_text).split())
-                        pdf_score = score_hansard_text(flat_pdf_body)
-                        pdf_text_chunks.append(flat_pdf_body)
-                        resolved_topic = true_topic or pdf_link["title"]
-                        if not pdf_date:
-                            pdf_date = _extract_submission_date(resolved_topic, url=pdf_link["url"])
-                        if not pdf_person or pdf_person in ("Not stated in PDF", "Not stated in portal index"):
-                            pdf_person = _extract_responsible_person(resolved_topic, title=resolved_topic)
-                        computed_summary, pdf_excerpt = _build_issue_summary_and_excerpt(
-                            resolved_topic,
-                            category,
-                            "PDF Downloaded & Ingested",
-                            raw_snippet=flat_pdf_body[:900],
-                            url=pdf_link["url"],
-                            submission_date=pdf_date,
-                        )
-                        page_markers = len(re.findall(r"---\s*Page\s+\d+\s*---", pdf_text))
-                        topic_item = {
-                            "topic": resolved_topic,
-                            "category": category,
-                            "status": "PDF Downloaded & Ingested",
-                            "friction": pdf_score if pdf_score is not None else 42.0,
-                            "url": pdf_link["url"],
-                            "submission_date": pdf_date,
-                            "responsible_person": pdf_person,
-                            "responsible": pdf_person,
-                            "summary": raw_pdf_summary or computed_summary,
-                            "content_excerpt": pdf_excerpt,
-                            "full_content": pdf_text,
-                        }
-                        if page_markers > 0:
-                            topic_item["page_count"] = page_markers
-                        pdf_topics.append(topic_item)
-                if pdf_text_chunks:
-                    stripped_text = f"{stripped_text} {' '.join(pdf_text_chunks)}".strip()
-                    seen_pdf_urls = {item["url"] for item in pdf_topics}
-                    topics = pdf_topics + [t for t in topics if t.get("url") not in seen_pdf_urls]
+        def _parse_body_for_category(raw_body, source_url, source_headers):
+            trimmed = (raw_body or "").lstrip()
+            if trimmed.startswith("[") or trimmed.startswith("{"):
+                wp_topics, wp_pdfs, wp_text = _extract_wp_json_topics_and_pdfs(raw_body, category, source_url, limit=4)
+                merged, final_txt, p_count = _ingest_pdf_links_for_category(wp_pdfs, category, wp_topics, wp_text)
+                return merged, final_txt, p_count
+            if trimmed.startswith("<?xml") or "<rss" in trimmed[:300].lower():
+                rss_topics, rss_txt = _extract_rss_topics(raw_body, category, source_url)
+                return rss_topics, rss_txt, 0
+            s_text = _strip_html(raw_body)
+            html_topics = extract_legislative_topics(raw_body, category, source_url)
+            if status_code == 200 and PdfReader is not None and not _is_pdf_payload(source_url, source_headers, None):
+                links = extract_pdf_links(raw_body, source_url, limit=4)
+                merged, final_txt, p_count = _ingest_pdf_links_for_category(links, category, html_topics, s_text)
+                return merged, final_txt, p_count
+            return html_topics, s_text, 0
+
+        topics, stripped_text, pdf_count = _parse_body_for_category(body, selected_url, resp_headers)
+
+        # If ParlZim or e-portal returned an HTTP 200 SPA/nav shell with 0 specific items, probe its subroutes first
+        if not topics and not via_fallback and status_code == 200:
+            for sub_url in _discover_portal_subroutes(category, portal_url, body):
+                try:
+                    sub_status, sub_body, sub_headers, sub_transport = _fetch_portal_response(sub_url, timeout=10)
+                    if sub_status == 200 and sub_body:
+                        sub_topics, sub_text, sub_pdfs = _parse_body_for_category(sub_body, sub_url, sub_headers)
+                        if sub_topics:
+                            topics, stripped_text, pdf_count = sub_topics, f"{stripped_text} {sub_text}".strip(), sub_pdfs
+                            selected_url = sub_url
+                            transport = sub_transport
+                            break
+                except Exception:
+                    continue
+
+        # Also trigger CF-free mirror/OpenParly archive supplement if portal index exposed <2 bills/briefs/Hansards
+        if allow_mirror_fallback and (len(topics) < 2 or (pdf_count == 0 and category in OPENPARLY_SUPPLEMENT_QUERIES)) and (not via_fallback or category in OPENPARLY_SUPPLEMENT_QUERIES):
+            supplement_urls = list(OPENPARLY_SUPPLEMENT_QUERIES.get(category, ()))
+            if not via_fallback and category in PARLZIM_FALLBACK_MIRRORS:
+                m_name, m_url = PARLZIM_FALLBACK_MIRRORS[category]
+                if m_url not in supplement_urls:
+                    if category in OPENPARLY_SUPPLEMENT_QUERIES:
+                        supplement_urls.append(m_url)
+                    else:
+                        supplement_urls.insert(0, m_url)
+                mirror_label = mirror_label or m_name
+            for sup_url in supplement_urls:
+                if len(topics) >= 5 and (pdf_count > 0 or category not in OPENPARLY_SUPPLEMENT_QUERIES):
+                    break
+                if len(topics) >= 6:
+                    break
+                try:
+                    s_status, s_body, s_headers, s_transport = _fetch_portal_response(sup_url, timeout=10)
+                    if s_status == 200 and s_body:
+                        sup_topics, sup_text, sup_pdfs = _parse_body_for_category(s_body, sup_url, s_headers)
+                        if sup_topics:
+                            seen_urls = {t.get("url") for t in topics}
+                            per_src_cap = 2 if ("zimlii.org" in sup_url and category in OPENPARLY_SUPPLEMENT_QUERIES) else 4
+                            added = 0
+                            for item in sup_topics:
+                                if added >= per_src_cap:
+                                    break
+                                if item.get("url") not in seen_urls:
+                                    topics.append(item)
+                                    seen_urls.add(item.get("url"))
+                                    added += 1
+                            stripped_text = f"{stripped_text} {sup_text}".strip()
+                            pdf_count += sup_pdfs
+                            via_fallback = True
+                            if selected_url == portal_url:
+                                selected_url = sup_url
+                            mirror_label = mirror_label or PARLZIM_FALLBACK_MIRRORS.get(category, ("OpenParly Archive", sup_url))[0]
+                except Exception:
+                    continue
 
         if status_code != 200 or len(stripped_text) < 80:
             sources_status.append({
@@ -1336,7 +1850,7 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
 
         total_chars += len(stripped_text)
         scores.append(cat_score)
-        tracked_topics.extend(topics)
+        tracked_topics.extend(topics[:4])
         entry_status = {
             "category": category,
             "url": selected_url,
@@ -1344,7 +1858,7 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
             "httpStatus": status_code,
             "score": cat_score,
             "charCount": len(stripped_text),
-            "topicCount": len(topics),
+            "topicCount": len(topics[:4]),
             "pdfCount": pdf_count,
             "transport": transport,
         }
@@ -1352,7 +1866,7 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
             entry_status["viaFallbackMirror"] = True
             entry_status["mirrorLabel"] = mirror_label
             entry_status["primaryUrl"] = portal_url
-            entry_status["primaryStatus"] = primary_http_status
+            entry_status["primaryStatus"] = primary_http_status or status_code
             entry_status["primaryBlockedByCloudflare"] = primary_blocked_cf
         sources_status.append(entry_status)
 
@@ -1361,6 +1875,8 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
     if accessible_sources > 0:
         avg_score = round(sum(scores) / accessible_sources, 2)
         hansard_ok = any(s["category"] == "Hansards" and s["status"] == "available" for s in sources_status)
+        ranked_topics = _enrich_and_rank_topics(tracked_topics)[:25]
+        sources_with_topics = _attach_topics_to_sources(sources_status, ranked_topics)
         result = {
             "score": avg_score,
             "status": "available",
@@ -1369,8 +1885,16 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
             "charCount": total_chars,
             "accessibleSources": accessible_sources,
             "totalSources": total_sources,
-            "sources": sources_status,
-            "tracked_topics": _enrich_and_rank_topics(tracked_topics)[:20],
+            "sources": sources_with_topics,
+            "tracked_topics": ranked_topics,
+            "summary_briefing": _build_summary_briefing(
+                sources_with_topics,
+                ranked_topics,
+                avg_score=avg_score,
+                accessible_sources=accessible_sources,
+                total_sources=total_sources,
+                status="available",
+            ),
         }
         HANSARD_CACHE["data"] = result
         HANSARD_CACHE["expires_at"] = now + HANSARD_TTL_SECONDS
@@ -1383,15 +1907,24 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
         return cached_snapshot
 
     all_cf = blocked_count > 0
+    unavailable_status = "blocked_by_cloudflare" if all_cf else "unavailable"
     result = {
         "score": None,
-        "status": "blocked_by_cloudflare" if all_cf else "unavailable",
+        "status": unavailable_status,
         "source": "unavailable",
         "httpStatus": 403 if all_cf else None,
         "accessibleSources": 0,
         "totalSources": total_sources,
         "sources": sources_status,
         "tracked_topics": [],
+        "summary_briefing": _build_summary_briefing(
+            sources_status,
+            [],
+            avg_score=None,
+            accessible_sources=0,
+            total_sources=total_sources,
+            status=unavailable_status,
+        ),
         "message": (
             f"All {blocked_count}/{total_sources} Parliament portals are currently protected by a Cloudflare challenge (HTTP 403)."
             if all_cf
@@ -1414,6 +1947,160 @@ def _is_fresh_timestamp(ts_value, max_age_seconds=HANSARD_TTL_SECONDS):
         return -300 <= age <= max_age_seconds
     except Exception:
         return False
+
+
+def _attach_topics_to_sources(sources, ranked_topics):
+    if not isinstance(sources, list):
+        return []
+    grouped = {}
+    for item in ranked_topics or []:
+        cat = str(item.get("category") or "").strip().lower()
+        grouped.setdefault(cat, []).append(item.get("topic") or "")
+    hydrated_sources = []
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        cat_key = str(src.get("category") or "").strip().lower()
+        names = [n for n in grouped.get(cat_key, []) if n]
+        copy = dict(src)
+        copy["topics"] = names[:4]
+        copy["topicCount"] = len(names)
+        hydrated_sources.append(copy)
+    return hydrated_sources
+
+
+def _build_summary_briefing(
+    sources,
+    ranked_topics,
+    avg_score=None,
+    accessible_sources=None,
+    total_sources=None,
+    status="available",
+    captured_at=None,
+):
+    sources_list = [s for s in (sources or []) if isinstance(s, dict)]
+    topics_list = [t for t in (ranked_topics or []) if isinstance(t, dict)]
+    total = total_sources if isinstance(total_sources, int) and total_sources > 0 else (len(sources_list) or 5)
+    accessible = (
+        accessible_sources
+        if isinstance(accessible_sources, int)
+        else sum(1 for s in sources_list if s.get("status") == "available")
+    )
+
+    scored_portals = [
+        s for s in sources_list
+        if s.get("status") == "available"
+        and isinstance(s.get("score"), (int, float))
+        and not isinstance(s.get("score"), bool)
+    ]
+    highest_portal = max(scored_portals, key=lambda s: s["score"], default=None)
+    top_issue = topics_list[0] if topics_list else None
+    top_friction = top_issue.get("friction") if top_issue else None
+
+    if isinstance(avg_score, (int, float)) and not isinstance(avg_score, bool) and math.isfinite(avg_score):
+        risk_posture = "Elevated" if (avg_score >= 50 or (isinstance(top_friction, (int, float)) and top_friction >= 50)) else "Moderate"
+    elif topics_list:
+        risk_posture = "Elevated" if isinstance(top_friction, (int, float)) and top_friction >= 50 else "Moderate"
+    else:
+        risk_posture = "Unavailable"
+
+    dates = sorted({str(t.get("submission_date") or "").strip() for t in topics_list if str(t.get("submission_date") or "").strip()})
+    if len(dates) == 1:
+        date_window = dates[0]
+    elif len(dates) > 1:
+        date_window = f"{dates[0]} to {dates[-1]}"
+    else:
+        date_window = None
+
+    active_categories = []
+    for t in topics_list:
+        cat = str(t.get("category") or "").strip()
+        if cat and cat not in active_categories:
+            active_categories.append(cat)
+
+    coverage_gaps = [
+        str(s.get("category"))
+        for s in sources_list
+        if s.get("status") == "available" and not s.get("topicCount") and s.get("category")
+    ]
+
+    sponsors = []
+    for t in topics_list:
+        person = str(t.get("responsible_person") or t.get("responsible") or "").strip()
+        if person and person not in ("Not stated in portal index", "Not stated in PDF") and person not in sponsors:
+            sponsors.append(person)
+
+    if accessible > 0:
+        avg_text = f"{avg_score:.1f} / 100" if isinstance(avg_score, (int, float)) and math.isfinite(avg_score) else "--"
+        if top_issue:
+            headline = f"{accessible}/{total} portals live (Avg Fparl {avg_text}) · Lead issue: {top_issue.get('topic')} ({float(top_issue.get('friction') or 0):.1f} / 100)"
+        else:
+            headline = f"{accessible}/{total} portals scanned live (Avg Fparl {avg_text}) · No bill or PDF links exposed in current index"
+
+        parts = [
+            f"Semantic TF-IDF telemetry across {accessible} of {total} Parliament of Zimbabwe portals records a composite friction score of {avg_text} ({risk_posture} posture)"
+            + (
+                f", highest on {highest_portal.get('category')} ({float(highest_portal.get('score')):.1f} / 100)."
+                if highest_portal
+                else "."
+            )
+        ]
+        if topics_list:
+            cat_summary = ", ".join(active_categories) if active_categories else "active portals"
+            count_word = "submission" if len(topics_list) == 1 else "submissions"
+            date_phrase = f" spanning {date_window}" if date_window else ""
+            parts.append(
+                f"{len(topics_list)} ranked {count_word} extracted from {cat_summary}{date_phrase}, led by #{top_issue.get('rank', 1)} {top_issue.get('topic')} ({float(top_issue.get('friction') or 0):.1f} / 100)."
+            )
+            if sponsors:
+                parts.append(f"Identified sponsoring authorities: {', '.join(sponsors[:4])}.")
+            else:
+                parts.append("Portal index records omit individual MP or committee sponsor attribution.")
+        else:
+            parts.append("Portal HTML indexes responded HTTP 200 without exposing downloadable bill digests or PDF attachments on this crawl.")
+        if coverage_gaps:
+            parts.append(f"Index-only portals with no bill or PDF links in this snapshot: {', '.join(coverage_gaps)}.")
+        executive_summary = " ".join(parts)
+    elif status == "blocked_by_cloudflare":
+        headline = f"0/{total} portals accessible — Cloudflare HTTP 403 challenge active"
+        executive_summary = f"All {total} Parliament of Zimbabwe portals returned Cloudflare HTTP 403 challenges on this poll; no synthetic briefing items are generated."
+    else:
+        headline = f"0/{total} portals reachable — awaiting repository poll"
+        executive_summary = "Parliament of Zimbabwe portals are currently unreachable; the summary briefing will populate once HTTP 200 HTML or PDF feeds are ingested."
+
+    full_pdf_count = sum(1 for t in topics_list if t.get("full_content"))
+    total_pages = sum(int(t.get("page_count") or 0) for t in topics_list if isinstance(t.get("page_count"), int))
+
+    key_findings = []
+    for idx, entry in enumerate(topics_list[:4]):
+        raw_summary = " ".join(str(entry.get("summary") or entry.get("content_excerpt") or "").split())
+        takeaway = raw_summary[:357].rstrip() + "..." if len(raw_summary) > 360 else raw_summary
+        key_findings.append({
+            "rank": entry.get("rank") or (idx + 1),
+            "category": entry.get("category") or "Parliament",
+            "topic": entry.get("topic") or "Parliamentary record",
+            "friction": entry.get("friction"),
+            "submission_date": entry.get("submission_date"),
+            "responsible_person": entry.get("responsible_person") or entry.get("responsible") or "Not stated in portal index",
+            "page_count": entry.get("page_count"),
+            "pdf_ingested": bool(entry.get("full_content")),
+            "takeaway": takeaway,
+        })
+
+    return {
+        "headline": headline,
+        "executive_summary": executive_summary,
+        "risk_posture": risk_posture,
+        "date_window": date_window,
+        "issue_count": len(topics_list),
+        "full_pdf_count": full_pdf_count,
+        "total_pages": total_pages,
+        "accessible_portals": accessible,
+        "total_portals": total,
+        "coverage_gaps": coverage_gaps,
+        "key_findings": key_findings,
+        "captured_at": captured_at,
+    }
 
 
 def _load_verified_telemetry_cache(allow_fresh_blocked=False):
@@ -1440,9 +2127,20 @@ def _load_verified_telemetry_cache(allow_fresh_blocked=False):
             and math.isfinite(score)
         ):
             hydrated = dict(snapshot)
-            hydrated["tracked_topics"] = _enrich_and_rank_topics(hydrated.get("tracked_topics") or [])[:20]
+            ranked = _enrich_and_rank_topics(hydrated.get("tracked_topics") or [])[:20]
+            hydrated["tracked_topics"] = ranked
+            hydrated["sources"] = _attach_topics_to_sources(hydrated.get("sources") or [], ranked)
             hydrated["fromCache"] = True
             hydrated["cacheUpdatedAt"] = raw.get("updated_at") or raw.get("timestamp") or snapshot.get("captured_at")
+            hydrated["summary_briefing"] = _build_summary_briefing(
+                hydrated["sources"],
+                ranked,
+                avg_score=round(float(score), 2),
+                accessible_sources=hydrated.get("accessibleSources"),
+                total_sources=hydrated.get("totalSources"),
+                status="available",
+                captured_at=hydrated["cacheUpdatedAt"],
+            )
             return hydrated
 
     flat_accessible = raw.get("accessible_sources")
@@ -1455,17 +2153,29 @@ def _load_verified_telemetry_cache(allow_fresh_blocked=False):
         and math.isfinite(flat_score)
     ):
         topics = _enrich_and_rank_topics(raw.get("tracked_topics") if isinstance(raw.get("tracked_topics"), list) else [])[:20]
+        captured_at = raw.get("timestamp") or raw.get("updated_at")
+        total_src = raw.get("total_sources", 5)
+        avg_val = round(float(flat_score), 2)
         return {
-            "score": round(float(flat_score), 2),
+            "score": avg_val,
             "status": "available",
             "source": "parlzim_portals",
             "httpStatus": 200,
             "accessibleSources": flat_accessible,
-            "totalSources": raw.get("total_sources", 5),
+            "totalSources": total_src,
             "sources": [],
             "tracked_topics": topics,
             "fromCache": True,
-            "cacheUpdatedAt": raw.get("timestamp") or raw.get("updated_at"),
+            "cacheUpdatedAt": captured_at,
+            "summary_briefing": _build_summary_briefing(
+                [],
+                topics,
+                avg_score=avg_val,
+                accessible_sources=flat_accessible,
+                total_sources=total_src,
+                status="available",
+                captured_at=captured_at,
+            ),
         }
 
     if allow_fresh_blocked and _is_fresh_timestamp(raw.get("timestamp") or raw.get("updated_at")):
