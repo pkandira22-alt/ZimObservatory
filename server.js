@@ -1225,7 +1225,8 @@ function enrichAndRankTrackedTopics(topics) {
     const rawFriction = raw.friction ?? raw.friction_score;
     const friction = Number.isFinite(rawFriction) ? Number(Number(rawFriction).toFixed(2)) : 42.0;
 
-    const existingExcerpt = String(raw.content_excerpt || '').trim();
+    const existingFull = String(raw.full_content || '').trim();
+    const existingExcerpt = String(raw.content_excerpt || '').trim() || existingFull.slice(0, 420);
     const existingSummary = String(raw.summary || '').trim();
     const submissionDate = raw.submission_date || extractSubmissionDate({
       texts: [title, existingExcerpt, existingSummary],
@@ -1263,6 +1264,9 @@ function enrichAndRankTrackedTopics(topics) {
       summary,
       content_excerpt: contentExcerpt
     };
+    if (existingFull) {
+      enriched.full_content = existingFull;
+    }
     const key = `${title.toLowerCase()}::${category.toLowerCase()}`;
     const prev = deduped.get(key);
     if (!prev || enriched.content_excerpt.length > prev.content_excerpt.length) {

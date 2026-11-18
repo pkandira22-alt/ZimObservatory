@@ -509,6 +509,20 @@ class StreamServerTests(unittest.TestCase):
         self.assertEqual(m_date, "2025-06-19")
         self.assertEqual(m_person, "Committee on Public Accounts")
 
+        p1 = MagicMock()
+        p1.extract_text.return_value = "Clause 1: Public procurement disclosure requirements."
+        p2 = MagicMock()
+        p2.extract_text.return_value = "Clause 2: Parliamentary oversight of state enterprises."
+        multi_reader = MagicMock()
+        multi_reader.return_value.pages = [p1, p2]
+        multi_reader.return_value.metadata = {}
+        with patch.object(stream_server, "PdfReader", multi_reader):
+            full_pdf_text = stream_server.extract_full_pdf_text(b"%PDF-1.7 multi")
+        self.assertIn("--- Page 1 ---", full_pdf_text)
+        self.assertIn("Clause 1: Public procurement disclosure requirements.", full_pdf_text)
+        self.assertIn("--- Page 2 ---", full_pdf_text)
+        self.assertIn("Clause 2: Parliamentary oversight of state enterprises.", full_pdf_text)
+
     def test_telemetry_cache_fallback_only_uses_verified_available_snapshots(self):
         import os
         import tempfile

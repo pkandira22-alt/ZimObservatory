@@ -614,7 +614,8 @@
                     const meta = document.createElement('div');
                     meta.className = 'flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400';
                     const catSpan = document.createElement('span');
-                    catSpan.textContent = `${entry.category || 'Parliament'} · ${entry.status || entry.action_status || 'Tracked'}`;
+                    const pageSuffix = Number.isFinite(entry.page_count) && entry.page_count > 0 ? ` · ${entry.page_count} page${entry.page_count === 1 ? '' : 's'}` : '';
+                    catSpan.textContent = `${entry.category || 'Parliament'} · ${entry.status || entry.action_status || 'Tracked'}${pageSuffix}`;
                     const dateSpan = document.createElement('span');
                     dateSpan.className = entry.submission_date ? 'text-slate-200' : 'text-slate-400';
                     dateSpan.textContent = `Submitted: ${entry.submission_date || 'Date unstated in index'}`;
@@ -633,17 +634,20 @@
                         row.append(sumP);
                     }
 
-                    if (entry.content_excerpt || safeUrl) {
+                    const fullBodyText = entry.full_content || '';
+                    const detailBody = fullBodyText || entry.content_excerpt || '';
+                    if (detailBody || safeUrl) {
                         const details = document.createElement('details');
                         details.className = 'text-xs text-slate-400 pt-0.5';
                         const sumToggle = document.createElement('summary');
                         sumToggle.className = 'cursor-pointer text-sky-400 hover:text-sky-300 select-none';
-                        sumToggle.textContent = 'View extracted contents & record details';
+                        sumToggle.textContent = fullBodyText ? 'Read full extracted PDF contents & record details' : 'View extracted contents & record details';
 
                         const excerptBox = document.createElement('div');
-                        excerptBox.className = 'mt-1.5 p-2.5 rounded bg-slate-950/80 border border-slate-800 text-slate-300 leading-relaxed space-y-1.5';
+                        excerptBox.className = 'mt-1.5 p-2.5 rounded bg-slate-950/80 border border-slate-800 text-slate-300 leading-relaxed space-y-2 max-h-72 overflow-y-auto';
                         const excerptP = document.createElement('p');
-                        excerptP.textContent = entry.content_excerpt || entry.summary || '';
+                        excerptP.className = 'whitespace-pre-wrap break-words';
+                        excerptP.textContent = detailBody || entry.summary || '';
                         excerptBox.append(excerptP);
 
                         if (safeUrl) {
