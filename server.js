@@ -1133,9 +1133,10 @@ function extractResponsiblePerson({ texts = [], author = '', sourceName = '', ti
   if (honMatch) {
     return honMatch[1].replace(/\s+/g, ' ').trim();
   }
-  const committeeMatch = combined.match(/\b((?:Parliamentary\s+)?(?:Portfolio|Thematic|Public Accounts)\s+Committee(?:\s+on\s+[A-Z][A-Za-z,&/\- ]{3,50})?)\b/i);
+  const committeeMatch = combined.match(/\b((?:(?:[Pp]arliamentary|[Jj]oint|[Ss]tanding|[Pp]ortfolio|[Tt]hematic|[Pp]ublic\s+[Aa]ccounts)\s+)*[Cc]ommittee(?:\s+[Oo]n\s+[A-Z][A-Za-z,&/\-]+(?:\s+(?:and|of|for|&|[A-Z][A-Za-z,&/\-]+)){0,5})?)\b/);
   if (committeeMatch) {
-    return committeeMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
+    const candidate = committeeMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
+    if (candidate.toLowerCase() !== 'committee') return candidate;
   }
   const institutionMatch = combined.match(/\b(Office of the Auditor[\s\-]General|Auditor[\s\-]General|Reserve Bank of Zimbabwe|Constitutional Court|ZIMRA|Parliament of Zimbabwe)\b/i);
   if (institutionMatch) {

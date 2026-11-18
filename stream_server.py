@@ -26,6 +26,10 @@ try:
     from pypdf import PdfReader
 except ImportError:
     PdfReader = None
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
 from prescriptive_orientation import evaluate_orientation, evaluate_state_classification
 from server import fetch_social_hashtag_trends
 
@@ -301,8 +305,22 @@ def _is_non_issue_link(title, url="", check_category_root=False):
 
 
 def _strip_navigation_chrome(raw_html):
-    stripped = re.sub(r"(?is)<(nav|header|footer)\b[^>]*>.*?</\1>", " ", raw_html or "")
-    return stripped if len(_strip_html(stripped)) >= 120 else (raw_html or "")
+    raw = raw_html or ""
+    if BeautifulSoup is not None and raw:
+        try:
+            soup = BeautifulSoup(raw, "html.parser")
+            for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+                tag.decompose()
+            main_el = soup.find("main") or soup.find("article")
+            if main_el is not None and len(main_el.get_text(" ", strip=True)) >= 120:
+                return str(main_el)
+            body_html = str(soup)
+            if len(_strip_html(body_html)) >= 120:
+                return body_html
+        except Exception:
+            pass
+    stripped = re.sub(r"(?is)<(nav|header|footer|aside)\b[^>]*>.*?</\1>", " ", raw)
+    return stripped if len(_strip_html(stripped)) >= 120 else raw
 
 
 def _parse_iso_date_str(raw_date):
@@ -402,12 +420,13 @@ def _extract_responsible_person(*texts, author="", source_name="", title=""):
         return " ".join(hon_match.group(1).split())
 
     committee_match = re.search(
-        r"\b((?:Parliamentary\s+)?(?:Portfolio|Thematic|Public Accounts)\s+Committee(?:\s+on\s+[A-Z][A-Za-z,&/\- ]{3,50})?)\b",
+        r"\b((?:(?:[Pp]arliamentary|[Jj]oint|[Ss]tanding|[Pp]ortfolio|[Tt]hematic|[Pp]ublic\s+[Aa]ccounts)\s+)*[Cc]ommittee(?:\s+[Oo]n\s+[A-Z][A-Za-z,&/\-]+(?:\s+(?:and|of|for|&|[A-Z][A-Za-z,&/\-]+)){0,5})?)\b",
         combined,
-        re.IGNORECASE,
     )
     if committee_match:
-        return " ".join(committee_match.group(1).split()).rstrip(".,;:- ")
+        candidate_committee = " ".join(committee_match.group(1).split()).rstrip(".,;:- ")
+        if candidate_committee.lower() != "committee":
+            return candidate_committee
 
     institution_match = re.search(
         r"\b(Office of the Auditor[\s\-]General|Auditor[\s\-]General|Reserve Bank of Zimbabwe|Constitutional Court|ZIMRA|Parliament of Zimbabwe)\b",
@@ -834,17 +853,64 @@ def _decode_portal_body(portal_url, headers, raw_payload):
     return raw_payload or ""
 
 
+def _parse_pdf_info_date(raw_value):
+    match = re.match(r"^(?:D:)?(20\d{2})(\d{2})?(\d{2})?", str(raw_value or "").strip())
+    if not match:
+        return None
+    year = int(match.group(1))
+    month = int(match.group(2)) if match.group(2) else None
+    day = int(match.group(3)) if match.group(3) else None
+    if month and 1 <= month <= 12:
+        if day and 1 <= day <= 31:
+            return f"{year:04d}-{month:02d}-{day:02d}"
+        return f"{year:04d}-{month:02d}"
+    return None
+
+
+def _read_pdf_info_and_text(pdf_bytes, max_pages=12):
+    if not pdf_bytes or PdfReader is None:
+        return {}, ""
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+        pages_text = []
+        for page in reader.pages[:max_pages]:
+            extracted = page.extract_text() or ""
+            if extracted.strip():
+                pages_text.append(extracted)
+        raw_meta = getattr(reader, "metadata", None) or {}
+        info = {}
+        if isinstance(raw_meta, dict) or hasattr(raw_meta, "get"):
+            for key, alias in (("/Author", "author"), ("author", "author"), ("/CreationDate", "creation_date"), ("creation_date", "creation_date"), ("/ModDate", "mod_date"), ("mod_date", "mod_date")):
+                val = raw_meta.get(key)
+                if isinstance(val, str) and val.strip() and alias not in info:
+                    info[alias] = val.strip()
+        return info, " ".join(" ".join(pages_text).split())
+    except Exception:
+        return {}, ""
+
+
 def extract_pdf_metadata_and_text(pdf_bytes, max_pages=12, pdf_url=""):
     """Extract normalized text, submission date, responsible body/person, and summary from PDF bytes using pypdf."""
-    full_text = extract_text_from_pdf_bytes(pdf_bytes, max_pages=max_pages)
+    info, full_text = _read_pdf_info_and_text(pdf_bytes, max_pages=max_pages)
     if not full_text:
-        return None, "Not stated in PDF", "", ""
+        info_date = _parse_pdf_info_date(info.get("creation_date") or info.get("mod_date"))
+        fallback_date = info_date or _extract_submission_date(url=pdf_url)
+        return fallback_date, "Not stated in PDF", "", ""
     head_text = full_text[:3000]
-    submission_date = _extract_submission_date(head_text, url=pdf_url)
+    submission_date = _extract_submission_date(head_text)
+    if not submission_date:
+        submission_date = _parse_pdf_info_date(info.get("creation_date") or info.get("mod_date"))
+    if not submission_date:
+        submission_date = _extract_submission_date(url=pdf_url)
+
+    raw_pdf_author = info.get("author", "")
+    if re.search(r"microsoft|adobe|libreoffice|writer|pypdf|unknown|admin|user", raw_pdf_author, re.IGNORECASE):
+        raw_pdf_author = ""
     responsible_person = _extract_responsible_person(head_text)
     if responsible_person == "Not stated in portal index":
-        responsible_person = "Not stated in PDF"
-    summary = full_text[:280].rstrip() + ("..." if len(full_text) > 280 else "")
+        responsible_person = raw_pdf_author[:120] if raw_pdf_author and "@" not in raw_pdf_author and len(raw_pdf_author) >= 3 else "Not stated in PDF"
+    clean_text = re.sub(r"\s+", " ", full_text).strip()
+    summary = clean_text[:280].rstrip() + ("..." if len(clean_text) > 280 else "")
     return submission_date, responsible_person, summary, full_text
 
 
@@ -857,18 +923,33 @@ def extract_pdf_links(raw_html, base_url, limit=4):
     generic_labels = {"download", "download pdf", "pdf", "view", "view pdf", "read more", "open"}
     links = []
     seen_urls = set()
-    for match in re.finditer(r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', content_html):
-        href = html_lib.unescape(match.group(1)).strip()
+    if BeautifulSoup is not None:
+        try:
+            soup = BeautifulSoup(content_html, "html.parser")
+            anchors = [(a.get("href", ""), a.get_text(" ", strip=True)) for a in soup.find_all("a", href=True)]
+        except Exception:
+            anchors = [
+                (html_lib.unescape(m.group(1)).strip(), _strip_html(m.group(2)))
+                for m in re.finditer(r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', content_html)
+            ]
+    else:
+        anchors = [
+            (html_lib.unescape(m.group(1)).strip(), _strip_html(m.group(2)))
+            for m in re.finditer(r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', content_html)
+        ]
+
+    for href, anchor_text in anchors:
+        href = str(href or "").strip()
         if not href or href.startswith("#") or href.lower().startswith("javascript:"):
             continue
         resolved = urljoin(base_url, href)
         parsed = urlparse(resolved)
-        if not parsed.path.lower().endswith(".pdf"):
+        if not (parsed.path.lower().endswith(".pdf") or ".pdf" in resolved.lower()):
             continue
         if resolved in seen_urls or _is_non_issue_link("", resolved):
             continue
         seen_urls.add(resolved)
-        label = _clean_issue_title(_strip_html(match.group(2)))
+        label = _clean_issue_title(anchor_text)
         if not label or label.lower() in generic_labels or len(label) < 6:
             filename = os.path.splitext(os.path.basename(parsed.path))[0]
             label = _clean_issue_title(filename) or "Parliamentary PDF Document"
@@ -878,19 +959,18 @@ def extract_pdf_links(raw_html, base_url, limit=4):
     return links
 
 
-def fetch_pdf_document_text(pdf_url, timeout=12):
-    """Download and extract normalized text from a PDF document URL via Chrome TLS impersonation, ScraperAPI, FlareSolverr, or urllib."""
+def fetch_pdf_document_metadata(pdf_url, timeout=12):
+    """Download PDF binary and return (submission_date, responsible_person, summary, full_text) using pypdf."""
     if PdfReader is None or not pdf_url:
-        return ""
+        return None, "Not stated in PDF", "", ""
+    raw_bytes = None
     try:
         if cureq is not None:
             response = cureq.get(pdf_url, impersonate="chrome", timeout=timeout)
-            status_code = getattr(response, "status_code", 0)
-            if status_code == 200:
-                raw_bytes = getattr(response, "content", b"") or b""
-                extracted = extract_text_from_pdf_bytes(raw_bytes)
-                if extracted:
-                    return extracted
+            if getattr(response, "status_code", 0) == 200:
+                candidate = getattr(response, "content", b"") or b""
+                if candidate:
+                    raw_bytes = candidate
         else:
             req = urllib.request.Request(
                 pdf_url,
@@ -901,42 +981,53 @@ def fetch_pdf_document_text(pdf_url, timeout=12):
             )
             with urllib.request.urlopen(req, timeout=timeout) as response:
                 if getattr(response, "status", 200) == 200:
-                    extracted = extract_text_from_pdf_bytes(response.read())
-                    if extracted:
-                        return extracted
+                    candidate = response.read()
+                    if candidate:
+                        raw_bytes = candidate
     except Exception:
         pass
 
-    api_key = os.environ.get("SCRAPER_API_KEY", SCRAPER_API_KEY).strip()
-    if api_key:
-        try:
-            proxy_url = "https://api.scraperapi.com/"
-            params = {"api_key": api_key, "url": pdf_url, "render": "false"}
-            if cureq is not None:
-                response = cureq.get(proxy_url, params=params, timeout=max(timeout, 25))
-                if getattr(response, "status_code", 0) == 200:
-                    raw_bytes = getattr(response, "content", b"") or b""
-                    extracted = extract_text_from_pdf_bytes(raw_bytes)
-                    if extracted:
-                        return extracted
-            else:
-                from urllib.parse import urlencode
-                req = urllib.request.Request(f"{proxy_url}?{urlencode(params)}")
-                with urllib.request.urlopen(req, timeout=max(timeout, 25)) as resp:
-                    if getattr(resp, "status", 200) == 200:
-                        extracted = extract_text_from_pdf_bytes(resp.read())
-                        if extracted:
-                            return extracted
-        except Exception:
-            pass
+    if not raw_bytes:
+        api_key = os.environ.get("SCRAPER_API_KEY", SCRAPER_API_KEY).strip()
+        if api_key:
+            try:
+                proxy_url = "https://api.scraperapi.com/"
+                params = {"api_key": api_key, "url": pdf_url, "render": "false"}
+                if cureq is not None:
+                    response = cureq.get(proxy_url, params=params, timeout=max(timeout, 25))
+                    if getattr(response, "status_code", 0) == 200:
+                        raw_bytes = getattr(response, "content", b"") or b""
+                else:
+                    from urllib.parse import urlencode
+                    req = urllib.request.Request(f"{proxy_url}?{urlencode(params)}")
+                    with urllib.request.urlopen(req, timeout=max(timeout, 25)) as resp:
+                        if getattr(resp, "status", 200) == 200:
+                            raw_bytes = resp.read()
+            except Exception:
+                pass
+
+    if raw_bytes:
+        return extract_pdf_metadata_and_text(raw_bytes, max_pages=12, pdf_url=pdf_url)
 
     if os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip():
         solved = _fetch_via_flaresolverr(pdf_url, timeout=max(timeout, 20))
         if solved is not None:
             status_code, solved_body, _headers, _transport = solved
             if status_code == 200 and solved_body:
-                return _strip_html(solved_body)
-    return ""
+                solved_text = _strip_html(solved_body)
+                return (
+                    _extract_submission_date(solved_text[:2500], url=pdf_url),
+                    _extract_responsible_person(solved_text[:2500]),
+                    solved_text[:280],
+                    solved_text,
+                )
+    return None, "Not stated in PDF", "", ""
+
+
+def fetch_pdf_document_text(pdf_url, timeout=12):
+    """Download and extract normalized text from a PDF document URL via Chrome TLS impersonation, ScraperAPI, FlareSolverr, or urllib."""
+    _date, _person, _summary, full_text = fetch_pdf_document_metadata(pdf_url, timeout=timeout)
+    return full_text
 
 
 def _fetch_portal_response(portal_url, timeout=10):
@@ -1081,13 +1172,17 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
                 pdf_topics = []
                 pdf_text_chunks = []
                 for pdf_link in pdf_links:
-                    pdf_text = fetch_pdf_document_text(pdf_link["url"], timeout=12)
+                    pdf_date, pdf_person, _raw_pdf_summary, pdf_text = fetch_pdf_document_metadata(
+                        pdf_link["url"], timeout=12
+                    )
                     if len(pdf_text) >= 80:
                         pdf_count += 1
                         pdf_score = score_hansard_text(pdf_text)
                         pdf_text_chunks.append(pdf_text)
-                        pdf_date = _extract_submission_date(pdf_link["title"], pdf_text[:2500], url=pdf_link["url"])
-                        pdf_person = _extract_responsible_person(pdf_text[:2500], title=pdf_link["title"])
+                        if not pdf_date:
+                            pdf_date = _extract_submission_date(pdf_link["title"], url=pdf_link["url"])
+                        if not pdf_person or pdf_person in ("Not stated in PDF", "Not stated in portal index"):
+                            pdf_person = _extract_responsible_person(pdf_link["title"], title=pdf_link["title"])
                         pdf_summary, pdf_excerpt = _build_issue_summary_and_excerpt(
                             pdf_link["title"],
                             category,

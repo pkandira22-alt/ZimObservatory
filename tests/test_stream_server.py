@@ -485,6 +485,7 @@ class StreamServerTests(unittest.TestCase):
         )
         fake_reader = MagicMock()
         fake_reader.return_value.pages = [fake_page]
+        fake_reader.return_value.metadata = {}
         with patch.object(stream_server, "PdfReader", fake_reader):
             pdf_date, pdf_person, pdf_summary, pdf_full = stream_server.extract_pdf_metadata_and_text(
                 b"%PDF-1.7 test",
@@ -494,6 +495,19 @@ class StreamServerTests(unittest.TestCase):
         self.assertIn("Hon. Josiah Hungwe", pdf_person)
         self.assertIn("audit discrepancies", pdf_summary)
         self.assertIn("unauthorized public expenditure", pdf_full)
+
+        meta_page = MagicMock()
+        meta_page.extract_text.return_value = "Committee on Public Accounts review of public procurement compliance and mineral revenue tracking."
+        meta_reader = MagicMock()
+        meta_reader.return_value.pages = [meta_page]
+        meta_reader.return_value.metadata = {"/CreationDate": "D:20250619101500+02'00'", "/Author": "Parliament Research Desk"}
+        with patch.object(stream_server, "PdfReader", meta_reader):
+            m_date, m_person, _m_sum, _m_full = stream_server.extract_pdf_metadata_and_text(
+                b"%PDF-1.7 meta",
+                pdf_url="https://www.parlzim.gov.zw/docs/review.pdf",
+            )
+        self.assertEqual(m_date, "2025-06-19")
+        self.assertEqual(m_person, "Committee on Public Accounts")
 
     def test_telemetry_cache_fallback_only_uses_verified_available_snapshots(self):
         import os

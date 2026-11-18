@@ -62,7 +62,7 @@ def generate_telemetry_cache():
         "hansard_friction": avg_friction,
         "tracked_topics": tracked_topics,
         "status": (
-            f"Resolved {accessible_sources}/{total_sources} via CF-free mirrors/live"
+            f"Resolved {accessible_sources}/{total_sources} portals · Deep PDF Parsing & Ranking Active"
             if accessible_sources > 0
             else "Live Crawl Blocked (CF 403)"
         ),
@@ -73,8 +73,8 @@ def generate_telemetry_cache():
 
     cache_path.write_text(json.dumps(cache_data, indent=2) + "\n", encoding="utf-8")
     print(
-        f"Telemetry cache generated successfully ({accessible_sources}/{total_sources} portals accessible, "
-        f"score={avg_friction}, topics={len(tracked_topics)})."
+        f"Telemetry cache generated with deep PDF metadata ({accessible_sources}/{total_sources} portals accessible, "
+        f"score={avg_friction}, ranked_topics={len(tracked_topics)})."
     )
     return cache_data
 
