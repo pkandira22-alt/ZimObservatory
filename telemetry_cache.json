@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "timestamp": "2026-11-18T05:59:26.490338Z",
-  "updated_at": "2026-11-18T05:59:26.490338Z",
+  "timestamp": "2026-11-18T05:59:54.680400Z",
+  "updated_at": "2026-11-18T05:59:54.680400Z",
   "runner": "github-actions",
   "accessible_sources": 5,
   "total_sources": 5,
-  "hansard_friction": 48.49,
+  "hansard_friction": 48.74,
   "tracked_topics": [
     {
       "topic": "Deeds Registries Regulations, 2025",
@@ -115,11 +115,11 @@
   ],
   "status": "Resolved 5/5 via CF-free mirrors/live",
   "parlzim": {
-    "score": 48.49,
+    "score": 48.74,
     "status": "available",
     "source": "parlzim_hansards",
     "httpStatus": 200,
-    "charCount": 25711,
+    "charCount": 25869,
     "accessibleSources": 5,
     "totalSources": 5,
     "sources": [
@@ -158,8 +158,8 @@
         "url": "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
         "status": "available",
         "httpStatus": 200,
-        "score": 44.45,
-        "charCount": 4741,
+        "score": 45.72,
+        "charCount": 4899,
         "topicCount": 4,
         "transport": "curl_cffi_chrome",
         "viaFallbackMirror": true,
@@ -308,11 +308,11 @@
     ]
   },
   "last_available_parlzim": {
-    "score": 48.49,
+    "score": 48.74,
     "status": "available",
     "source": "parlzim_hansards",
     "httpStatus": 200,
-    "charCount": 25711,
+    "charCount": 25869,
     "accessibleSources": 5,
     "totalSources": 5,
     "sources": [
@@ -351,8 +351,8 @@
         "url": "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
         "status": "available",
         "httpStatus": 200,
-        "score": 44.45,
-        "charCount": 4741,
+        "score": 45.72,
+        "charCount": 4899,
         "topicCount": 4,
         "transport": "curl_cffi_chrome",
         "viaFallbackMirror": true,
@@ -499,7 +499,7 @@
         "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
       }
     ],
-    "captured_at": "2026-11-18T05:59:26.490338Z"
+    "captured_at": "2026-11-18T05:59:54.680400Z"
   },
   "layer2_macro": {
     "GDP_Growth": 8.10671343048909,
