@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
-  "timestamp": "2026-11-18T06:01:21.024962Z",
-  "updated_at": "2026-11-18T06:01:21.024962Z",
+  "timestamp": "2026-11-18T06:11:01.965735Z",
+  "updated_at": "2026-11-18T06:11:01.965735Z",
   "runner": "github-actions",
   "accessible_sources": 4,
   "total_sources": 5,
@@ -485,7 +485,7 @@
         "url": "https://news.google.com/rss/articles/CBMihwJBVV95cUxOUjBoR243Ymh4ZUI3OFFYN1RDWkZJakVaMUN2NU51eWtkYlZWNE5ScGZCZnhmTnBMazhySWRESUhoQm9nU0pOUEhRZ2NuaUlwTkJVYW0yRU1xNmdVMmFXUHZzMUUyckVRTXRwTUxsSUI3ZVFsdnhMZWk1VzRMWlg5NDBWLU5rWWtoeUpQQUJTTHpudjRRRlgzYXdUS0s5cjlqVDRuVGNVZTF4YjYwaGtJcURIamk3dHdZQk1jaVFFcTRHVFh4NHlnWW1fSnE1MmE3RG9UYUg4SFVZeHRHSmRQaW9VWVA3eTZtRGxLT19aY0NZRFl1S0sxM3ZWUDhMQnVWYU52eEZKZw?oc=5"
       }
     ],
-    "captured_at": "2026-11-18T06:01:21.024962Z"
+    "captured_at": "2026-11-18T06:11:01.965735Z"
   },
   "layer2_macro": {
     "GDP_Growth": 8.10671343048909,
