@@ -619,8 +619,9 @@
                     dateSpan.className = entry.submission_date ? 'text-slate-200' : 'text-slate-400';
                     dateSpan.textContent = `Submitted: ${entry.submission_date || 'Date unstated in index'}`;
                     const personSpan = document.createElement('span');
-                    personSpan.className = entry.responsible_person && entry.responsible_person !== 'Not stated in portal index' ? 'text-slate-300' : 'text-slate-400';
-                    personSpan.textContent = `Responsible: ${entry.responsible_person || 'Not stated in portal index'}`;
+                    const rawPerson = entry.responsible_person || entry.responsible || '';
+                    personSpan.className = rawPerson && rawPerson !== 'Not stated in portal index' ? 'text-slate-300' : 'text-slate-400';
+                    personSpan.textContent = `Responsible: ${rawPerson || 'Not stated in portal index'}`;
                     meta.append(catSpan, dateSpan, personSpan);
 
                     row.append(top, meta);

@@ -410,6 +410,91 @@ class StreamServerTests(unittest.TestCase):
         self.assertEqual(toll_reg["submission_date"], "2026-11-06")
         self.assertEqual(toll_reg["responsible_person"], "Not stated in portal index")
 
+    def test_nav_chrome_filtering_title_cleanup_and_deep_pdf_metadata(self):
+        noisy_html = """
+        <html><body>
+          <header><nav>
+            <a href="https://www.parlzim.gov.zw/policy-briefs/">Policy Briefs</a>
+            <a href="https://www.parlzim.gov.zw/office-of-the-speaker/">Office of the Hon Speaker</a>
+            <a href="https://www.parlzim.gov.zw/president-of-senate/">Office of the Hon President of Senate</a>
+            <a href="https://www.parlzim.gov.zw/deputy-speaker-of-parliament/">Office of the Hon Deputy Speaker</a>
+            <a href="https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7">Parliament Building Mt Hampden.</a>
+          </nav></header>
+          <main>
+            <p>Official Parliamentary Portfolio Committee submissions and fact-finding reports on public accountability.</p>
+            <a href="https://www.parlzim.gov.zw/wp-content/uploads/2025/06/Report_on_Command_Agriculture_fact_finding_Public_Hearing.pdf">Report_on_Command_Agriculture_fact_finding_Public_Hearing</a>
+          </main>
+          <footer><a href="https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7">Parliament Building Mt Hampden.</a></footer>
+        </body></html>
+        """
+        extracted = stream_server.extract_legislative_topics(
+            noisy_html, "Policy Briefs", "https://www.parlzim.gov.zw/policy-briefs/"
+        )
+        self.assertEqual(len(extracted), 1)
+        self.assertEqual(
+            extracted[0]["topic"],
+            "Report on Command Agriculture fact finding Public Hearing",
+        )
+        self.assertEqual(extracted[0]["submission_date"], "2025-06")
+
+        filtered_cache = stream_server._enrich_and_rank_topics([
+            {
+                "topic": "Parliament Building Mt Hampden.",
+                "category": "Bill Digests",
+                "status": "Legislative Pipeline",
+                "friction": 42.0,
+                "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7",
+            },
+            {
+                "topic": "Office of the Hon Speaker",
+                "category": "Enacted Acts",
+                "status": "Enacted / Gazetted",
+                "friction": 48.52,
+                "url": "https://www.parlzim.gov.zw/office-of-the-speaker/",
+            },
+            {
+                "topic": "PUBLIC_BODIES_PRIVATE_BILL_PROCEDURE_ACT_2_09",
+                "category": "Enacted Acts",
+                "status": "PDF Downloaded & Ingested",
+                "friction": 52.7,
+                "url": "https://www.parlzim.gov.zw/wp-content/uploads/2025/06/PUBLIC_BODIES_PRIVATE_BILL_PROCEDURE_ACT_2_09.pdf",
+            },
+            {
+                "topic": "Zimbabwes-GBV-Crisis-2020–2024-Prevalence-Laws-and-Gaps-in-Response",
+                "category": "Fact Sheets",
+                "status": "PDF Downloaded & Ingested",
+                "friction": 47.97,
+                "url": "https://www.parlzim.gov.zw/wp-content/uploads/2026/02/Zimbabwes-GBV-Crisis-2020–2024-Prevalence-Laws-and-Gaps-in-Response.pdf",
+            },
+        ])
+        self.assertEqual(len(filtered_cache), 2)
+        self.assertEqual(filtered_cache[0]["topic"], "Public Bodies Private Bill Procedure Act 2 09")
+        self.assertEqual(filtered_cache[0]["submission_date"], "2025-06")
+        self.assertEqual(filtered_cache[0]["rank"], 1)
+        self.assertEqual(
+            filtered_cache[1]["topic"],
+            "Zimbabwes GBV Crisis 2020–2024 Prevalence Laws and Gaps in Response",
+        )
+        self.assertEqual(filtered_cache[1]["submission_date"], "2026-02")
+        self.assertEqual(filtered_cache[1]["rank"], 2)
+
+        fake_page = MagicMock()
+        fake_page.extract_text.return_value = (
+            "18 September 2025 Report submitted by Hon. Josiah Hungwe, Portfolio Committee on Budget, "
+            "regarding audit discrepancies and unauthorized public expenditure."
+        )
+        fake_reader = MagicMock()
+        fake_reader.return_value.pages = [fake_page]
+        with patch.object(stream_server, "PdfReader", fake_reader):
+            pdf_date, pdf_person, pdf_summary, pdf_full = stream_server.extract_pdf_metadata_and_text(
+                b"%PDF-1.7 test",
+                pdf_url="https://www.parlzim.gov.zw/wp-content/uploads/2025/09/budget-audit.pdf",
+            )
+        self.assertEqual(pdf_date, "2025-09-18")
+        self.assertIn("Hon. Josiah Hungwe", pdf_person)
+        self.assertIn("audit discrepancies", pdf_summary)
+        self.assertIn("unauthorized public expenditure", pdf_full)
+
     def test_telemetry_cache_fallback_only_uses_verified_available_snapshots(self):
         import os
         import tempfile

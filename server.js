@@ -997,11 +997,71 @@ const PARLZIM_MONTH_NAMES = {
   october: 10, oct: 10, november: 11, nov: 11, december: 12, dec: 12
 };
 
+function cleanIssueTitle(rawTitle) {
+  let title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
+  if (!title) return '';
+  const underscoreCount = (title.match(/_/g) || []).length;
+  const hyphenCount = (title.match(/-/g) || []).length;
+  if (underscoreCount >= 2 || (!title.includes(' ') && hyphenCount >= 3)) {
+    title = title.replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (title === title.toUpperCase()) {
+      title = title.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
+  }
+  return title;
+}
+
+const NON_ISSUE_TITLES = new Set([
+  'parliament building mt hampden',
+  'parliament building mt hampden.',
+  'office of the hon speaker',
+  'office of the speaker',
+  'office of the hon deputy speaker',
+  'office of the deputy speaker',
+  'office of the hon president of senate',
+  'office of the president of senate',
+  'bill digests',
+  'enacted acts',
+  'policy briefs',
+  'fact sheets',
+  'hansards',
+  'parliament of zimbabwe'
+]);
+
+const NON_ISSUE_URL_PARTS = [
+  'maps.app.goo.gl', 'goo.gl/maps', 'google.com/maps',
+  'facebook.com', 'twitter.com', 'x.com/', 'youtube.com', 'instagram.com',
+  '/office-of-the-speaker', '/president-of-senate', '/deputy-speaker',
+  '/clerk-of-parliament', '/contact', '/about', '/privacy', '/sitemap',
+  '/wp-admin', '/login'
+];
+
+function isNonIssueLink(title, url = '', checkCategoryRoot = false) {
+  const cleanTitle = String(title || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const cleanUrl = String(url || '').trim().toLowerCase();
+  if (NON_ISSUE_TITLES.has(cleanTitle.replace(/\.+$/, ''))) return true;
+  if (NON_ISSUE_URL_PARTS.some(part => cleanUrl.includes(part))) return true;
+  if (checkCategoryRoot && /^https?:\/\/[^/]+\/(bill-digest|acts|policy-briefs|fact-sheets|hansards)\/?$/.test(cleanUrl)) return true;
+  return false;
+}
+
+function stripNavigationChrome(rawHtml) {
+  const stripped = String(rawHtml || '').replace(/<(nav|header|footer)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ');
+  return stripHtmlToText(stripped).length >= 120 ? stripped : String(rawHtml || '');
+}
+
 function parseIsoDateString(rawDate) {
   const value = String(rawDate || '').trim();
   if (!value) return null;
-  const isoMatch = value.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-  if (isoMatch) return isoMatch[1];
+  const isoMatch = value.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
+  if (isoMatch) {
+    const y = Number(isoMatch[1]);
+    const m = Number(isoMatch[2]);
+    const d = Number(isoMatch[3]);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
   const dmy = value.match(/\b(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(20\d{2})\b/i);
   if (dmy) {
     const day = Number(dmy[1]);
@@ -1020,11 +1080,20 @@ function parseIsoDateString(rawDate) {
       return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     }
   }
-  const parsed = Date.parse(value);
-  if (Number.isFinite(parsed) && value.length >= 8) {
-    const d = new Date(parsed);
-    if (d.getUTCFullYear() >= 2000 && d.getUTCFullYear() <= 2099) {
-      return d.toISOString().slice(0, 10);
+  const my = value.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b/i);
+  if (my) {
+    const month = PARLZIM_MONTH_NAMES[my[1].toLowerCase()];
+    const year = Number(my[2]);
+    if (month) return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
+  }
+  if (/\b20\d{2}\b/.test(value) && value.length >= 8) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      const d = new Date(parsed);
+      const y = d.getUTCFullYear();
+      if (y >= 2000 && y <= 2099 && value.includes(String(y))) {
+        return d.toISOString().slice(0, 10);
+      }
     }
   }
   return null;
@@ -1041,6 +1110,8 @@ function extractSubmissionDate({ texts = [], pubDate = '', url = '' } = {}) {
     const p = parseIsoDateString(text);
     if (p) return p;
   }
+  const wpUpload = String(url || '').match(/\/wp-content\/uploads\/(20\d{2})\/(\d{2})\//);
+  if (wpUpload) return `${wpUpload[1]}-${wpUpload[2]}`;
   return null;
 }
 
@@ -1054,7 +1125,7 @@ function extractResponsiblePerson({ texts = [], author = '', sourceName = '', ti
   if (ministerMatch) {
     return ministerMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
   }
-  const submitMatch = combined.match(/\b(?:tabled by|submitted by|presented by|moved by|sponsored by|prepared by|authored by)\s+([A-Z][A-Za-z.'\- ]{2,65}?)(?=[.;,\n]|$)/i);
+  const submitMatch = combined.match(/\b(?:tabled by|submitted by|presented by|moved by|sponsored by|prepared by|authored by)\s+([A-Z][A-Za-z.'\- ]{2,65}?)(?=[;,\n]|(?:\.(?!\s*[A-Z]))|$)/i);
   if (submitMatch) {
     return submitMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
   }
@@ -1144,11 +1215,12 @@ function enrichAndRankTrackedTopics(topics) {
   const deduped = new Map();
   for (const raw of topics) {
     if (!raw || typeof raw !== 'object') continue;
-    const title = String(raw.topic || '').replace(/\s+/g, ' ').trim();
-    if (!title) continue;
+    const rawTitle = String(raw.topic || '').replace(/\s+/g, ' ').trim();
+    const url = String(raw.url || '').trim();
+    if (!rawTitle || isNonIssueLink(rawTitle, url)) continue;
+    const title = cleanIssueTitle(rawTitle);
     const category = String(raw.category || 'Parliament').trim();
     const status = String(raw.status || raw.action_status || 'Tracked').trim();
-    const url = String(raw.url || '').trim();
     const rawFriction = raw.friction ?? raw.friction_score;
     const friction = Number.isFinite(rawFriction) ? Number(Number(rawFriction).toFixed(2)) : 42.0;
 
@@ -1158,7 +1230,7 @@ function enrichAndRankTrackedTopics(topics) {
       texts: [title, existingExcerpt, existingSummary],
       url
     });
-    let responsiblePerson = String(raw.responsible_person || '').trim();
+    let responsiblePerson = String(raw.responsible_person || raw.responsible || '').trim();
     if (!responsiblePerson || responsiblePerson === 'Not stated in portal index') {
       responsiblePerson = extractResponsiblePerson({ texts: [existingExcerpt], title });
     }
@@ -1186,6 +1258,7 @@ function enrichAndRankTrackedTopics(topics) {
       url,
       submission_date: submissionDate,
       responsible_person: responsiblePerson,
+      responsible: responsiblePerson,
       summary,
       content_excerpt: contentExcerpt
     };
@@ -1196,11 +1269,16 @@ function enrichAndRankTrackedTopics(topics) {
     }
   }
 
+  function dateSortNum(val) {
+    let digits = String(val || '').replace(/\D/g, '');
+    if (digits.length === 6) digits += '01';
+    return digits.length === 8 ? Number(digits) : 0;
+  }
+
   const ranked = [...deduped.values()].sort((a, b) => {
     if (b.friction !== a.friction) return b.friction - a.friction;
-    const dateA = a.submission_date ? Number(a.submission_date.replace(/-/g, '')) : 0;
-    const dateB = b.submission_date ? Number(b.submission_date.replace(/-/g, '')) : 0;
-    if (dateB !== dateA) return dateB - dateA;
+    const dateDiff = dateSortNum(b.submission_date) - dateSortNum(a.submission_date);
+    if (dateDiff !== 0) return dateDiff;
     return a.topic.localeCompare(b.topic);
   });
   ranked.forEach((item, idx) => {
@@ -1302,11 +1380,12 @@ function extractLegislativeTopics(rawHtml, category, baseUrl, limit = 4) {
         /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
       ];
 
+  const contentHtml = stripNavigationChrome(rawHtml);
   for (let pIdx = 0; pIdx < patterns.length; pIdx++) {
     const regex = patterns[pIdx];
     const isAnchorPattern = regex.source.startsWith('<a');
     let match;
-    while ((match = regex.exec(rawHtml)) !== null) {
+    while ((match = regex.exec(contentHtml)) !== null) {
       let href = baseUrl;
       let rawTitle;
       if (!isAnchorPattern) {
@@ -1321,24 +1400,25 @@ function extractLegislativeTopics(rawHtml, category, baseUrl, limit = 4) {
           href = baseUrl;
         }
       }
-      const title = stripHtmlToText(rawTitle);
+      const title = cleanIssueTitle(stripHtmlToText(rawTitle));
       const lowerTitle = title.toLowerCase();
       if (
         title.length < 12 ||
         title.length > 160 ||
         skipPhrases.has(lowerTitle) ||
         seen.has(lowerTitle) ||
+        isNonIssueLink(title, href, isAnchorPattern) ||
         !/[a-zA-Z]{4,}/.test(title)
       ) {
         continue;
       }
       seen.add(lowerTitle);
 
-      let contextHtml = rawHtml.slice(Math.max(0, match.index - 250), Math.min(rawHtml.length, match.index + match[0].length + 450));
-      const trStart = rawHtml.lastIndexOf('<tr', match.index);
-      const trEnd = rawHtml.indexOf('</tr>', match.index + match[0].length);
+      let contextHtml = contentHtml.slice(Math.max(0, match.index - 250), Math.min(contentHtml.length, match.index + match[0].length + 450));
+      const trStart = contentHtml.lastIndexOf('<tr', match.index);
+      const trEnd = contentHtml.indexOf('</tr>', match.index + match[0].length);
       if (trStart !== -1 && trEnd !== -1 && (trEnd - trStart) < 2500) {
-        contextHtml = rawHtml.slice(trStart, trEnd + 5);
+        contextHtml = contentHtml.slice(trStart, trEnd + 5);
       }
       const contextText = stripHtmlToText(contextHtml);
       const timeMatch = contextHtml.match(/datetime=["']([^"']+)["']/i);
@@ -1359,6 +1439,7 @@ function extractLegislativeTopics(rawHtml, category, baseUrl, limit = 4) {
         url: href,
         submission_date: submissionDate,
         responsible_person: responsiblePerson,
+        responsible: responsiblePerson,
         summary,
         content_excerpt
       });

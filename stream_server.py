@@ -235,13 +235,85 @@ MONTH_NAME_MAP = {
 }
 
 
+def _clean_issue_title(raw_title):
+    title = " ".join(str(raw_title or "").split())
+    if not title:
+        return ""
+    if title.count("_") >= 2 or (" " not in title and title.count("-") >= 3):
+        title = re.sub(r"[_\-]+", " ", title)
+        title = " ".join(title.split())
+        if title.isupper():
+            title = title.title()
+    return title
+
+
+NON_ISSUE_TITLES = frozenset({
+    "parliament building mt hampden",
+    "parliament building mt hampden.",
+    "office of the hon speaker",
+    "office of the speaker",
+    "office of the hon deputy speaker",
+    "office of the deputy speaker",
+    "office of the hon president of senate",
+    "office of the president of senate",
+    "bill digests",
+    "enacted acts",
+    "policy briefs",
+    "fact sheets",
+    "hansards",
+    "parliament of zimbabwe",
+})
+
+NON_ISSUE_URL_PARTS = (
+    "maps.app.goo.gl",
+    "goo.gl/maps",
+    "google.com/maps",
+    "facebook.com",
+    "twitter.com",
+    "x.com/",
+    "youtube.com",
+    "instagram.com",
+    "/office-of-the-speaker",
+    "/president-of-senate",
+    "/deputy-speaker",
+    "/clerk-of-parliament",
+    "/contact",
+    "/about",
+    "/privacy",
+    "/sitemap",
+    "/wp-admin",
+    "/login",
+)
+
+
+def _is_non_issue_link(title, url="", check_category_root=False):
+    clean_title = " ".join(str(title or "").split()).strip().lower()
+    clean_url = str(url or "").strip().lower()
+    if clean_title.rstrip(".") in NON_ISSUE_TITLES:
+        return True
+    if any(part in clean_url for part in NON_ISSUE_URL_PARTS):
+        return True
+    if check_category_root and re.fullmatch(
+        r"https?://[^/]+/(bill-digest|acts|policy-briefs|fact-sheets|hansards)/?", clean_url
+    ):
+        return True
+    return False
+
+
+def _strip_navigation_chrome(raw_html):
+    stripped = re.sub(r"(?is)<(nav|header|footer)\b[^>]*>.*?</\1>", " ", raw_html or "")
+    return stripped if len(_strip_html(stripped)) >= 120 else (raw_html or "")
+
+
 def _parse_iso_date_str(raw_date):
     value = str(raw_date or "").strip()
     if not value:
         return None
-    iso_match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", value)
+    iso_match = re.search(r"\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b", value)
     if iso_match:
-        return iso_match.group(1)
+        y, m, d = int(iso_match.group(1)), int(iso_match.group(2)), int(iso_match.group(3))
+        if 1 <= m <= 12 and 1 <= d <= 31:
+            return f"{y:04d}-{m:02d}-{d:02d}"
     try:
         dt = parsedate_to_datetime(value)
         if dt is not None:
@@ -268,11 +340,21 @@ def _parse_iso_date_str(raw_date):
         month = MONTH_NAME_MAP.get(month_name)
         if month and 1 <= day <= 31:
             return f"{year:04d}-{month:02d}-{day:02d}"
+    my = re.search(
+        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b",
+        value,
+        re.IGNORECASE,
+    )
+    if my:
+        month = MONTH_NAME_MAP.get(my.group(1).lower())
+        year = int(my.group(2))
+        if month:
+            return f"{year:04d}-{month:02d}"
     return None
 
 
 def _extract_submission_date(*texts, pub_date="", url=""):
-    """Extract verified submission/publication/gazette date as YYYY-MM-DD when present."""
+    """Extract verified submission/publication/gazette date as YYYY-MM-DD or YYYY-MM when present."""
     for candidate in (pub_date,):
         parsed = _parse_iso_date_str(candidate)
         if parsed:
@@ -284,6 +366,9 @@ def _extract_submission_date(*texts, pub_date="", url=""):
         parsed = _parse_iso_date_str(text)
         if parsed:
             return parsed
+    wp_upload = re.search(r"/wp-content/uploads/(20\d{2})/(\d{2})/", str(url or ""))
+    if wp_upload:
+        return f"{wp_upload.group(1)}-{wp_upload.group(2)}"
     return None
 
 
@@ -302,7 +387,7 @@ def _extract_responsible_person(*texts, author="", source_name="", title=""):
         return " ".join(minister_match.group(1).split()).rstrip(".,;:- ")
 
     submit_match = re.search(
-        r"\b(?:tabled by|submitted by|presented by|moved by|sponsored by|prepared by|authored by)\s+([A-Z][A-Za-z.'\- ]{2,65}?)(?=[.;,\n]|$)",
+        r"\b(?:tabled by|submitted by|presented by|moved by|sponsored by|prepared by|authored by)\s+([A-Z][A-Za-z.'\- ]{2,65}?)(?=[;,\n]|(?:\.(?!\s*[A-Z]))|$)",
         combined,
         re.IGNORECASE,
     )
@@ -400,19 +485,20 @@ def _build_issue_summary_and_excerpt(title, category, status, raw_snippet="", ur
 
 
 def _enrich_and_rank_topics(topics):
-    """Deduplicate, enrich missing metadata strictly from real record properties, and rank by friction risk."""
+    """Filter nav chrome, enrich missing metadata strictly from real record properties, and rank by friction risk."""
     if not isinstance(topics, list):
         return []
     deduped = {}
     for raw in topics:
         if not isinstance(raw, dict):
             continue
-        title = " ".join(str(raw.get("topic") or "").split())
-        if not title:
+        raw_title = " ".join(str(raw.get("topic") or "").split())
+        url = str(raw.get("url") or "").strip()
+        if not raw_title or _is_non_issue_link(raw_title, url):
             continue
+        title = _clean_issue_title(raw_title)
         category = str(raw.get("category") or "Parliament").strip()
         status = str(raw.get("status") or raw.get("action_status") or "Tracked").strip()
-        url = str(raw.get("url") or "").strip()
         raw_friction = raw.get("friction", raw.get("friction_score"))
         friction = round(float(raw_friction), 2) if isinstance(raw_friction, (int, float)) and not isinstance(raw_friction, bool) and math.isfinite(raw_friction) else 42.0
 
@@ -421,7 +507,7 @@ def _enrich_and_rank_topics(topics):
         submission_date = raw.get("submission_date") or _extract_submission_date(
             title, existing_excerpt, existing_summary, url=url
         )
-        responsible_person = str(raw.get("responsible_person") or "").strip()
+        responsible_person = str(raw.get("responsible_person") or raw.get("responsible") or "").strip()
         if not responsible_person or responsible_person == "Not stated in portal index":
             responsible_person = _extract_responsible_person(existing_excerpt, title=title)
         if not existing_summary or not existing_excerpt:
@@ -443,6 +529,7 @@ def _enrich_and_rank_topics(topics):
             "url": url,
             "submission_date": submission_date,
             "responsible_person": responsible_person,
+            "responsible": responsible_person,
             "summary": summary,
             "content_excerpt": content_excerpt,
         }
@@ -451,11 +538,17 @@ def _enrich_and_rank_topics(topics):
         if prev is None or len(enriched["content_excerpt"]) > len(prev.get("content_excerpt", "")):
             deduped[key] = enriched
 
+    def _date_sort_key(val):
+        digits = re.sub(r"\D", "", str(val or ""))
+        if len(digits) == 6:
+            digits += "01"
+        return int(digits) if len(digits) == 8 else 0
+
     ranked = sorted(
         deduped.values(),
         key=lambda item: (
             -float(item.get("friction") or 0.0),
-            -(int(item["submission_date"].replace("-", "")) if item.get("submission_date") and re.fullmatch(r"\d{4}-\d{2}-\d{2}", item["submission_date"]) else 0),
+            -_date_sort_key(item.get("submission_date")),
             item.get("topic", "").lower(),
         ),
     )
@@ -546,6 +639,7 @@ def extract_legislative_topics(raw_html, category, base_url, limit=4):
     candidates = []
     seen = set()
 
+    content_html = _strip_navigation_chrome(raw_html)
     patterns = (
         (
             r'(?is)<a[^>]+href=["\'](/akn/zw/[^"\']+)["\'][^>]*>(.*?)</a>',
@@ -559,7 +653,7 @@ def extract_legislative_topics(raw_html, category, base_url, limit=4):
     )
 
     for pattern in patterns:
-        for match in re.finditer(pattern, raw_html):
+        for match in re.finditer(pattern, content_html):
             if match.lastindex == 1:
                 href = base_url
                 raw_title = match.group(1)
@@ -571,24 +665,25 @@ def extract_legislative_topics(raw_html, category, base_url, limit=4):
                 if href.startswith("/"):
                     from urllib.parse import urljoin
                     href = urljoin(base_url, href)
-            title = " ".join(_strip_html(raw_title).split())
+            title = _clean_issue_title(_strip_html(raw_title))
             lower_title = title.lower()
             if (
                 len(title) < 12
                 or len(title) > 160
                 or lower_title in skip_phrases
                 or lower_title in seen
+                or _is_non_issue_link(title, href, check_category_root=(match.lastindex != 1))
                 or not re.search(r"[a-zA-Z]{4,}", title)
             ):
                 continue
             seen.add(lower_title)
             row_start = max(0, match.start() - 250)
-            row_end = min(len(raw_html), match.end() + 450)
-            context_html = raw_html[row_start:row_end]
-            tr_start = raw_html.rfind("<tr", max(0, match.start() - 1200), match.start())
-            tr_end = raw_html.find("</tr>", match.end(), min(len(raw_html), match.end() + 1200))
+            row_end = min(len(content_html), match.end() + 450)
+            context_html = content_html[row_start:row_end]
+            tr_start = content_html.rfind("<tr", max(0, match.start() - 1200), match.start())
+            tr_end = content_html.find("</tr>", match.end(), min(len(content_html), match.end() + 1200))
             if tr_start != -1 and tr_end != -1:
-                context_html = raw_html[tr_start:tr_end + 5]
+                context_html = content_html[tr_start:tr_end + 5]
             context_text = " ".join(_strip_html(context_html).split())
             time_match = re.search(r'datetime=["\']([^"\']+)["\']', context_html, re.IGNORECASE)
             time_attr = time_match.group(1) if time_match else ""
@@ -607,6 +702,7 @@ def extract_legislative_topics(raw_html, category, base_url, limit=4):
                 "url": href,
                 "submission_date": submission_date,
                 "responsible_person": responsible_person,
+                "responsible": responsible_person,
                 "summary": summary,
                 "content_excerpt": content_excerpt,
             })
@@ -738,15 +834,30 @@ def _decode_portal_body(portal_url, headers, raw_payload):
     return raw_payload or ""
 
 
-def extract_pdf_links(raw_html, base_url, limit=2):
-    """Discover real .pdf document links inside an HTML page."""
+def extract_pdf_metadata_and_text(pdf_bytes, max_pages=12, pdf_url=""):
+    """Extract normalized text, submission date, responsible body/person, and summary from PDF bytes using pypdf."""
+    full_text = extract_text_from_pdf_bytes(pdf_bytes, max_pages=max_pages)
+    if not full_text:
+        return None, "Not stated in PDF", "", ""
+    head_text = full_text[:3000]
+    submission_date = _extract_submission_date(head_text, url=pdf_url)
+    responsible_person = _extract_responsible_person(head_text)
+    if responsible_person == "Not stated in portal index":
+        responsible_person = "Not stated in PDF"
+    summary = full_text[:280].rstrip() + ("..." if len(full_text) > 280 else "")
+    return submission_date, responsible_person, summary, full_text
+
+
+def extract_pdf_links(raw_html, base_url, limit=4):
+    """Discover real .pdf document links inside main HTML content."""
     if not raw_html or not base_url:
         return []
     from urllib.parse import urljoin, urlparse
+    content_html = _strip_navigation_chrome(raw_html)
     generic_labels = {"download", "download pdf", "pdf", "view", "view pdf", "read more", "open"}
     links = []
     seen_urls = set()
-    for match in re.finditer(r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', raw_html):
+    for match in re.finditer(r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', content_html):
         href = html_lib.unescape(match.group(1)).strip()
         if not href or href.startswith("#") or href.lower().startswith("javascript:"):
             continue
@@ -754,13 +865,13 @@ def extract_pdf_links(raw_html, base_url, limit=2):
         parsed = urlparse(resolved)
         if not parsed.path.lower().endswith(".pdf"):
             continue
-        if resolved in seen_urls:
+        if resolved in seen_urls or _is_non_issue_link("", resolved):
             continue
         seen_urls.add(resolved)
-        label = " ".join(_strip_html(match.group(2)).split())
+        label = _clean_issue_title(_strip_html(match.group(2)))
         if not label or label.lower() in generic_labels or len(label) < 6:
             filename = os.path.splitext(os.path.basename(parsed.path))[0]
-            label = " ".join(re.split(r"[-_]+", filename)).strip() or "Parliamentary PDF Document"
+            label = _clean_issue_title(filename) or "Parliamentary PDF Document"
         links.append({"url": resolved, "title": label[:160]})
         if len(links) >= limit:
             break
@@ -768,7 +879,7 @@ def extract_pdf_links(raw_html, base_url, limit=2):
 
 
 def fetch_pdf_document_text(pdf_url, timeout=12):
-    """Download and extract normalized text from a PDF document URL via Chrome TLS impersonation, optional ScraperAPI, or urllib."""
+    """Download and extract normalized text from a PDF document URL via Chrome TLS impersonation, ScraperAPI, FlareSolverr, or urllib."""
     if PdfReader is None or not pdf_url:
         return ""
     try:
@@ -777,7 +888,9 @@ def fetch_pdf_document_text(pdf_url, timeout=12):
             status_code = getattr(response, "status_code", 0)
             if status_code == 200:
                 raw_bytes = getattr(response, "content", b"") or b""
-                return extract_text_from_pdf_bytes(raw_bytes)
+                extracted = extract_text_from_pdf_bytes(raw_bytes)
+                if extracted:
+                    return extracted
         else:
             req = urllib.request.Request(
                 pdf_url,
@@ -788,7 +901,9 @@ def fetch_pdf_document_text(pdf_url, timeout=12):
             )
             with urllib.request.urlopen(req, timeout=timeout) as response:
                 if getattr(response, "status", 200) == 200:
-                    return extract_text_from_pdf_bytes(response.read())
+                    extracted = extract_text_from_pdf_bytes(response.read())
+                    if extracted:
+                        return extracted
     except Exception:
         pass
 
@@ -801,15 +916,26 @@ def fetch_pdf_document_text(pdf_url, timeout=12):
                 response = cureq.get(proxy_url, params=params, timeout=max(timeout, 25))
                 if getattr(response, "status_code", 0) == 200:
                     raw_bytes = getattr(response, "content", b"") or b""
-                    return extract_text_from_pdf_bytes(raw_bytes)
+                    extracted = extract_text_from_pdf_bytes(raw_bytes)
+                    if extracted:
+                        return extracted
             else:
                 from urllib.parse import urlencode
                 req = urllib.request.Request(f"{proxy_url}?{urlencode(params)}")
                 with urllib.request.urlopen(req, timeout=max(timeout, 25)) as resp:
                     if getattr(resp, "status", 200) == 200:
-                        return extract_text_from_pdf_bytes(resp.read())
+                        extracted = extract_text_from_pdf_bytes(resp.read())
+                        if extracted:
+                            return extracted
         except Exception:
-            return ""
+            pass
+
+    if os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip():
+        solved = _fetch_via_flaresolverr(pdf_url, timeout=max(timeout, 20))
+        if solved is not None:
+            status_code, solved_body, _headers, _transport = solved
+            if status_code == 200 and solved_body:
+                return _strip_html(solved_body)
     return ""
 
 
@@ -951,7 +1077,7 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
             stripped_text = _strip_html(body)
             topics = extract_legislative_topics(body, category, selected_url)
             if status_code == 200 and PdfReader is not None and not _is_pdf_payload(selected_url, resp_headers, None):
-                pdf_links = extract_pdf_links(body, selected_url, limit=2)
+                pdf_links = extract_pdf_links(body, selected_url, limit=4)
                 pdf_topics = []
                 pdf_text_chunks = []
                 for pdf_link in pdf_links:
@@ -960,8 +1086,8 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
                         pdf_count += 1
                         pdf_score = score_hansard_text(pdf_text)
                         pdf_text_chunks.append(pdf_text)
-                        pdf_date = _extract_submission_date(pdf_link["title"], pdf_text[:1500], url=pdf_link["url"])
-                        pdf_person = _extract_responsible_person(pdf_text[:2000], title=pdf_link["title"])
+                        pdf_date = _extract_submission_date(pdf_link["title"], pdf_text[:2500], url=pdf_link["url"])
+                        pdf_person = _extract_responsible_person(pdf_text[:2500], title=pdf_link["title"])
                         pdf_summary, pdf_excerpt = _build_issue_summary_and_excerpt(
                             pdf_link["title"],
                             category,
@@ -978,6 +1104,7 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
                             "url": pdf_link["url"],
                             "submission_date": pdf_date,
                             "responsible_person": pdf_person,
+                            "responsible": pdf_person,
                             "summary": pdf_summary,
                             "content_excerpt": pdf_excerpt,
                         })
