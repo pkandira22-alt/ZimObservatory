@@ -990,6 +990,225 @@ function scoreHansardText(liveText) {
   return Number(Math.min(100, Math.max(40, (meanSimilarity * 250) + 42)).toFixed(2));
 }
 
+const PARLZIM_MONTH_NAMES = {
+  january: 1, jan: 1, february: 2, feb: 2, march: 3, mar: 3,
+  april: 4, apr: 4, may: 5, june: 6, jun: 6,
+  july: 7, jul: 7, august: 8, aug: 8, september: 9, sep: 9, sept: 9,
+  october: 10, oct: 10, november: 11, nov: 11, december: 12, dec: 12
+};
+
+function parseIsoDateString(rawDate) {
+  const value = String(rawDate || '').trim();
+  if (!value) return null;
+  const isoMatch = value.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+  if (isoMatch) return isoMatch[1];
+  const dmy = value.match(/\b(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(20\d{2})\b/i);
+  if (dmy) {
+    const day = Number(dmy[1]);
+    const month = PARLZIM_MONTH_NAMES[dmy[2].toLowerCase()];
+    const year = Number(dmy[3]);
+    if (month && day >= 1 && day <= 31) {
+      return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+  const mdy = value.match(/\b(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b/i);
+  if (mdy) {
+    const month = PARLZIM_MONTH_NAMES[mdy[1].toLowerCase()];
+    const day = Number(mdy[2]);
+    const year = Number(mdy[3]);
+    if (month && day >= 1 && day <= 31) {
+      return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+  }
+  const parsed = Date.parse(value);
+  if (Number.isFinite(parsed) && value.length >= 8) {
+    const d = new Date(parsed);
+    if (d.getUTCFullYear() >= 2000 && d.getUTCFullYear() <= 2099) {
+      return d.toISOString().slice(0, 10);
+    }
+  }
+  return null;
+}
+
+function extractSubmissionDate({ texts = [], pubDate = '', url = '' } = {}) {
+  if (pubDate) {
+    const p = parseIsoDateString(pubDate);
+    if (p) return p;
+  }
+  const aknMatch = String(url || '').match(/@(\d{4}-\d{2}-\d{2})(?:[/?#]|$)/);
+  if (aknMatch) return aknMatch[1];
+  for (const text of texts) {
+    const p = parseIsoDateString(text);
+    if (p) return p;
+  }
+  return null;
+}
+
+function extractResponsiblePerson({ texts = [], author = '', sourceName = '', title = '' } = {}) {
+  const cleanAuthor = String(author || '').replace(/\s+/g, ' ').trim();
+  if (cleanAuthor && !cleanAuthor.includes('@') && cleanAuthor.length >= 3) {
+    return cleanAuthor.slice(0, 120);
+  }
+  const combined = [title, ...texts].filter(Boolean).join(' ');
+  const ministerMatch = combined.match(/\b(Minister of [A-Z][A-Za-z,&/\- ]{3,75}?)(?=\)|\]|;|\s+Notice\b|\s+Regulations\b|\s+Bill\b|\s+Act\b|,?\s+20\d{2}|$)/);
+  if (ministerMatch) {
+    return ministerMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
+  }
+  const submitMatch = combined.match(/\b(?:tabled by|submitted by|presented by|moved by|sponsored by|prepared by|authored by)\s+([A-Z][A-Za-z.'\- ]{2,65}?)(?=[.;,\n]|$)/i);
+  if (submitMatch) {
+    return submitMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
+  }
+  const honMatch = combined.match(/\b((?:Hon\.?|Honourable|Sen\.?|Senator)\s+[A-Z][A-Za-z.'\-]+(?:\s+[A-Z][A-Za-z.'\-]+){1,3})\b/);
+  if (honMatch) {
+    return honMatch[1].replace(/\s+/g, ' ').trim();
+  }
+  const committeeMatch = combined.match(/\b((?:Parliamentary\s+)?(?:Portfolio|Thematic|Public Accounts)\s+Committee(?:\s+on\s+[A-Z][A-Za-z,&/\- ]{3,50})?)\b/i);
+  if (committeeMatch) {
+    return committeeMatch[1].replace(/\s+/g, ' ').replace(/[.,;:\- ]+$/, '');
+  }
+  const institutionMatch = combined.match(/\b(Office of the Auditor[\s\-]General|Auditor[\s\-]General|Reserve Bank of Zimbabwe|Constitutional Court|ZIMRA|Parliament of Zimbabwe)\b/i);
+  if (institutionMatch) {
+    return institutionMatch[1].replace(/\s+/g, ' ').trim();
+  }
+  let cleanSource = String(sourceName || '').replace(/\s+/g, ' ').trim();
+  if (!cleanSource && String(title || '').includes(' - ')) {
+    const possiblePub = String(title).split(' - ').pop().trim();
+    if (possiblePub.length >= 3 && possiblePub.length <= 60 && !/\d{4}/.test(possiblePub)) {
+      cleanSource = possiblePub;
+    }
+  }
+  if (cleanSource) {
+    return `Submitted via ${cleanSource}`;
+  }
+  return 'Not stated in portal index';
+}
+
+function extractAknCitation(url) {
+  const raw = String(url || '');
+  const siMatch = raw.match(/\/akn\/zw\/act\/si\/(\d{4})\/(\d+)/i);
+  if (siMatch) return `Statutory Instrument ${siMatch[2]} of ${siMatch[1]}`;
+  const actMatch = raw.match(/\/akn\/zw\/act\/(\d{4})\/(\d+)/i);
+  if (actMatch) return `Act ${actMatch[2]} of ${actMatch[1]}`;
+  return '';
+}
+
+function inferPolicyThemes(text) {
+  const lower = String(text || '').toLowerCase();
+  const checks = [
+    ['fiscal & taxation controls', ['tax', 'budget', 'expenditure', 'audit', 'levy', 'treasury', 'debt']],
+    ['procurement & anti-corruption oversight', ['tender', 'procurement', 'corruption', 'embezzlement', 'graft', 'audit discrepancy']],
+    ['currency & macro stability', ['inflation', 'currency', 'exchange rate', 'parallel market', 'depreciation', 'fuel']],
+    ['regulatory & civic compliance', ['private voluntary', 'supervision', 'terrorist financing', 'constitution', 'amendment', 'disabilities', 'court']],
+    ['border & infrastructure modernisation', ['toll', 'border', 'chirundu', 'forbes', 'road', 'energy', 'mining']],
+    ['executive portfolio governance', ['assignment of functions', 'minister', 'lands', 'agriculture', 'local authority']]
+  ];
+  const themes = [];
+  for (const [label, keywords] of checks) {
+    if (keywords.some(kw => lower.includes(kw))) themes.push(label);
+  }
+  return themes.slice(0, 2);
+}
+
+function buildIssueSummaryAndExcerpt({ title, category, status, rawSnippet = '', url = '', submissionDate = null }) {
+  const cleanSnippet = String(rawSnippet || '').replace(/\s+/g, ' ').trim();
+  const citation = extractAknCitation(url);
+  let contentExcerpt;
+  if (cleanSnippet && cleanSnippet.toLowerCase() !== String(title || '').trim().toLowerCase()) {
+    contentExcerpt = cleanSnippet.length > 420 ? `${cleanSnippet.slice(0, 420)}…` : cleanSnippet;
+  } else if (citation) {
+    const dateNote = submissionDate ? ` (gazetted/dated ${submissionDate})` : '';
+    contentExcerpt = `${citation}${dateNote} — ${title}.`;
+  } else {
+    contentExcerpt = `${title} (${category} · ${status}).`;
+  }
+
+  const themes = inferPolicyThemes(`${title} ${cleanSnippet}`);
+  const themeClause = themes.length ? ` Focuses on ${themes.join(' and ')}.` : '';
+  const dateClause = submissionDate ? ` Dated ${submissionDate}.` : '';
+
+  let summary;
+  if (cleanSnippet && cleanSnippet.length >= 45 && cleanSnippet.toLowerCase() !== String(title || '').trim().toLowerCase()) {
+    const firstSentenceRaw = cleanSnippet.split(/(?<=[.!?])\s+/)[0] || cleanSnippet;
+    const firstSentence = firstSentenceRaw.length > 220 ? `${firstSentenceRaw.slice(0, 217).trimEnd()}…` : firstSentenceRaw;
+    summary = `${firstSentence}${themeClause}`;
+  } else if (citation) {
+    summary = `${citation} (${status}).${dateClause}${themeClause}`;
+  } else {
+    summary = `${category} record classified as ${status}.${dateClause}${themeClause}`;
+  }
+  return { summary: summary.trim(), content_excerpt: contentExcerpt.trim() };
+}
+
+function enrichAndRankTrackedTopics(topics) {
+  if (!Array.isArray(topics)) return [];
+  const deduped = new Map();
+  for (const raw of topics) {
+    if (!raw || typeof raw !== 'object') continue;
+    const title = String(raw.topic || '').replace(/\s+/g, ' ').trim();
+    if (!title) continue;
+    const category = String(raw.category || 'Parliament').trim();
+    const status = String(raw.status || raw.action_status || 'Tracked').trim();
+    const url = String(raw.url || '').trim();
+    const rawFriction = raw.friction ?? raw.friction_score;
+    const friction = Number.isFinite(rawFriction) ? Number(Number(rawFriction).toFixed(2)) : 42.0;
+
+    const existingExcerpt = String(raw.content_excerpt || '').trim();
+    const existingSummary = String(raw.summary || '').trim();
+    const submissionDate = raw.submission_date || extractSubmissionDate({
+      texts: [title, existingExcerpt, existingSummary],
+      url
+    });
+    let responsiblePerson = String(raw.responsible_person || '').trim();
+    if (!responsiblePerson || responsiblePerson === 'Not stated in portal index') {
+      responsiblePerson = extractResponsiblePerson({ texts: [existingExcerpt], title });
+    }
+    let summary = existingSummary;
+    let contentExcerpt = existingExcerpt;
+    if (!summary || !contentExcerpt) {
+      const built = buildIssueSummaryAndExcerpt({
+        title,
+        category,
+        status,
+        rawSnippet: existingExcerpt,
+        url,
+        submissionDate
+      });
+      summary = summary || built.summary;
+      contentExcerpt = contentExcerpt || built.content_excerpt;
+    }
+
+    const enriched = {
+      ...raw,
+      topic: title.slice(0, 160),
+      category,
+      status,
+      friction,
+      url,
+      submission_date: submissionDate,
+      responsible_person: responsiblePerson,
+      summary,
+      content_excerpt: contentExcerpt
+    };
+    const key = `${title.toLowerCase()}::${category.toLowerCase()}`;
+    const prev = deduped.get(key);
+    if (!prev || enriched.content_excerpt.length > prev.content_excerpt.length) {
+      deduped.set(key, enriched);
+    }
+  }
+
+  const ranked = [...deduped.values()].sort((a, b) => {
+    if (b.friction !== a.friction) return b.friction - a.friction;
+    const dateA = a.submission_date ? Number(a.submission_date.replace(/-/g, '')) : 0;
+    const dateB = b.submission_date ? Number(b.submission_date.replace(/-/g, '')) : 0;
+    if (dateB !== dateA) return dateB - dateA;
+    return a.topic.localeCompare(b.topic);
+  });
+  ranked.forEach((item, idx) => {
+    item.rank = idx + 1;
+  });
+  return ranked;
+}
+
 function extractRssLegislativeTopics(rawXml, category, baseUrl, limit = 4) {
   const categoryStatus = {
     'Bill Digests': 'Legislative Pipeline',
@@ -1009,9 +1228,17 @@ function extractRssLegislativeTopics(rawXml, category, baseUrl, limit = 4) {
     const rawTitle = (block.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
     const rawLink = (block.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1] || '';
     const rawDesc = (block.match(/<description[^>]*>([\s\S]*?)<\/description>/i) || [])[1] || '';
+    const rawPubDate = (block.match(/<(?:pubDate|dc:date)[^>]*>([\s\S]*?)<\/(?:pubDate|dc:date)>/i) || [])[1] || '';
+    const rawAuthor = (block.match(/<(?:dc:creator|author)[^>]*>([\s\S]*?)<\/(?:dc:creator|author)>/i) || [])[1] || '';
+    const rawSource = (block.match(/<source[^>]*>([\s\S]*?)<\/source>/i) || [])[1] || '';
+
     const title = stripHtmlToText(decodeXmlEntities(rawTitle.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')));
     const desc = stripHtmlToText(decodeXmlEntities(rawDesc.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')));
     const link = decodeXmlEntities(rawLink).trim() || baseUrl;
+    const pubDate = stripHtmlToText(decodeXmlEntities(rawPubDate));
+    const author = stripHtmlToText(decodeXmlEntities(rawAuthor));
+    const sourceName = stripHtmlToText(decodeXmlEntities(rawSource));
+
     if (title) textParts.push(title);
     if (desc) textParts.push(desc);
 
@@ -1019,12 +1246,21 @@ function extractRssLegislativeTopics(rawXml, category, baseUrl, limit = 4) {
     if (title.length >= 12 && !seen.has(lowerTitle) && candidates.length < limit) {
       seen.add(lowerTitle);
       const friction = scoreHansardText(`${title} ${desc}`);
+      const submissionDate = extractSubmissionDate({ texts: [title, desc], pubDate, url: link });
+      const responsiblePerson = extractResponsiblePerson({ texts: [desc], author, sourceName, title });
+      const { summary, content_excerpt } = buildIssueSummaryAndExcerpt({
+        title, category, status: categoryStatus, rawSnippet: desc, url: link, submissionDate
+      });
       candidates.push({
         topic: title.slice(0, 160),
         category,
         status: categoryStatus,
         friction: friction !== null ? friction : 42.0,
-        url: link
+        url: link,
+        submission_date: submissionDate,
+        responsible_person: responsiblePerson,
+        summary,
+        content_excerpt
       });
     }
   }
@@ -1097,13 +1333,34 @@ function extractLegislativeTopics(rawHtml, category, baseUrl, limit = 4) {
         continue;
       }
       seen.add(lowerTitle);
-      const friction = scoreHansardText(title);
+
+      let contextHtml = rawHtml.slice(Math.max(0, match.index - 250), Math.min(rawHtml.length, match.index + match[0].length + 450));
+      const trStart = rawHtml.lastIndexOf('<tr', match.index);
+      const trEnd = rawHtml.indexOf('</tr>', match.index + match[0].length);
+      if (trStart !== -1 && trEnd !== -1 && (trEnd - trStart) < 2500) {
+        contextHtml = rawHtml.slice(trStart, trEnd + 5);
+      }
+      const contextText = stripHtmlToText(contextHtml);
+      const timeMatch = contextHtml.match(/datetime=["']([^"']+)["']/i);
+      const pubDate = timeMatch ? timeMatch[1] : '';
+
+      const friction = scoreHansardText(`${title} ${contextText}`);
+      const submissionDate = extractSubmissionDate({ texts: [title, contextText], pubDate, url: href });
+      const responsiblePerson = extractResponsiblePerson({ texts: [contextText], title });
+      const { summary, content_excerpt } = buildIssueSummaryAndExcerpt({
+        title, category, status: categoryStatus, rawSnippet: contextText, url: href, submissionDate
+      });
+
       candidates.push({
         topic: title,
         category,
         status: categoryStatus,
         friction: friction !== null ? friction : 42.0,
-        url: href
+        url: href,
+        submission_date: submissionDate,
+        responsible_person: responsiblePerson,
+        summary,
+        content_excerpt
       });
       if (candidates.length >= limit) return candidates;
     }
@@ -1311,7 +1568,7 @@ async function fetchParliamentaryPolicyTracker() {
   if (available.length > 0) {
     const avgScore = Number((available.reduce((sum, item) => sum + item.score, 0) / available.length).toFixed(2));
     const hansardOk = available.some(item => item.category === 'Hansards');
-    const trackedTopics = available.flatMap(item => item.topics).slice(0, 15);
+    const trackedTopics = enrichAndRankTrackedTopics(available.flatMap(item => item.topics)).slice(0, 20);
     const totalChars = available.reduce((sum, item) => sum + (item.charCount || 0), 0);
     const okResult = {
       score: avgScore,
@@ -1377,6 +1634,7 @@ function readVerifiedTelemetryCache(options = {}) {
       ) {
         return {
           ...snapshot,
+          tracked_topics: enrichAndRankTrackedTopics(snapshot.tracked_topics || []).slice(0, 20),
           fromCache: true,
           cacheUpdatedAt: raw.updated_at || raw.timestamp || snapshot.captured_at || null
         };
@@ -1395,7 +1653,7 @@ function readVerifiedTelemetryCache(options = {}) {
         accessibleSources: raw.accessible_sources,
         totalSources: raw.total_sources || 5,
         sources: [],
-        tracked_topics: Array.isArray(raw.tracked_topics) ? raw.tracked_topics : [],
+        tracked_topics: enrichAndRankTrackedTopics(Array.isArray(raw.tracked_topics) ? raw.tracked_topics : []).slice(0, 20),
         fromCache: true,
         cacheUpdatedAt: raw.timestamp || raw.updated_at || null
       };

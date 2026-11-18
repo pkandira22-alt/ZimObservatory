@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 try:
     from aiohttp import web
@@ -226,6 +227,243 @@ def _strip_html(raw_html):
     return " ".join(html_lib.unescape(cleaned).split())
 
 
+MONTH_NAME_MAP = {
+    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
+    "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6,
+    "july": 7, "jul": 7, "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9,
+    "october": 10, "oct": 10, "november": 11, "nov": 11, "december": 12, "dec": 12,
+}
+
+
+def _parse_iso_date_str(raw_date):
+    value = str(raw_date or "").strip()
+    if not value:
+        return None
+    iso_match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", value)
+    if iso_match:
+        return iso_match.group(1)
+    try:
+        dt = parsedate_to_datetime(value)
+        if dt is not None:
+            return dt.date().isoformat()
+    except Exception:
+        pass
+    dmy = re.search(
+        r"\b(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(20\d{2})\b",
+        value,
+        re.IGNORECASE,
+    )
+    if dmy:
+        day, month_name, year = int(dmy.group(1)), dmy.group(2).lower(), int(dmy.group(3))
+        month = MONTH_NAME_MAP.get(month_name)
+        if month and 1 <= day <= 31:
+            return f"{year:04d}-{month:02d}-{day:02d}"
+    mdy = re.search(
+        r"\b(January|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})\b",
+        value,
+        re.IGNORECASE,
+    )
+    if mdy:
+        month_name, day, year = mdy.group(1).lower(), int(mdy.group(2)), int(mdy.group(3))
+        month = MONTH_NAME_MAP.get(month_name)
+        if month and 1 <= day <= 31:
+            return f"{year:04d}-{month:02d}-{day:02d}"
+    return None
+
+
+def _extract_submission_date(*texts, pub_date="", url=""):
+    """Extract verified submission/publication/gazette date as YYYY-MM-DD when present."""
+    for candidate in (pub_date,):
+        parsed = _parse_iso_date_str(candidate)
+        if parsed:
+            return parsed
+    akn_match = re.search(r"@(\d{4}-\d{2}-\d{2})(?:[/?#]|$)", str(url or ""))
+    if akn_match:
+        return akn_match.group(1)
+    for text in texts:
+        parsed = _parse_iso_date_str(text)
+        if parsed:
+            return parsed
+    return None
+
+
+def _extract_responsible_person(*texts, author="", source_name="", title=""):
+    """Extract named sponsor, minister, committee, MP, or source desk strictly from real metadata/text."""
+    raw_author = " ".join(str(author or "").split())
+    if raw_author and "@" not in raw_author and len(raw_author) >= 3:
+        return raw_author[:120]
+
+    combined = " ".join(t for t in (title, *texts) if t)
+    minister_match = re.search(
+        r"\b(Minister of [A-Z][A-Za-z,&/\- ]{3,75}?)(?=\)|\]|;|\s+Notice\b|\s+Regulations\b|\s+Bill\b|\s+Act\b|,?\s+20\d{2}|$)",
+        combined,
+    )
+    if minister_match:
+        return " ".join(minister_match.group(1).split()).rstrip(".,;:- ")
+
+    submit_match = re.search(
+        r"\b(?:tabled by|submitted by|presented by|moved by|sponsored by|prepared by|authored by)\s+([A-Z][A-Za-z.'\- ]{2,65}?)(?=[.;,\n]|$)",
+        combined,
+        re.IGNORECASE,
+    )
+    if submit_match:
+        return " ".join(submit_match.group(1).split()).rstrip(".,;:- ")
+
+    hon_match = re.search(
+        r"\b((?:Hon\.?|Honourable|Sen\.?|Senator)\s+[A-Z][A-Za-z.'\-]+(?:\s+[A-Z][A-Za-z.'\-]+){1,3})\b",
+        combined,
+    )
+    if hon_match:
+        return " ".join(hon_match.group(1).split())
+
+    committee_match = re.search(
+        r"\b((?:Parliamentary\s+)?(?:Portfolio|Thematic|Public Accounts)\s+Committee(?:\s+on\s+[A-Z][A-Za-z,&/\- ]{3,50})?)\b",
+        combined,
+        re.IGNORECASE,
+    )
+    if committee_match:
+        return " ".join(committee_match.group(1).split()).rstrip(".,;:- ")
+
+    institution_match = re.search(
+        r"\b(Office of the Auditor[\s\-]General|Auditor[\s\-]General|Reserve Bank of Zimbabwe|Constitutional Court|ZIMRA|Parliament of Zimbabwe)\b",
+        combined,
+        re.IGNORECASE,
+    )
+    if institution_match:
+        return " ".join(institution_match.group(1).split())
+
+    clean_source = " ".join(str(source_name or "").split())
+    if not clean_source and " - " in str(title or ""):
+        possible_pub = str(title).rsplit(" - ", 1)[-1].strip()
+        if 3 <= len(possible_pub) <= 60 and not re.search(r"\d{4}", possible_pub):
+            clean_source = possible_pub
+    if clean_source:
+        return f"Submitted via {clean_source}"
+
+    return "Not stated in portal index"
+
+
+def _extract_akn_citation(url):
+    raw_url = str(url or "")
+    si_match = re.search(r"/akn/zw/act/si/(\d{4})/(\d+)", raw_url, re.IGNORECASE)
+    if si_match:
+        return f"Statutory Instrument {si_match.group(2)} of {si_match.group(1)}"
+    act_match = re.search(r"/akn/zw/act/(\d{4})/(\d+)", raw_url, re.IGNORECASE)
+    if act_match:
+        return f"Act {act_match.group(2)} of {act_match.group(1)}"
+    return ""
+
+
+def _infer_policy_themes(text):
+    lower = str(text or "").lower()
+    themes = []
+    checks = (
+        ("fiscal & taxation controls", ("tax", "budget", "expenditure", "audit", "levy", "treasury", "debt")),
+        ("procurement & anti-corruption oversight", ("tender", "procurement", "corruption", "embezzlement", "graft", "audit discrepancy")),
+        ("currency & macro stability", ("inflation", "currency", "exchange rate", "parallel market", "depreciation", "fuel")),
+        ("regulatory & civic compliance", ("private voluntary", "supervision", "terrorist financing", "constitution", "amendment", "disabilities", "court")),
+        ("border & infrastructure modernisation", ("toll", "border", "chirundu", "forbes", "road", "energy", "mining")),
+        ("executive portfolio governance", ("assignment of functions", "minister", "lands", "agriculture", "local authority")),
+    )
+    for label, keywords in checks:
+        if any(kw in lower for kw in keywords):
+            themes.append(label)
+    return themes[:2]
+
+
+def _build_issue_summary_and_excerpt(title, category, status, raw_snippet="", url="", submission_date=None):
+    clean_snippet = " ".join(str(raw_snippet or "").split())
+    citation = _extract_akn_citation(url)
+    if clean_snippet and clean_snippet.lower() != str(title or "").strip().lower():
+        content_excerpt = clean_snippet[:420] + ("…" if len(clean_snippet) > 420 else "")
+    elif citation:
+        date_note = f" (gazetted/dated {submission_date})" if submission_date else ""
+        content_excerpt = f"{citation}{date_note} — {title}."
+    else:
+        content_excerpt = f"{title} ({category} · {status})."
+
+    themes = _infer_policy_themes(f"{title} {clean_snippet}")
+    theme_clause = f" Focuses on {' and '.join(themes)}." if themes else ""
+    date_clause = f" Dated {submission_date}." if submission_date else ""
+
+    if clean_snippet and len(clean_snippet) >= 45 and clean_snippet.lower() != str(title or "").strip().lower():
+        first_sentence = re.split(r"(?<=[.!?])\s+", clean_snippet, maxsplit=1)[0]
+        if len(first_sentence) > 220:
+            first_sentence = first_sentence[:217].rstrip() + "…"
+        summary = f"{first_sentence}{theme_clause}"
+    elif citation:
+        summary = f"{citation} ({status}).{date_clause}{theme_clause}"
+    else:
+        summary = f"{category} record classified as {status}.{date_clause}{theme_clause}"
+
+    return summary.strip(), content_excerpt.strip()
+
+
+def _enrich_and_rank_topics(topics):
+    """Deduplicate, enrich missing metadata strictly from real record properties, and rank by friction risk."""
+    if not isinstance(topics, list):
+        return []
+    deduped = {}
+    for raw in topics:
+        if not isinstance(raw, dict):
+            continue
+        title = " ".join(str(raw.get("topic") or "").split())
+        if not title:
+            continue
+        category = str(raw.get("category") or "Parliament").strip()
+        status = str(raw.get("status") or raw.get("action_status") or "Tracked").strip()
+        url = str(raw.get("url") or "").strip()
+        raw_friction = raw.get("friction", raw.get("friction_score"))
+        friction = round(float(raw_friction), 2) if isinstance(raw_friction, (int, float)) and not isinstance(raw_friction, bool) and math.isfinite(raw_friction) else 42.0
+
+        existing_excerpt = str(raw.get("content_excerpt") or "").strip()
+        existing_summary = str(raw.get("summary") or "").strip()
+        submission_date = raw.get("submission_date") or _extract_submission_date(
+            title, existing_excerpt, existing_summary, url=url
+        )
+        responsible_person = str(raw.get("responsible_person") or "").strip()
+        if not responsible_person or responsible_person == "Not stated in portal index":
+            responsible_person = _extract_responsible_person(existing_excerpt, title=title)
+        if not existing_summary or not existing_excerpt:
+            computed_summary, computed_excerpt = _build_issue_summary_and_excerpt(
+                title, category, status, raw_snippet=existing_excerpt, url=url, submission_date=submission_date
+            )
+            summary = existing_summary or computed_summary
+            content_excerpt = existing_excerpt or computed_excerpt
+        else:
+            summary = existing_summary
+            content_excerpt = existing_excerpt
+
+        enriched = {
+            **raw,
+            "topic": title[:160],
+            "category": category,
+            "status": status,
+            "friction": friction,
+            "url": url,
+            "submission_date": submission_date,
+            "responsible_person": responsible_person,
+            "summary": summary,
+            "content_excerpt": content_excerpt,
+        }
+        key = (title.lower(), category.lower())
+        prev = deduped.get(key)
+        if prev is None or len(enriched["content_excerpt"]) > len(prev.get("content_excerpt", "")):
+            deduped[key] = enriched
+
+    ranked = sorted(
+        deduped.values(),
+        key=lambda item: (
+            -float(item.get("friction") or 0.0),
+            -(int(item["submission_date"].replace("-", "")) if item.get("submission_date") and re.fullmatch(r"\d{4}-\d{2}-\d{2}", item["submission_date"]) else 0),
+            item.get("topic", "").lower(),
+        ),
+    )
+    for idx, item in enumerate(ranked, start=1):
+        item["rank"] = idx
+    return ranked
+
+
 def _extract_rss_topics(raw_xml, category, base_url, limit=4):
     try:
         root = ET.fromstring(raw_xml)
@@ -243,10 +481,15 @@ def _extract_rss_topics(raw_xml, category, base_url, limit=4):
     text_parts = []
     candidates = []
     seen = set()
+    dc_ns = "{http://purl.org/dc/elements/1.1/}"
     for item in items:
         title = " ".join(_strip_html(item.findtext("title") or "").split())
         link = (item.findtext("link") or base_url).strip()
         desc = " ".join(_strip_html(item.findtext("description") or "").split())
+        pub_date = (item.findtext("pubDate") or item.findtext(f"{dc_ns}date") or "").strip()
+        author = (item.findtext(f"{dc_ns}creator") or item.findtext("author") or "").strip()
+        source_el = item.find("source")
+        source_name = (source_el.text or "").strip() if source_el is not None else ""
         if title:
             text_parts.append(title)
         if desc:
@@ -255,18 +498,29 @@ def _extract_rss_topics(raw_xml, category, base_url, limit=4):
         if len(title) >= 12 and lower_title not in seen and len(candidates) < limit:
             seen.add(lower_title)
             friction = score_hansard_text(f"{title} {desc}")
+            submission_date = _extract_submission_date(title, desc, pub_date=pub_date, url=link)
+            responsible_person = _extract_responsible_person(
+                desc, author=author, source_name=source_name, title=title
+            )
+            summary, content_excerpt = _build_issue_summary_and_excerpt(
+                title, category, category_status, raw_snippet=desc, url=link, submission_date=submission_date
+            )
             candidates.append({
                 "topic": title[:160],
                 "category": category,
                 "status": category_status,
                 "friction": friction if friction is not None else 42.0,
                 "url": link,
+                "submission_date": submission_date,
+                "responsible_person": responsible_person,
+                "summary": summary,
+                "content_excerpt": content_excerpt,
             })
     return candidates, " ".join(text_parts)
 
 
 def extract_legislative_topics(raw_html, category, base_url, limit=4):
-    """Extract real document/debate titles from accessible HTML or XML RSS pages without fabricating entries."""
+    """Extract real document/debate titles, dates, sponsors, and summaries from accessible HTML or XML RSS pages."""
     if not raw_html:
         return []
     stripped_start = raw_html.lstrip()
@@ -328,13 +582,33 @@ def extract_legislative_topics(raw_html, category, base_url, limit=4):
             ):
                 continue
             seen.add(lower_title)
-            friction = score_hansard_text(title)
+            row_start = max(0, match.start() - 250)
+            row_end = min(len(raw_html), match.end() + 450)
+            context_html = raw_html[row_start:row_end]
+            tr_start = raw_html.rfind("<tr", max(0, match.start() - 1200), match.start())
+            tr_end = raw_html.find("</tr>", match.end(), min(len(raw_html), match.end() + 1200))
+            if tr_start != -1 and tr_end != -1:
+                context_html = raw_html[tr_start:tr_end + 5]
+            context_text = " ".join(_strip_html(context_html).split())
+            time_match = re.search(r'datetime=["\']([^"\']+)["\']', context_html, re.IGNORECASE)
+            time_attr = time_match.group(1) if time_match else ""
+
+            friction = score_hansard_text(f"{title} {context_text}")
+            submission_date = _extract_submission_date(title, context_text, pub_date=time_attr, url=href)
+            responsible_person = _extract_responsible_person(context_text, title=title)
+            summary, content_excerpt = _build_issue_summary_and_excerpt(
+                title, category, category_status, raw_snippet=context_text, url=href, submission_date=submission_date
+            )
             candidates.append({
                 "topic": title,
                 "category": category,
                 "status": category_status,
                 "friction": friction if friction is not None else 42.0,
                 "url": href,
+                "submission_date": submission_date,
+                "responsible_person": responsible_person,
+                "summary": summary,
+                "content_excerpt": content_excerpt,
             })
             if len(candidates) >= limit:
                 return candidates
@@ -686,12 +960,26 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
                         pdf_count += 1
                         pdf_score = score_hansard_text(pdf_text)
                         pdf_text_chunks.append(pdf_text)
+                        pdf_date = _extract_submission_date(pdf_link["title"], pdf_text[:1500], url=pdf_link["url"])
+                        pdf_person = _extract_responsible_person(pdf_text[:2000], title=pdf_link["title"])
+                        pdf_summary, pdf_excerpt = _build_issue_summary_and_excerpt(
+                            pdf_link["title"],
+                            category,
+                            "PDF Downloaded & Ingested",
+                            raw_snippet=pdf_text[:450],
+                            url=pdf_link["url"],
+                            submission_date=pdf_date,
+                        )
                         pdf_topics.append({
                             "topic": pdf_link["title"],
                             "category": category,
                             "status": "PDF Downloaded & Ingested",
                             "friction": pdf_score if pdf_score is not None else 42.0,
                             "url": pdf_link["url"],
+                            "submission_date": pdf_date,
+                            "responsible_person": pdf_person,
+                            "summary": pdf_summary,
+                            "content_excerpt": pdf_excerpt,
                         })
                 if pdf_text_chunks:
                     stripped_text = f"{stripped_text} {' '.join(pdf_text_chunks)}".strip()
@@ -763,7 +1051,7 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
             "accessibleSources": accessible_sources,
             "totalSources": total_sources,
             "sources": sources_status,
-            "tracked_topics": tracked_topics[:15],
+            "tracked_topics": _enrich_and_rank_topics(tracked_topics)[:20],
         }
         HANSARD_CACHE["data"] = result
         HANSARD_CACHE["expires_at"] = now + HANSARD_TTL_SECONDS
@@ -833,6 +1121,7 @@ def _load_verified_telemetry_cache(allow_fresh_blocked=False):
             and math.isfinite(score)
         ):
             hydrated = dict(snapshot)
+            hydrated["tracked_topics"] = _enrich_and_rank_topics(hydrated.get("tracked_topics") or [])[:20]
             hydrated["fromCache"] = True
             hydrated["cacheUpdatedAt"] = raw.get("updated_at") or raw.get("timestamp") or snapshot.get("captured_at")
             return hydrated
@@ -846,7 +1135,7 @@ def _load_verified_telemetry_cache(allow_fresh_blocked=False):
         and not isinstance(flat_score, bool)
         and math.isfinite(flat_score)
     ):
-        topics = raw.get("tracked_topics") if isinstance(raw.get("tracked_topics"), list) else []
+        topics = _enrich_and_rank_topics(raw.get("tracked_topics") if isinstance(raw.get("tracked_topics"), list) else [])[:20]
         return {
             "score": round(float(flat_score), 2),
             "status": "available",

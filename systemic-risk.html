@@ -494,35 +494,170 @@
             });
 
             topicsPanel.replaceChildren();
-            const topics = Array.isArray(hansard?.tracked_topics) ? hansard.tracked_topics : [];
-            if (topics.length > 0) {
+            const rawTopics = Array.isArray(hansard?.tracked_topics) ? hansard.tracked_topics : [];
+            if (rawTopics.length > 0) {
+                if (!window.__sysRiskTrackerState) {
+                    window.__sysRiskTrackerState = { sortBy: 'rank', category: 'All' };
+                }
+                window.__latestSysRiskHansard = hansard;
+                const state = window.__sysRiskTrackerState;
+
+                const headerBar = document.createElement('div');
+                headerBar.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3';
+
                 const heading = document.createElement('h4');
-                heading.className = 'text-xs font-semibold uppercase tracking-wider text-slate-300 mb-3';
-                heading.textContent = `Extracted Active Parliamentary & Policy Topics (${topics.length})`;
-                topicsPanel.append(heading);
+                heading.className = 'text-xs font-semibold uppercase tracking-wider text-slate-300';
+                heading.textContent = `Ranked Parliamentary Issues & Submissions (${rawTopics.length})`;
+
+                const controls = document.createElement('div');
+                controls.className = 'flex flex-wrap items-center gap-2';
+
+                const catSelect = document.createElement('select');
+                catSelect.setAttribute('aria-label', 'Filter tracked issues by portal');
+                catSelect.className = 'bg-slate-950 text-slate-200 border border-slate-700 rounded px-2 py-1 text-xs';
+                ['All', ...new Set(rawTopics.map(t => t.category).filter(Boolean))].forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat === 'All' ? 'All Portals' : cat;
+                    if (state.category === cat) opt.selected = true;
+                    catSelect.append(opt);
+                });
+                catSelect.addEventListener('change', () => {
+                    state.category = catSelect.value;
+                    renderLegislativePolicyTracker(window.__latestSysRiskHansard);
+                });
+
+                const sortSelect = document.createElement('select');
+                sortSelect.setAttribute('aria-label', 'Sort tracked issues');
+                sortSelect.className = 'bg-slate-950 text-slate-200 border border-slate-700 rounded px-2 py-1 text-xs';
+                [
+                    { value: 'rank', label: 'Rank: Friction Risk (High → Low)' },
+                    { value: 'date', label: 'Sort: Submission Date (Newest)' }
+                ].forEach(cfg => {
+                    const opt = document.createElement('option');
+                    opt.value = cfg.value;
+                    opt.textContent = cfg.label;
+                    if (state.sortBy === cfg.value) opt.selected = true;
+                    sortSelect.append(opt);
+                });
+                sortSelect.addEventListener('change', () => {
+                    state.sortBy = sortSelect.value;
+                    renderLegislativePolicyTracker(window.__latestSysRiskHansard);
+                });
+
+                controls.append(catSelect, sortSelect);
+                headerBar.append(heading, controls);
+                topicsPanel.append(headerBar);
+
+                const sortedTopics = rawTopics
+                    .filter(entry => state.category === 'All' || entry.category === state.category)
+                    .slice()
+                    .sort((a, b) => {
+                        if (state.sortBy === 'date') {
+                            const dA = a.submission_date || '';
+                            const dB = b.submission_date || '';
+                            if (dB !== dA) return dB.localeCompare(dA);
+                        }
+                        const rA = Number.isFinite(a.rank) ? a.rank : 9999;
+                        const rB = Number.isFinite(b.rank) ? b.rank : 9999;
+                        if (rA !== rB) return rA - rB;
+                        const fA = Number.isFinite(a.friction) ? a.friction : (a.friction_score || 0);
+                        const fB = Number.isFinite(b.friction) ? b.friction : (b.friction_score || 0);
+                        return fB - fA;
+                    });
 
                 const list = document.createElement('div');
-                list.className = 'divide-y divide-slate-800/80';
-                topics.slice(0, 10).forEach(entry => {
-                    const row = document.createElement('div');
-                    row.className = 'py-2.5 flex items-center justify-between gap-4';
-
-                    const left = document.createElement('div');
-                    left.className = 'min-w-0';
-                    const title = document.createElement('p');
-                    title.className = 'text-sm font-medium text-white truncate';
-                    title.textContent = entry.topic || 'Legislative record';
-                    const sub = document.createElement('p');
-                    sub.className = 'text-xs text-slate-400';
-                    sub.textContent = `${entry.category || 'Parliament'} · ${entry.status || entry.action_status || 'Tracked'}`;
-                    left.append(title, sub);
-
+                list.className = 'divide-y divide-slate-800/80 max-h-[520px] overflow-y-auto pr-1';
+                sortedTopics.slice(0, 15).forEach((entry, idx) => {
                     const topicFriction = Number.isFinite(entry.friction) ? entry.friction : entry.friction_score;
+                    const isElevated = Number.isFinite(topicFriction) && topicFriction >= 50;
+
+                    const row = document.createElement('div');
+                    row.className = 'py-3 space-y-1.5';
+
+                    const top = document.createElement('div');
+                    top.className = 'flex items-start justify-between gap-4';
+
+                    const titleWrap = document.createElement('div');
+                    titleWrap.className = 'flex items-baseline gap-2 min-w-0';
+
+                    const rankBadge = document.createElement('span');
+                    const displayRank = Number.isFinite(entry.rank) ? entry.rank : (idx + 1);
+                    rankBadge.className = `text-[11px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                        isElevated ? 'bg-amber-500/15 text-amber-300' : 'bg-sky-500/15 text-sky-300'
+                    }`;
+                    rankBadge.textContent = `#${displayRank}`;
+
+                    const safeUrl = typeof entry.url === 'string' && /^https?:\/\//i.test(entry.url) ? entry.url : null;
+                    let titleNode;
+                    if (safeUrl) {
+                        titleNode = document.createElement('a');
+                        titleNode.href = safeUrl;
+                        titleNode.target = '_blank';
+                        titleNode.rel = 'noopener noreferrer';
+                        titleNode.className = 'text-sm font-medium text-white hover:text-sky-300 transition-colors';
+                    } else {
+                        titleNode = document.createElement('p');
+                        titleNode.className = 'text-sm font-medium text-white';
+                    }
+                    titleNode.textContent = entry.topic || 'Legislative record';
+                    titleWrap.append(rankBadge, titleNode);
+
                     const score = document.createElement('span');
-                    score.className = 'text-xs font-mono tabular-nums font-bold text-emerald-400 shrink-0';
+                    score.className = `text-xs font-mono tabular-nums font-bold shrink-0 ${
+                        isElevated ? 'text-amber-400' : 'text-emerald-400'
+                    }`;
                     score.textContent = Number.isFinite(topicFriction) ? `${topicFriction.toFixed(1)} / 100` : '--';
 
-                    row.append(left, score);
+                    top.append(titleWrap, score);
+
+                    const meta = document.createElement('div');
+                    meta.className = 'flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400';
+                    const catSpan = document.createElement('span');
+                    catSpan.textContent = `${entry.category || 'Parliament'} · ${entry.status || entry.action_status || 'Tracked'}`;
+                    const dateSpan = document.createElement('span');
+                    dateSpan.className = entry.submission_date ? 'text-slate-200' : 'text-slate-400';
+                    dateSpan.textContent = `Submitted: ${entry.submission_date || 'Date unstated in index'}`;
+                    const personSpan = document.createElement('span');
+                    personSpan.className = entry.responsible_person && entry.responsible_person !== 'Not stated in portal index' ? 'text-slate-300' : 'text-slate-400';
+                    personSpan.textContent = `Responsible: ${entry.responsible_person || 'Not stated in portal index'}`;
+                    meta.append(catSpan, dateSpan, personSpan);
+
+                    row.append(top, meta);
+
+                    if (entry.summary) {
+                        const sumP = document.createElement('p');
+                        sumP.className = 'text-xs text-slate-300 leading-relaxed';
+                        sumP.textContent = entry.summary;
+                        row.append(sumP);
+                    }
+
+                    if (entry.content_excerpt || safeUrl) {
+                        const details = document.createElement('details');
+                        details.className = 'text-xs text-slate-400 pt-0.5';
+                        const sumToggle = document.createElement('summary');
+                        sumToggle.className = 'cursor-pointer text-sky-400 hover:text-sky-300 select-none';
+                        sumToggle.textContent = 'View extracted contents & record details';
+
+                        const excerptBox = document.createElement('div');
+                        excerptBox.className = 'mt-1.5 p-2.5 rounded bg-slate-950/80 border border-slate-800 text-slate-300 leading-relaxed space-y-1.5';
+                        const excerptP = document.createElement('p');
+                        excerptP.textContent = entry.content_excerpt || entry.summary || '';
+                        excerptBox.append(excerptP);
+
+                        if (safeUrl) {
+                            const linkEl = document.createElement('a');
+                            linkEl.href = safeUrl;
+                            linkEl.target = '_blank';
+                            linkEl.rel = 'noopener noreferrer';
+                            linkEl.className = 'inline-block text-amber-400 hover:underline';
+                            linkEl.textContent = 'Open source submission record';
+                            excerptBox.append(linkEl);
+                        }
+                        details.append(sumToggle, excerptBox);
+                        row.append(details);
+                    }
+
                     list.append(row);
                 });
                 topicsPanel.append(list);

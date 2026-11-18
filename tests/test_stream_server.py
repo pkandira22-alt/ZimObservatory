@@ -355,6 +355,61 @@ class StreamServerTests(unittest.TestCase):
         self.assertEqual(tracker["sources"][0]["transport"], "flaresolverr")
         self.assertIn("Finance Bill Digest 2026", [t["topic"] for t in tracker["tracked_topics"]])
 
+    def test_tracked_issues_include_dates_summaries_responsible_persons_and_ranks(self):
+        rss_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+          <channel>
+            <item>
+              <title>Parliament Public Accounts Committee probes tender embezzlement</title>
+              <link>https://news.example.zw/pac-audit</link>
+              <pubDate>Tue, 10 Nov 2026 09:30:00 GMT</pubDate>
+              <dc:creator>Hon. Charlton Hwende</dc:creator>
+              <description>Tabled oversight findings on audit discrepancies and unauthorized procurement expenditure.</description>
+            </item>
+          </channel>
+        </rss>"""
+        rss_items, _ = stream_server._extract_rss_topics(rss_xml, "Hansards", "https://e-portal.parlzim.gov.zw/")
+        self.assertEqual(len(rss_items), 1)
+        self.assertEqual(rss_items[0]["submission_date"], "2026-11-10")
+        self.assertEqual(rss_items[0]["responsible_person"], "Hon. Charlton Hwende")
+        self.assertIn("audit discrepancies", rss_items[0]["content_excerpt"])
+        self.assertTrue(rss_items[0]["summary"])
+
+        raw_topics = [
+            {
+                "topic": "Toll Roads (Forbes Border Post Modernisation) Regulations, 2026",
+                "category": "Bill Digests",
+                "status": "Legislative Pipeline",
+                "friction": 42.0,
+                "url": "https://zimlii.org/akn/zw/act/si/2026/179/eng@2026-11-06",
+            },
+            {
+                "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+                "category": "Enacted Acts",
+                "status": "Enacted / Gazetted",
+                "friction": 49.02,
+                "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04",
+            },
+            rss_items[0],
+        ]
+        ranked = stream_server._enrich_and_rank_topics(raw_topics)
+        self.assertEqual([item["rank"] for item in ranked], [1, 2, 3])
+        self.assertGreaterEqual(ranked[0]["friction"], ranked[1]["friction"])
+        self.assertGreaterEqual(ranked[1]["friction"], ranked[2]["friction"])
+
+        si_notice = next(t for t in ranked if "Assignment of Functions" in t["topic"])
+        self.assertEqual(si_notice["submission_date"], "2026-06-04")
+        self.assertEqual(
+            si_notice["responsible_person"],
+            "Minister of Lands, Agriculture, Fisheries, Water and Rural Development",
+        )
+        self.assertIn("Statutory Instrument 96 of 2026", si_notice["summary"])
+        self.assertIn("Statutory Instrument 96 of 2026", si_notice["content_excerpt"])
+
+        toll_reg = next(t for t in ranked if "Forbes Border Post" in t["topic"])
+        self.assertEqual(toll_reg["submission_date"], "2026-11-06")
+        self.assertEqual(toll_reg["responsible_person"], "Not stated in portal index")
+
     def test_telemetry_cache_fallback_only_uses_verified_available_snapshots(self):
         import os
         import tempfile
