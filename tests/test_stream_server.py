@@ -523,6 +523,26 @@ class StreamServerTests(unittest.TestCase):
         self.assertIn("--- Page 2 ---", full_pdf_text)
         self.assertIn("Clause 2: Parliamentary oversight of state enterprises.", full_pdf_text)
 
+        title_page = MagicMock()
+        title_page.extract_text.return_value = (
+            "PARLIAMENT OF ZIMBABWE\n"
+            "Page 1\n"
+            "PUBLIC PROCUREMENT TRANSPARENCY AND TENDER AUDIT BILL REPORT\n"
+            "Presented by Committee on Public Accounts on 14 October 2026 regarding unauthorized expenditure."
+        )
+        title_reader = MagicMock()
+        title_reader.return_value.pages = [title_page]
+        title_reader.return_value.metadata = {}
+        with patch.object(stream_server, "PdfReader", title_reader):
+            true_topic, t_date, t_person, _t_sum, _t_full = stream_server.extract_true_pdf_topic_and_text(
+                b"%PDF-1.7 heading",
+                fallback_title="Download PDF",
+                pdf_url="https://www.parlzim.gov.zw/wp-content/uploads/2026/10/doc.pdf",
+            )
+        self.assertEqual(true_topic, "Public Procurement Transparency And Tender Audit Bill Report")
+        self.assertEqual(t_date, "2026-10-14")
+        self.assertEqual(t_person, "Committee on Public Accounts")
+
     def test_telemetry_cache_fallback_only_uses_verified_available_snapshots(self):
         import os
         import tempfile

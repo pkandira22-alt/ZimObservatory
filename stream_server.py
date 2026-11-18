@@ -887,7 +887,12 @@ def _read_pdf_info_and_text(pdf_bytes, max_pages=None):
         raw_meta = getattr(reader, "metadata", None) or {}
         info = {}
         if isinstance(raw_meta, dict) or hasattr(raw_meta, "get"):
-            for key, alias in (("/Author", "author"), ("author", "author"), ("/CreationDate", "creation_date"), ("creation_date", "creation_date"), ("/ModDate", "mod_date"), ("mod_date", "mod_date")):
+            for key, alias in (
+                ("/Title", "title"), ("title", "title"),
+                ("/Author", "author"), ("author", "author"),
+                ("/CreationDate", "creation_date"), ("creation_date", "creation_date"),
+                ("/ModDate", "mod_date"), ("mod_date", "mod_date"),
+            ):
                 val = raw_meta.get(key)
                 if isinstance(val, str) and val.strip() and alias not in info:
                     info[alias] = val.strip()
@@ -904,13 +909,55 @@ def extract_full_pdf_text(pdf_bytes, max_pages=None):
     return full_structured
 
 
-def extract_pdf_metadata_and_text(pdf_bytes, max_pages=None, pdf_url=""):
-    """Extract complete page text, submission date, responsible body/person, and 1200-char summary from PDF bytes."""
+def _is_heading_line(line):
+    words = [w for w in re.findall(r"[A-Za-z]+", line) if len(w) >= 3]
+    if len(words) < 3:
+        return False
+    cap_ratio = sum(1 for w in words if w[0].isupper()) / len(words)
+    if line.endswith(".") and not re.search(r"\b(?:Act|Bill|Report|Notice|Regulations)\.$", line, re.IGNORECASE):
+        return False
+    return cap_ratio >= 0.6
+
+
+def _extract_pdf_true_title(info, full_structured, fallback_title=""):
+    raw_meta_title = " ".join(str((info or {}).get("title") or "").split())
+    if (
+        12 <= len(raw_meta_title) <= 140
+        and not re.search(r"\b(?:untitled|document\s*\d*|microsoft|adobe|libreoffice|slide)\b|\.(?:pdf|docx?|pptx?)$", raw_meta_title, re.IGNORECASE)
+        and not _is_non_issue_link(raw_meta_title)
+        and re.search(r"[a-zA-Z]{4,}", raw_meta_title)
+    ):
+        return _clean_issue_title(raw_meta_title)
+
+    first_page = str(full_structured or "").split("--- Page 2 ---", 1)[0]
+    for raw_line in first_page.splitlines():
+        line = " ".join(raw_line.split()).strip(" :-–—|")
+        if not line or line.startswith("--- Page "):
+            continue
+        if len(line) < 12 or len(line) > 125:
+            continue
+        if re.match(
+            r"^(?:page\s*\d*|\d+|zimbabwe|parliament(?:\s+of\s+zimbabwe)?|national\s+assembly|senate|government\s+gazette|table\s+of\s+contents|contents|chapter\s+\d+|act\s+no\.?|bill\s+no\.?|h\.?b\.?\s*\d*|s\.?i\.?\s*\d*)$",
+            line,
+            re.IGNORECASE,
+        ):
+            continue
+        if _is_non_issue_link(line):
+            continue
+        if _is_heading_line(line):
+            normalized = line.title() if line.isupper() else line
+            return _clean_issue_title(normalized)[:160]
+    return fallback_title
+
+
+def extract_true_pdf_topic_and_text(pdf_bytes, fallback_title="", max_pages=None, pdf_url=""):
+    """Extract true PDF heading/topic, submission date, responsible body/person, summary, and full text."""
     info, full_structured, flat_text, page_count = _read_pdf_info_and_text(pdf_bytes, max_pages=max_pages)
     if not flat_text:
         info_date = _parse_pdf_info_date(info.get("creation_date") or info.get("mod_date"))
         fallback_date = info_date or _extract_submission_date(url=pdf_url)
-        return fallback_date, "Not stated in PDF", "", ""
+        return fallback_title, fallback_date, "Not stated in PDF", "", ""
+    true_topic = _extract_pdf_true_title(info, full_structured, fallback_title=fallback_title)
     head_text = flat_text[:4000]
     submission_date = _extract_submission_date(head_text)
     if not submission_date:
@@ -928,6 +975,14 @@ def extract_pdf_metadata_and_text(pdf_bytes, max_pages=None, pdf_url=""):
     full_payload = full_structured[:60000] + ("\n\n[Truncated after 60,000 characters]" if len(full_structured) > 60000 else "")
     if page_count:
         info["page_count"] = page_count
+    return true_topic, submission_date, responsible_person, summary, full_payload
+
+
+def extract_pdf_metadata_and_text(pdf_bytes, max_pages=None, pdf_url=""):
+    """Extract complete page text, submission date, responsible body/person, and 1200-char summary from PDF bytes."""
+    _topic, submission_date, responsible_person, summary, full_payload = extract_true_pdf_topic_and_text(
+        pdf_bytes, fallback_title="", max_pages=max_pages, pdf_url=pdf_url
+    )
     return submission_date, responsible_person, summary, full_payload
 
 
@@ -943,7 +998,14 @@ def extract_pdf_links(raw_html, base_url, limit=4):
     if BeautifulSoup is not None:
         try:
             soup = BeautifulSoup(content_html, "html.parser")
-            anchors = [(a.get("href", ""), a.get_text(" ", strip=True)) for a in soup.find_all("a", href=True)]
+            anchors = [
+                (a.get("data-downloadurl") or a.get("data-pdf") or a.get("href", ""), a.get_text(" ", strip=True))
+                for a in soup.find_all(["a", "button"], href=True)
+            ]
+            for tag in soup.find_all(["iframe", "embed", "object"]):
+                media_url = tag.get("src") or tag.get("data") or ""
+                if ".pdf" in str(media_url).lower():
+                    anchors.append((media_url, tag.get("title") or ""))
         except Exception:
             anchors = [
                 (html_lib.unescape(m.group(1)).strip(), _strip_html(m.group(2)))
@@ -954,6 +1016,8 @@ def extract_pdf_links(raw_html, base_url, limit=4):
             (html_lib.unescape(m.group(1)).strip(), _strip_html(m.group(2)))
             for m in re.finditer(r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', content_html)
         ]
+        for em in re.finditer(r'(?is)<(?:iframe|embed|object)[^>]+(?:src|data)=["\']([^"\']*\.pdf[^"\']*)["\']', content_html):
+            anchors.append((html_lib.unescape(em.group(1)).strip(), ""))
 
     for href, anchor_text in anchors:
         href = str(href or "").strip()
@@ -976,10 +1040,10 @@ def extract_pdf_links(raw_html, base_url, limit=4):
     return links
 
 
-def fetch_pdf_document_metadata(pdf_url, timeout=12):
-    """Download PDF binary and return (submission_date, responsible_person, summary, full_text) using pypdf."""
+def fetch_true_pdf_document(pdf_url, fallback_title="", timeout=12):
+    """Download PDF binary and return (true_topic, submission_date, responsible_person, summary, full_text) via pypdf."""
     if PdfReader is None or not pdf_url:
-        return None, "Not stated in PDF", "", ""
+        return fallback_title, None, "Not stated in PDF", "", ""
     raw_bytes = None
     try:
         if cureq is not None:
@@ -1024,7 +1088,9 @@ def fetch_pdf_document_metadata(pdf_url, timeout=12):
                 pass
 
     if raw_bytes:
-        return extract_pdf_metadata_and_text(raw_bytes, max_pages=None, pdf_url=pdf_url)
+        return extract_true_pdf_topic_and_text(
+            raw_bytes, fallback_title=fallback_title, max_pages=None, pdf_url=pdf_url
+        )
 
     if os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip():
         solved = _fetch_via_flaresolverr(pdf_url, timeout=max(timeout, 20))
@@ -1033,12 +1099,19 @@ def fetch_pdf_document_metadata(pdf_url, timeout=12):
             if status_code == 200 and solved_body:
                 solved_text = _strip_html(solved_body)
                 return (
+                    fallback_title,
                     _extract_submission_date(solved_text[:2500], url=pdf_url),
                     _extract_responsible_person(solved_text[:2500]),
-                    solved_text[:280],
+                    solved_text[:1200],
                     solved_text,
                 )
-    return None, "Not stated in PDF", "", ""
+    return fallback_title, None, "Not stated in PDF", "", ""
+
+
+def fetch_pdf_document_metadata(pdf_url, timeout=12):
+    """Download PDF binary and return (submission_date, responsible_person, summary, full_text) using pypdf."""
+    _topic, sub_date, person, summary, full_text = fetch_true_pdf_document(pdf_url, fallback_title="", timeout=timeout)
+    return sub_date, person, summary, full_text
 
 
 def fetch_pdf_document_text(pdf_url, timeout=12):
@@ -1189,20 +1262,21 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
                 pdf_topics = []
                 pdf_text_chunks = []
                 for pdf_link in pdf_links:
-                    pdf_date, pdf_person, raw_pdf_summary, pdf_text = fetch_pdf_document_metadata(
-                        pdf_link["url"], timeout=12
+                    true_topic, pdf_date, pdf_person, raw_pdf_summary, pdf_text = fetch_true_pdf_document(
+                        pdf_link["url"], fallback_title=pdf_link["title"], timeout=12
                     )
                     if len(pdf_text) >= 80:
                         pdf_count += 1
                         flat_pdf_body = " ".join(re.sub(r"---\s*Page\s+\d+\s*---", " ", pdf_text).split())
                         pdf_score = score_hansard_text(flat_pdf_body)
                         pdf_text_chunks.append(flat_pdf_body)
+                        resolved_topic = true_topic or pdf_link["title"]
                         if not pdf_date:
-                            pdf_date = _extract_submission_date(pdf_link["title"], url=pdf_link["url"])
+                            pdf_date = _extract_submission_date(resolved_topic, url=pdf_link["url"])
                         if not pdf_person or pdf_person in ("Not stated in PDF", "Not stated in portal index"):
-                            pdf_person = _extract_responsible_person(pdf_link["title"], title=pdf_link["title"])
+                            pdf_person = _extract_responsible_person(resolved_topic, title=resolved_topic)
                         computed_summary, pdf_excerpt = _build_issue_summary_and_excerpt(
-                            pdf_link["title"],
+                            resolved_topic,
                             category,
                             "PDF Downloaded & Ingested",
                             raw_snippet=flat_pdf_body[:900],
@@ -1211,7 +1285,7 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
                         )
                         page_markers = len(re.findall(r"---\s*Page\s+\d+\s*---", pdf_text))
                         topic_item = {
-                            "topic": pdf_link["title"],
+                            "topic": resolved_topic,
                             "category": category,
                             "status": "PDF Downloaded & Ingested",
                             "friction": pdf_score if pdf_score is not None else 42.0,
