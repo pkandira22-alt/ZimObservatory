@@ -45,7 +45,18 @@ The service also exposes `GET /api/timeline` as a CORS-enabled JSON endpoint and
 
 The timeline's experimental Fragility State Index is calculated as `0.40 × (100 − Φ) + 0.35 × projected crisis risk + 0.25 × macro stress proxy`. It is only updated when the current social sample and all three latest World Bank indicators are available without fallback. The macro stress proxy is explicitly not measured volatility: it uses the experimental scaling `0.50 × clamp(inflation / 2, 0, 100) + 0.30 × clamp(debt/GNI, 0, 100) + 0.20 × clamp((10 − GDP growth) × 5, 0, 100)`. The UI withholds live FSI when sourced macro inputs are missing, marks seed FSI as illustrative, and shows its threshold band (stable ≤25, latent ≤50, accelerated ≤75, acute >75). These thresholds and scaling are uncalibrated model assumptions, not validated forecasts or emergency guidance.
 
-When `https://e-portal.parlzim.gov.zw/hansards` (or a configured `HANSARD_PORTAL_URL`) returns indexable parliamentary text (`HTTP 200`), both `stream_server.py` and `server.js` also compute a dependency-free TF-IDF cosine-similarity `hansard_friction` score (`40–100`) and switch live FSI to the 4-factor weights `0.35 × (100 − Φ) + 0.30 × projected crisis risk + 0.20 × macro stress proxy + 0.15 × hansard_friction`. If the portal returns a Cloudflare challenge (`HTTP 403`) or is unreachable, `hansardStatus` reports `blocked_by_cloudflare` / `unavailable` without fabricating a fallback score.
+When `https://e-portal.parlzim.gov.zw/hansards` (or a configured `HANSARD_PORTAL_URL`) returns indexable parliamentary text (`HTTP 200`), both `stream_server.py` and `server.js` also compute a dependency-free TF-IDF cosine-similarity `hansard_friction` score (`40–100`) and switch live FSI to the 4-factor weights `0.35 × (100 − Φ) + 0.30 × projected crisis risk + 0.20 × macro stress proxy + 0.15 × hansard_friction`. If the portal returns a Cloudflare challenge (`HTTP 403`), you can run a local FlareSolverr container and set `FLARESOLVERR_URL=http://localhost:8191/v1`:
+
+```sh
+docker run -d \
+  --name=flaresolverr \
+  -p 8191:8191 \
+  -e LOG_LEVEL=info \
+  --restart unless-stopped \
+  ghcr.io/flaresolverr/flaresolverr:latest
+```
+
+Without a solver or reachable mirror, `hansardStatus` reports `blocked_by_cloudflare` / `unavailable` without fabricating a fallback score.
 
 ### Prescriptive Strategic Orientation Engine
 

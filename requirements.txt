@@ -5,6 +5,7 @@ curl-cffi
 beautifulsoup4
 scikit-learn
 numpy
+pypdf
 apscheduler
 aiohttp
 xlrd

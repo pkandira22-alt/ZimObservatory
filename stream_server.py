@@ -1,6 +1,7 @@
 import asyncio
 from collections import Counter
 import html as html_lib
+from io import BytesIO
 import json
 import logging
 import math
@@ -20,6 +21,10 @@ try:
     from curl_cffi import requests as cureq
 except ImportError:
     cureq = None
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
 from prescriptive_orientation import evaluate_orientation, evaluate_state_classification
 from server import fetch_social_hashtag_trends
 
@@ -37,6 +42,7 @@ TELEMETRY_CACHE_PATH = os.environ.get(
 )
 HANSARD_PORTAL_URL = os.environ.get("HANSARD_PORTAL_URL", "https://e-portal.parlzim.gov.zw/")
 FLARESOLVERR_URL = os.environ.get("FLARESOLVERR_URL", "").strip()
+SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY", "").strip()
 PARLZIM_STATIC_PORTALS = (
     ("Bill Digests", "https://www.parlzim.gov.zw/bill-digest/"),
     ("Enacted Acts", "https://www.parlzim.gov.zw/acts/"),
@@ -339,8 +345,17 @@ def _get_parlzim_portals():
     return PARLZIM_STATIC_PORTALS + (("Hansards", HANSARD_PORTAL_URL),)
 
 
+def _normalize_flaresolverr_endpoint(endpoint):
+    trimmed = (endpoint or "").strip().rstrip("/")
+    if not trimmed:
+        return ""
+    return trimmed if trimmed.endswith("/v1") else f"{trimmed}/v1"
+
+
 def _fetch_via_flaresolverr(portal_url, timeout=20):
-    solver_endpoint = os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip()
+    solver_endpoint = _normalize_flaresolverr_endpoint(
+        os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL)
+    )
     if not solver_endpoint:
         return None
     payload = json.dumps({
@@ -354,22 +369,189 @@ def _fetch_via_flaresolverr(portal_url, timeout=20):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout + 5) as resp:
-        solved = json.loads(resp.read().decode("utf-8", errors="ignore"))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout + 5) as resp:
+            solved = json.loads(resp.read().decode("utf-8", errors="ignore"))
+    except Exception:
+        return None
     sol = solved.get("solution") or {}
     if solved.get("status") == "ok" and sol.get("response"):
         headers = {str(k).lower(): str(v) for k, v in (sol.get("headers") or {}).items()}
-        return int(sol.get("status", 200)), sol.get("response", ""), headers, "flaresolverr"
+        body = _decode_portal_body(portal_url, headers, sol.get("response", ""))
+        return int(sol.get("status", 200)), body, headers, "flaresolverr"
     return None
 
 
+def _fetch_via_scraperapi(target_url, timeout=25):
+    """Optional ScraperAPI proxy fetch when SCRAPER_API_KEY env var is configured."""
+    api_key = os.environ.get("SCRAPER_API_KEY", SCRAPER_API_KEY).strip()
+    if not api_key or not target_url:
+        return None
+    proxy_url = "https://api.scraperapi.com/"
+    params = {"api_key": api_key, "url": target_url, "render": "false"}
+    try:
+        if cureq is not None:
+            response = cureq.get(proxy_url, params=params, timeout=max(timeout, 25))
+            status_code = getattr(response, "status_code", 200)
+            headers = {str(k).lower(): str(v) for k, v in getattr(response, "headers", {}).items()}
+            raw_content = getattr(response, "content", None)
+            raw_payload = raw_content if isinstance(raw_content, (bytes, bytearray)) else (getattr(response, "text", "") or "")
+            body = _decode_portal_body(target_url, headers, raw_payload)
+            if status_code == 200 and body:
+                return status_code, body, headers, "scraperapi"
+            return None
+
+        from urllib.parse import urlencode
+        query_url = f"{proxy_url}?{urlencode(params)}"
+        req = urllib.request.Request(
+            query_url,
+            headers={"Accept": "text/html,application/xhtml+xml,application/xml,application/pdf;q=0.9,*/*;q=0.8"},
+        )
+        with urllib.request.urlopen(req, timeout=max(timeout, 25)) as resp:
+            status_code = getattr(resp, "status", 200)
+            headers = {str(k).lower(): str(v) for k, v in getattr(resp, "headers", {}).items()}
+            body = _decode_portal_body(target_url, headers, resp.read())
+            if status_code == 200 and body:
+                return status_code, body, headers, "scraperapi"
+    except Exception:
+        return None
+    return None
+
+
+def extract_text_from_pdf_bytes(pdf_bytes, max_pages=12):
+    """Extract normalized text streams natively from PDF bytes using pypdf."""
+    if not pdf_bytes or PdfReader is None:
+        return ""
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+        pages_text = []
+        for page in reader.pages[:max_pages]:
+            extracted = page.extract_text() or ""
+            if extracted.strip():
+                pages_text.append(extracted)
+        return " ".join(" ".join(pages_text).split())
+    except Exception:
+        return ""
+
+
+def extract_pdf_text(pdf_bytes, max_pages=12):
+    """Alias for extract_text_from_pdf_bytes."""
+    return extract_text_from_pdf_bytes(pdf_bytes, max_pages=max_pages)
+
+
+def _is_pdf_payload(portal_url, headers, raw_payload):
+    content_type = (headers or {}).get("content-type", "").lower()
+    if "application/pdf" in content_type:
+        return True
+    if (portal_url or "").lower().split("?")[0].endswith(".pdf"):
+        return True
+    if isinstance(raw_payload, (bytes, bytearray)):
+        return raw_payload.lstrip()[:5] == b"%PDF-"
+    if isinstance(raw_payload, str):
+        return raw_payload.lstrip()[:5] == "%PDF-"
+    return False
+
+
+def _decode_portal_body(portal_url, headers, raw_payload):
+    if _is_pdf_payload(portal_url, headers, raw_payload):
+        raw_bytes = raw_payload if isinstance(raw_payload, (bytes, bytearray)) else str(raw_payload).encode("latin-1", errors="ignore")
+        pdf_text = extract_text_from_pdf_bytes(raw_bytes)
+        if pdf_text:
+            return f"<html><body><p>{html_lib.escape(pdf_text)}</p></body></html>"
+        return ""
+    if isinstance(raw_payload, (bytes, bytearray)):
+        return raw_payload.decode("utf-8", errors="ignore")
+    return raw_payload or ""
+
+
+def extract_pdf_links(raw_html, base_url, limit=2):
+    """Discover real .pdf document links inside an HTML page."""
+    if not raw_html or not base_url:
+        return []
+    from urllib.parse import urljoin, urlparse
+    generic_labels = {"download", "download pdf", "pdf", "view", "view pdf", "read more", "open"}
+    links = []
+    seen_urls = set()
+    for match in re.finditer(r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', raw_html):
+        href = html_lib.unescape(match.group(1)).strip()
+        if not href or href.startswith("#") or href.lower().startswith("javascript:"):
+            continue
+        resolved = urljoin(base_url, href)
+        parsed = urlparse(resolved)
+        if not parsed.path.lower().endswith(".pdf"):
+            continue
+        if resolved in seen_urls:
+            continue
+        seen_urls.add(resolved)
+        label = " ".join(_strip_html(match.group(2)).split())
+        if not label or label.lower() in generic_labels or len(label) < 6:
+            filename = os.path.splitext(os.path.basename(parsed.path))[0]
+            label = " ".join(re.split(r"[-_]+", filename)).strip() or "Parliamentary PDF Document"
+        links.append({"url": resolved, "title": label[:160]})
+        if len(links) >= limit:
+            break
+    return links
+
+
+def fetch_pdf_document_text(pdf_url, timeout=12):
+    """Download and extract normalized text from a PDF document URL via Chrome TLS impersonation, optional ScraperAPI, or urllib."""
+    if PdfReader is None or not pdf_url:
+        return ""
+    try:
+        if cureq is not None:
+            response = cureq.get(pdf_url, impersonate="chrome", timeout=timeout)
+            status_code = getattr(response, "status_code", 0)
+            if status_code == 200:
+                raw_bytes = getattr(response, "content", b"") or b""
+                return extract_text_from_pdf_bytes(raw_bytes)
+        else:
+            req = urllib.request.Request(
+                pdf_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    "Accept": "application/pdf,*/*;q=0.8",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                if getattr(response, "status", 200) == 200:
+                    return extract_text_from_pdf_bytes(response.read())
+    except Exception:
+        pass
+
+    api_key = os.environ.get("SCRAPER_API_KEY", SCRAPER_API_KEY).strip()
+    if api_key:
+        try:
+            proxy_url = "https://api.scraperapi.com/"
+            params = {"api_key": api_key, "url": pdf_url, "render": "false"}
+            if cureq is not None:
+                response = cureq.get(proxy_url, params=params, timeout=max(timeout, 25))
+                if getattr(response, "status_code", 0) == 200:
+                    raw_bytes = getattr(response, "content", b"") or b""
+                    return extract_text_from_pdf_bytes(raw_bytes)
+            else:
+                from urllib.parse import urlencode
+                req = urllib.request.Request(f"{proxy_url}?{urlencode(params)}")
+                with urllib.request.urlopen(req, timeout=max(timeout, 25)) as resp:
+                    if getattr(resp, "status", 200) == 200:
+                        return extract_text_from_pdf_bytes(resp.read())
+        except Exception:
+            return ""
+    return ""
+
+
 def _fetch_portal_response(portal_url, timeout=10):
-    """Fetch a portal using curl_cffi Chrome TLS impersonation (and optional FlareSolverr), else urllib."""
+    """Fetch a portal using curl_cffi Chrome TLS impersonation (and optional ScraperAPI / FlareSolverr), else urllib; decodes PDFs via pypdf."""
     if cureq is not None:
         response = cureq.get(portal_url, impersonate="chrome", timeout=timeout)
         status_code = getattr(response, "status_code", 200)
         headers = {str(k).lower(): str(v) for k, v in getattr(response, "headers", {}).items()}
-        body = getattr(response, "text", "") or ""
+        raw_content = getattr(response, "content", None)
+        raw_payload = raw_content if isinstance(raw_content, (bytes, bytearray)) else (getattr(response, "text", "") or "")
+        body = _decode_portal_body(portal_url, headers, raw_payload)
+        if status_code == 403 and os.environ.get("SCRAPER_API_KEY", SCRAPER_API_KEY).strip():
+            proxied = _fetch_via_scraperapi(portal_url, timeout=max(timeout, 25))
+            if proxied is not None:
+                return proxied
         if status_code == 403 and os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip():
             solved = _fetch_via_flaresolverr(portal_url, timeout=max(timeout, 20))
             if solved is not None:
@@ -380,7 +562,7 @@ def _fetch_portal_response(portal_url, timeout=10):
         portal_url,
         headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml,application/pdf;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
         },
     )
@@ -388,9 +570,14 @@ def _fetch_portal_response(portal_url, timeout=10):
         with urllib.request.urlopen(req, timeout=min(timeout, 8)) as response:
             status_code = getattr(response, "status", 200)
             headers = {str(k).lower(): str(v) for k, v in getattr(response, "headers", {}).items()}
-            body = response.read().decode("utf-8", errors="ignore")
+            raw_bytes = response.read()
+            body = _decode_portal_body(portal_url, headers, raw_bytes)
         return status_code, body, headers, "urllib"
     except urllib.error.HTTPError as err:
+        if err.code == 403 and os.environ.get("SCRAPER_API_KEY", SCRAPER_API_KEY).strip():
+            proxied = _fetch_via_scraperapi(portal_url, timeout=max(timeout, 25))
+            if proxied is not None:
+                return proxied
         if err.code == 403 and os.environ.get("FLARESOLVERR_URL", FLARESOLVERR_URL).strip():
             solved = _fetch_via_flaresolverr(portal_url, timeout=max(timeout, 20))
             if solved is not None:
@@ -482,12 +669,34 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
             continue
 
         is_rss = body.lstrip().startswith("<?xml") or "<rss" in body[:300].lower()
+        pdf_count = 0
         if is_rss:
             topics, rss_text = _extract_rss_topics(body, category, selected_url)
             stripped_text = rss_text
         else:
             stripped_text = _strip_html(body)
             topics = extract_legislative_topics(body, category, selected_url)
+            if status_code == 200 and PdfReader is not None and not _is_pdf_payload(selected_url, resp_headers, None):
+                pdf_links = extract_pdf_links(body, selected_url, limit=2)
+                pdf_topics = []
+                pdf_text_chunks = []
+                for pdf_link in pdf_links:
+                    pdf_text = fetch_pdf_document_text(pdf_link["url"], timeout=12)
+                    if len(pdf_text) >= 80:
+                        pdf_count += 1
+                        pdf_score = score_hansard_text(pdf_text)
+                        pdf_text_chunks.append(pdf_text)
+                        pdf_topics.append({
+                            "topic": pdf_link["title"],
+                            "category": category,
+                            "status": "PDF Downloaded & Ingested",
+                            "friction": pdf_score if pdf_score is not None else 42.0,
+                            "url": pdf_link["url"],
+                        })
+                if pdf_text_chunks:
+                    stripped_text = f"{stripped_text} {' '.join(pdf_text_chunks)}".strip()
+                    seen_pdf_urls = {item["url"] for item in pdf_topics}
+                    topics = pdf_topics + [t for t in topics if t.get("url") not in seen_pdf_urls]
 
         if status_code != 200 or len(stripped_text) < 80:
             sources_status.append({
@@ -529,6 +738,7 @@ def fetch_parliamentary_policy_tracker(use_cache=True, allow_mirror_fallback=Tru
             "score": cat_score,
             "charCount": len(stripped_text),
             "topicCount": len(topics),
+            "pdfCount": pdf_count,
             "transport": transport,
         }
         if via_fallback:

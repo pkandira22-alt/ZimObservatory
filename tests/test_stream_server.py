@@ -204,6 +204,157 @@ class StreamServerTests(unittest.TestCase):
         self.assertIn("Public Procurement and Disposal of Public Assets (Amendment) Regulations, 2026", topic_titles)
         self.assertIn("Parliament portfolio committee debates 2027 National Budget and audit discrepancies", topic_titles)
 
+    def test_pypdf_extraction_handles_pdf_responses(self):
+        fake_page = MagicMock()
+        fake_page.extract_text.return_value = (
+            "Parliamentary Public Accounts Committee Audit Report on tender embezzlement, "
+            "unauthorized expenditure, and currency depreciation across state enterprises."
+        )
+        fake_reader_cls = MagicMock()
+        fake_reader_cls.return_value.pages = [fake_page]
+
+        with patch.object(stream_server, "PdfReader", fake_reader_cls):
+            extracted = stream_server.extract_pdf_text(b"%PDF-1.7 mock binary")
+            self.assertIn("Public Accounts Committee Audit Report", extracted)
+
+            cm = MagicMock()
+            cm.__enter__.return_value.status = 200
+            cm.__enter__.return_value.headers = {"Content-Type": "application/pdf"}
+            cm.__enter__.return_value.read.return_value = b"%PDF-1.7 mock binary"
+            cm.__exit__.return_value = False
+            with (
+                patch.object(stream_server, "cureq", None),
+                patch("stream_server.urllib.request.urlopen", return_value=cm),
+            ):
+                status_code, body, _hdrs, _transport = stream_server._fetch_portal_response(
+                    "https://www.parlzim.gov.zw/docs/audit-brief.pdf"
+                )
+        self.assertEqual(status_code, 200)
+        self.assertIn("Audit Report on tender embezzlement", body)
+        self.assertGreater(stream_server.score_hansard_text(body), 42.0)
+
+    def test_scraperapi_bypass_and_html_pdf_link_ingestion(self):
+        import os
+
+        html_with_pdf = (
+            "<html><body><main>"
+            "<h1>Parliament of Zimbabwe Hansard Portal</h1>"
+            "<p>Routine session index listing official parliamentary debate transcripts for November 2026.</p>"
+            "<a href='/uploads/hansard-november-2026-debate.pdf'>National Assembly Hansard Vol 53 Debate</a>"
+            "</main></body></html>"
+        )
+        fake_page = MagicMock()
+        fake_page.extract_text.return_value = (
+            "Parliamentary debate regarding unauthorized expenditures, audit discrepancies, "
+            "currency depreciation, and tender embezzlement across public procurement agencies."
+        )
+        fake_reader_cls = MagicMock()
+        fake_reader_cls.return_value.pages = [fake_page]
+
+        def fake_cureq_get(url, **kwargs):
+            resp = MagicMock()
+            if url == "https://api.scraperapi.com/":
+                target = (kwargs.get("params") or {}).get("url", "")
+                self.assertEqual((kwargs.get("params") or {}).get("api_key"), "test_scraper_key")
+                if target.endswith(".pdf"):
+                    resp.status_code = 200
+                    resp.headers = {"Content-Type": "application/pdf"}
+                    resp.content = b"%PDF-1.7 proxied pdf"
+                    return resp
+                resp.status_code = 200
+                resp.headers = {"Content-Type": "text/html"}
+                resp.content = html_with_pdf.encode("utf-8")
+                resp.text = html_with_pdf
+                return resp
+
+            resp.status_code = 403
+            resp.headers = {"cf-mitigated": "challenge", "server": "cloudflare"}
+            resp.content = b"Just a moment..."
+            resp.text = "Just a moment..."
+            return resp
+
+        fake_cureq = MagicMock()
+        fake_cureq.get.side_effect = fake_cureq_get
+
+        with (
+            patch.dict(os.environ, {"SCRAPER_API_KEY": "test_scraper_key"}),
+            patch.object(stream_server, "HANSARD_CACHE", {"expires_at": 0.0, "data": None}),
+            patch.object(stream_server, "PARLZIM_STATIC_PORTALS", (("Hansards", "https://e-portal.parlzim.gov.zw/"),)),
+            patch.object(stream_server, "_get_parlzim_portals", return_value=(("Hansards", "https://e-portal.parlzim.gov.zw/"),)),
+            patch.object(stream_server, "PdfReader", fake_reader_cls),
+            patch.object(stream_server, "cureq", fake_cureq),
+        ):
+            tracker = stream_server.fetch_parliamentary_policy_tracker(use_cache=False, allow_mirror_fallback=False)
+
+        self.assertEqual(tracker["status"], "available")
+        self.assertEqual(tracker["accessibleSources"], 1)
+        self.assertEqual(tracker["sources"][0]["transport"], "scraperapi")
+        self.assertEqual(tracker["sources"][0]["pdfCount"], 1)
+        pdf_topic = tracker["tracked_topics"][0]
+        self.assertEqual(pdf_topic["topic"], "National Assembly Hansard Vol 53 Debate")
+        self.assertEqual(pdf_topic["status"], "PDF Downloaded & Ingested")
+        self.assertEqual(pdf_topic["url"], "https://e-portal.parlzim.gov.zw/uploads/hansard-november-2026-debate.pdf")
+        self.assertGreater(pdf_topic["friction"], 45.0)
+
+    def test_flaresolverr_normalizes_v1_and_bypasses_cloudflare_403(self):
+        import os
+
+        self.assertEqual(
+            stream_server._normalize_flaresolverr_endpoint("http://localhost:8191"),
+            "http://localhost:8191/v1",
+        )
+        self.assertEqual(
+            stream_server._normalize_flaresolverr_endpoint("http://localhost:8191/v1/"),
+            "http://localhost:8191/v1",
+        )
+
+        solved_html = (
+            "<html><body>"
+            "<h1>Finance Bill Digest 2026</h1>"
+            "<p>Parliament reviewed audit discrepancies, public debt ceilings, and currency depreciation.</p>"
+            "<a href='https://www.parlzim.gov.zw/bill-digest/finance-2026'>Finance Amendment Bill Digest 2026</a>"
+            "</body></html>"
+        )
+        fake_cureq = MagicMock()
+        cf_resp = MagicMock()
+        cf_resp.status_code = 403
+        cf_resp.headers = {"cf-mitigated": "challenge", "server": "cloudflare"}
+        cf_resp.content = b"Just a moment..."
+        cf_resp.text = "Just a moment..."
+        fake_cureq.get.return_value = cf_resp
+
+        fs_payload = json.dumps({
+            "status": "ok",
+            "solution": {
+                "status": 200,
+                "headers": {"Content-Type": "text/html"},
+                "response": solved_html,
+            },
+        }).encode("utf-8")
+
+        captured_urls = []
+
+        def fake_urlopen(req, timeout=25):
+            captured_urls.append(getattr(req, "full_url", str(req)))
+            cm = MagicMock()
+            cm.__enter__.return_value.read.return_value = fs_payload
+            cm.__exit__.return_value = False
+            return cm
+
+        with (
+            patch.dict(os.environ, {"FLARESOLVERR_URL": "http://localhost:8191", "SCRAPER_API_KEY": ""}),
+            patch.object(stream_server, "HANSARD_CACHE", {"expires_at": 0.0, "data": None}),
+            patch.object(stream_server, "_get_parlzim_portals", return_value=(("Bill Digests", "https://www.parlzim.gov.zw/bill-digest/"),)),
+            patch.object(stream_server, "cureq", fake_cureq),
+            patch("stream_server.urllib.request.urlopen", side_effect=fake_urlopen),
+        ):
+            tracker = stream_server.fetch_parliamentary_policy_tracker(use_cache=False, allow_mirror_fallback=False)
+
+        self.assertEqual(captured_urls, ["http://localhost:8191/v1"])
+        self.assertEqual(tracker["status"], "available")
+        self.assertEqual(tracker["sources"][0]["transport"], "flaresolverr")
+        self.assertIn("Finance Bill Digest 2026", [t["topic"] for t in tracker["tracked_topics"]])
+
     def test_telemetry_cache_fallback_only_uses_verified_available_snapshots(self):
         import os
         import tempfile

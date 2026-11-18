@@ -1141,6 +1141,51 @@ async function fetchParliamentaryPolicyTracker() {
     'Accept-Language': 'en-US,en;q=0.9'
   };
 
+  async function fetchViaFlareSolverr(targetUrl) {
+    const rawEndpoint = (process.env.FLARESOLVERR_URL || '').trim().replace(/\/+$/, '');
+    if (!rawEndpoint) return null;
+    const solverUrl = rawEndpoint.endsWith('/v1') ? rawEndpoint : `${rawEndpoint}/v1`;
+    try {
+      const resp = await fetch(solverUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cmd: 'request.get', url: targetUrl, maxTimeout: 25000 }),
+        signal: AbortSignal.timeout(28000)
+      });
+      if (!resp.ok) return null;
+      const payload = await resp.json();
+      const solution = payload?.solution;
+      if (payload?.status === 'ok' && solution?.response) {
+        return {
+          status: Number(solution.status) || 200,
+          body: solution.response,
+          transport: 'flaresolverr'
+        };
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  async function fetchViaScraperApi(targetUrl) {
+    const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
+    if (!apiKey) return null;
+    try {
+      const proxyUrl = new URL('https://api.scraperapi.com/');
+      proxyUrl.searchParams.set('api_key', apiKey);
+      proxyUrl.searchParams.set('url', targetUrl);
+      proxyUrl.searchParams.set('render', 'false');
+      const resp = await fetch(proxyUrl.toString(), { signal: AbortSignal.timeout(25000) });
+      if (resp.ok) {
+        return { status: resp.status, body: await resp.text(), transport: 'scraperapi' };
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
   const results = await Promise.all(PARLZIM_PORTAL_SOURCES.map(async ({ category, url }) => {
     let primaryBlockedCf = false;
     let primaryHttpStatus = null;
@@ -1171,6 +1216,15 @@ async function fetchParliamentaryPolicyTracker() {
       }
     } catch (error) {
       primaryErrorMsg = error.message || 'Portal request failed.';
+    }
+
+    if (primaryErrorMsg && primaryHttpStatus === 403) {
+      const solved = (await fetchViaScraperApi(url)) || (await fetchViaFlareSolverr(url));
+      if (solved && solved.body) {
+        rawBody = solved.body;
+        finalStatus = solved.status;
+        primaryErrorMsg = null;
+      }
     }
 
     if (primaryErrorMsg && process.env.PARLZIM_DISABLE_MIRROR_FALLBACK !== '1' && PARLZIM_FALLBACK_MIRRORS[category]) {

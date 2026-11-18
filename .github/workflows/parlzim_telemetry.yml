@@ -11,6 +11,14 @@ jobs:
     permissions:
       contents: write
 
+    services:
+      flaresolverr:
+        image: ghcr.io/flaresolverr/flaresolverr:latest
+        env:
+          LOG_LEVEL: info
+        ports:
+          - 8191:8191
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -22,9 +30,12 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install requests beautifulsoup4 curl-cffi scikit-learn numpy
+          pip install requests beautifulsoup4 curl-cffi scikit-learn numpy pypdf
 
       - name: Run Scraper Script
+        env:
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+          FLARESOLVERR_URL: ${{ secrets.FLARESOLVERR_URL || 'http://localhost:8191/v1' }}
         run: |
           python scripts/update_telemetry.py
 
