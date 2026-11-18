@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "timestamp": "2026-11-17T07:10:28.477744Z",
-  "updated_at": "2026-11-17T07:10:28.477744Z",
+  "timestamp": "2026-11-18T05:59:26.490338Z",
+  "updated_at": "2026-11-18T05:59:26.490338Z",
   "runner": "github-actions",
-  "accessible_sources": 4,
+  "accessible_sources": 5,
   "total_sources": 5,
-  "hansard_friction": 49.15,
+  "hansard_friction": 48.49,
   "tracked_topics": [
     {
       "topic": "Deeds Registries Regulations, 2025",
@@ -113,14 +113,14 @@
       "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
     }
   ],
-  "status": "Resolved 4/5 via CF-free mirrors/live",
+  "status": "Resolved 5/5 via CF-free mirrors/live",
   "parlzim": {
-    "score": 49.15,
+    "score": 48.49,
     "status": "available",
-    "source": "parlzim_portals",
+    "source": "parlzim_hansards",
     "httpStatus": 200,
-    "charCount": 23868,
-    "accessibleSources": 4,
+    "charCount": 25711,
+    "accessibleSources": 5,
     "totalSources": 5,
     "sources": [
       {
@@ -158,8 +158,8 @@
         "url": "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
         "status": "available",
         "httpStatus": 200,
-        "score": 45.53,
-        "charCount": 4877,
+        "score": 44.45,
+        "charCount": 4741,
         "topicCount": 4,
         "transport": "curl_cffi_chrome",
         "viaFallbackMirror": true,
@@ -185,11 +185,18 @@
       },
       {
         "category": "Hansards",
-        "url": "https://e-portal.parlzim.gov.zw/",
-        "status": "blocked_by_cloudflare",
-        "httpStatus": 403,
-        "score": null,
-        "message": "Protected by Cloudflare challenge (HTTP 403)."
+        "url": "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 46.94,
+        "charCount": 1979,
+        "topicCount": 4,
+        "transport": "curl_cffi_chrome",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "Parliament Debates RSS (30d)",
+        "primaryUrl": "https://e-portal.parlzim.gov.zw/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
       }
     ],
     "tracked_topics": [
@@ -301,12 +308,12 @@
     ]
   },
   "last_available_parlzim": {
-    "score": 49.15,
+    "score": 48.49,
     "status": "available",
-    "source": "parlzim_portals",
+    "source": "parlzim_hansards",
     "httpStatus": 200,
-    "charCount": 23868,
-    "accessibleSources": 4,
+    "charCount": 25711,
+    "accessibleSources": 5,
     "totalSources": 5,
     "sources": [
       {
@@ -344,8 +351,8 @@
         "url": "https://news.google.com/rss/search?q=(Zimbabwe+Parliament+policy+OR+%22Public+Accounts%22+OR+%22Auditor+General%22)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
         "status": "available",
         "httpStatus": 200,
-        "score": 45.53,
-        "charCount": 4877,
+        "score": 44.45,
+        "charCount": 4741,
         "topicCount": 4,
         "transport": "curl_cffi_chrome",
         "viaFallbackMirror": true,
@@ -371,11 +378,18 @@
       },
       {
         "category": "Hansards",
-        "url": "https://e-portal.parlzim.gov.zw/",
-        "status": "blocked_by_cloudflare",
-        "httpStatus": 403,
-        "score": null,
-        "message": "Protected by Cloudflare challenge (HTTP 403)."
+        "url": "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "status": "available",
+        "httpStatus": 200,
+        "score": 46.94,
+        "charCount": 1979,
+        "topicCount": 4,
+        "transport": "curl_cffi_chrome",
+        "viaFallbackMirror": true,
+        "mirrorLabel": "Parliament Debates RSS (30d)",
+        "primaryUrl": "https://e-portal.parlzim.gov.zw/",
+        "primaryStatus": 403,
+        "primaryBlockedByCloudflare": true
       }
     ],
     "tracked_topics": [
@@ -485,12 +499,12 @@
         "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
       }
     ],
-    "captured_at": "2026-11-17T07:10:28.477744Z"
+    "captured_at": "2026-11-18T05:59:26.490338Z"
   },
   "layer2_macro": {
-    "GDP_Growth": 8.3,
+    "GDP_Growth": 8.10671343048909,
     "Inflation": 104.705170628667,
     "Debt_GNI": 31.5941416031795,
-    "source": "fallback_baseline"
+    "source": "world_bank_v2"
   }
 }
