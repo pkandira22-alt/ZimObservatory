@@ -1,491 +1,465 @@
 {
   "schema_version": 2,
-  "timestamp": "2026-11-18T06:11:01.965735Z",
-  "updated_at": "2026-11-18T06:11:01.965735Z",
+  "timestamp": "2026-11-18T07:10:49.705399Z",
+  "updated_at": "2026-11-18T07:10:49.705399Z",
   "runner": "github-actions",
-  "accessible_sources": 4,
+  "accessible_sources": 5,
   "total_sources": 5,
-  "hansard_friction": 49.5,
+  "hansard_friction": 52.38,
   "tracked_topics": [
     {
-      "topic": "Deeds Registries Regulations, 2025",
+      "topic": "Parliament Building Mt Hampden.",
       "category": "Bill Digests",
       "status": "Legislative Pipeline",
       "friction": 42.0,
-      "url": "https://zimlii.org/akn/zw/act/si/2025/76/eng@2025-07-18"
+      "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
     },
     {
-      "topic": "Persons with Disabilities Act",
+      "topic": "Office of the Hon Speaker",
       "category": "Bill Digests",
       "status": "Legislative Pipeline",
-      "friction": 42.0,
-      "url": "https://zimlii.org/akn/zw/act/2025/3/eng@2026-02-06"
+      "friction": 48.52,
+      "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
     },
     {
-      "topic": "Toll Roads (Chirundu Border Post Modernisation) Regulations, 2026",
+      "topic": "Office of the Hon President of Senate",
       "category": "Bill Digests",
       "status": "Legislative Pipeline",
-      "friction": 42.0,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/154/eng@2026-10-09"
+      "friction": 51.7,
+      "url": "https://www.parlzim.gov.zw/president-of-senate/"
     },
     {
-      "topic": "Toll Roads (Forbes Border Post Modernisation) Regulations, 2026",
+      "topic": "Office of the Hon Deputy Speaker",
       "category": "Bill Digests",
       "status": "Legislative Pipeline",
-      "friction": 42.0,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/179/eng@2026-11-06"
+      "friction": 47.78,
+      "url": "https://www.parlzim.gov.zw/deputy-speaker-of-parliament/"
     },
     {
-      "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+      "topic": "Report_on_Command_Agriculture_fact_finding_Public_Hearing",
+      "category": "Enacted Acts",
+      "status": "PDF Downloaded & Ingested",
+      "friction": 50.76,
+      "url": "https://www.parlzim.gov.zw/wp-content/uploads/2025/06/Report_on_Command_Agriculture_fact_finding_Public_Hearing.pdf"
+    },
+    {
+      "topic": "PUBLIC_BODIES_PRIVATE_BILL_PROCEDURE_ACT_2_09",
+      "category": "Enacted Acts",
+      "status": "PDF Downloaded & Ingested",
+      "friction": 52.7,
+      "url": "https://www.parlzim.gov.zw/wp-content/uploads/2025/06/PUBLIC_BODIES_PRIVATE_BILL_PROCEDURE_ACT_2_09.pdf"
+    },
+    {
+      "topic": "Parliament Building Mt Hampden.",
       "category": "Enacted Acts",
       "status": "Enacted / Gazetted",
       "friction": 42.0,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+      "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
     },
     {
-      "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+      "topic": "Office of the Hon Speaker",
       "category": "Enacted Acts",
       "status": "Enacted / Gazetted",
-      "friction": 42.0,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+      "friction": 48.52,
+      "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
     },
     {
-      "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+      "topic": "Office of the Hon President of Senate",
       "category": "Enacted Acts",
       "status": "Enacted / Gazetted",
-      "friction": 49.02,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+      "friction": 51.7,
+      "url": "https://www.parlzim.gov.zw/president-of-senate/"
     },
     {
-      "topic": "National Arts Council of Zimbabwe (General) (Amendment) Regulations, 2026 (No. 4)",
+      "topic": "Office of the Hon Deputy Speaker",
       "category": "Enacted Acts",
       "status": "Enacted / Gazetted",
-      "friction": 50.8,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
+      "friction": 47.78,
+      "url": "https://www.parlzim.gov.zw/deputy-speaker-of-parliament/"
     },
     {
-      "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
-      "category": "Fact Sheets",
-      "status": "Briefing Published",
+      "topic": "Policy Briefs",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
       "friction": 42.0,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+      "url": "https://www.parlzim.gov.zw/policy-briefs/"
     },
     {
-      "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
-      "category": "Fact Sheets",
-      "status": "Briefing Published",
+      "topic": "Parliament Building Mt Hampden.",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
       "friction": 42.0,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+      "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
     },
     {
-      "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+      "topic": "Office of the Hon Speaker",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
+      "friction": 48.52,
+      "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
+    },
+    {
+      "topic": "Office of the Hon President of Senate",
+      "category": "Policy Briefs",
+      "status": "Policy Review",
+      "friction": 51.7,
+      "url": "https://www.parlzim.gov.zw/president-of-senate/"
+    },
+    {
+      "topic": "Zimbabwes-GBV-Crisis-2020\u20132024-Prevalence-Laws-and-Gaps-in-Response",
       "category": "Fact Sheets",
-      "status": "Briefing Published",
-      "friction": 49.02,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
-    },
-    {
-      "topic": "Income Tax (Fiscalised Recording of Fuel Transactions) Regulations, 2026",
-      "category": "Fact Sheets",
-      "status": "Briefing Published",
-      "friction": 46.51,
-      "url": "https://zimlii.org/akn/zw/act/si/2026/88/eng@2026-05-15"
-    },
-    {
-      "topic": "Zimbabwe portfolio committee proposes annual levy on idle farms - Farmer's Weekly SA",
-      "category": "Hansards",
-      "status": "Parliamentary Debate",
-      "friction": 42.0,
-      "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxPTEZvdFgyOEU0eksyZU5Ld2htZFYwVG5JblVDRmJWR0xZekRkVGlVMy1jYllIbkV6SUgwdTNpOTBXR0k1bnloaHE2bTl6OVVJQ2xncUFTM0tRWXpXdzFGUjlfTWtLVEFjUExQSjBuN3dFbjFFNDFEZGMwM2VGQVV1bFpTSF8zMjR2ODJkdERKRFlaSF9tWjllQjhBZllmQTFqYWU3V2JvNE9FMldyRWo0a21VVQ?oc=5"
-    },
-    {
-      "topic": "Zimbabwe mining bill targets community, environmental safeguards - Mining.com.au",
-      "category": "Hansards",
-      "status": "Parliamentary Debate",
-      "friction": 42.0,
-      "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxOeFRUYnpFLXIwYkxPSU5ObHgtTVdGSXdMN096N0VyMjRtVDR4dFcyZjRnRlJTNFlEdG5GaEtod2pCbzNhQ0Z2OTNWamY0a0VZdWZqaENCdWpDM0Jxb0ZBMjZwWmhxd2tQS0dmdzJnOWJsQkRDOUhhSWNlcGdEdHlpLWZ2MjA3X3dmcm40eWhuNA?oc=5"
-    },
-    {
-      "topic": "The Constitutional Court will hear challenges to Constitution of Zimbabwe (Amendment) Act (No. 3) of 2026 on the 11th and 25th of November 2026 - The Zimbabwean",
-      "category": "Hansards",
-      "status": "Parliamentary Debate",
-      "friction": 52.69,
-      "url": "https://news.google.com/rss/articles/CBMihwJBVV95cUxOUjBoR243Ymh4ZUI3OFFYN1RDWkZJakVaMUN2NU51eWtkYlZWNE5ScGZCZnhmTnBMazhySWRESUhoQm9nU0pOUEhRZ2NuaUlwTkJVYW0yRU1xNmdVMmFXUHZzMUUyckVRTXRwTUxsSUI3ZVFsdnhMZWk1VzRMWlg5NDBWLU5rWWtoeUpQQUJTTHpudjRRRlgzYXdUS0s5cjlqVDRuVGNVZTF4YjYwaGtJcURIamk3dHdZQk1jaVFFcTRHVFh4NHlnWW1fSnE1MmE3RG9UYUg4SFVZeHRHSmRQaW9VWVA3eTZtRGxLT19aY0NZRFl1S0sxM3ZWUDhMQnVWYU52eEZKZw?oc=5"
+      "status": "PDF Downloaded & Ingested",
+      "friction": 47.97,
+      "url": "https://www.parlzim.gov.zw/wp-content/uploads/2026/02/Zimbabwes-GBV-Crisis-2020\u20132024-Prevalence-Laws-and-Gaps-in-Response.pdf"
     }
   ],
-  "status": "Resolved 4/5 via CF-free mirrors/live",
+  "status": "Resolved 5/5 via CF-free mirrors/live",
   "parlzim": {
-    "score": 49.5,
+    "score": 52.38,
     "status": "available",
     "source": "parlzim_hansards",
     "httpStatus": 200,
-    "charCount": 20970,
-    "accessibleSources": 4,
+    "charCount": 61296,
+    "accessibleSources": 5,
     "totalSources": 5,
     "sources": [
       {
         "category": "Bill Digests",
-        "url": "https://zimlii.org/legislation/uncommenced",
+        "url": "https://www.parlzim.gov.zw/bill-digest/",
         "status": "available",
         "httpStatus": 200,
-        "score": 44.98,
-        "charCount": 2630,
+        "score": 51.26,
+        "charCount": 6874,
         "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "ZimLII Uncommenced Legislation",
-        "primaryUrl": "https://www.parlzim.gov.zw/bill-digest/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "pdfCount": 0,
+        "transport": "flaresolverr"
       },
       {
         "category": "Enacted Acts",
-        "url": "https://zimlii.org/legislation/recent",
+        "url": "https://www.parlzim.gov.zw/acts/",
         "status": "available",
         "httpStatus": 200,
-        "score": 53.71,
-        "charCount": 8010,
-        "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "ZimLII Recent Legislation",
-        "primaryUrl": "https://www.parlzim.gov.zw/acts/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "score": 54.29,
+        "charCount": 33220,
+        "topicCount": 6,
+        "pdfCount": 2,
+        "transport": "flaresolverr"
       },
       {
         "category": "Policy Briefs",
         "url": "https://www.parlzim.gov.zw/policy-briefs/",
-        "status": "blocked_by_cloudflare",
-        "httpStatus": 403,
-        "score": null,
-        "message": "Protected by Cloudflare challenge (HTTP 403)."
+        "status": "available",
+        "httpStatus": 200,
+        "score": 51.26,
+        "charCount": 6880,
+        "topicCount": 4,
+        "pdfCount": 0,
+        "transport": "flaresolverr"
       },
       {
         "category": "Fact Sheets",
-        "url": "https://zimlii.org/legislation/subsidiary",
+        "url": "https://www.parlzim.gov.zw/fact-sheets/",
         "status": "available",
         "httpStatus": 200,
-        "score": 52.37,
-        "charCount": 8351,
-        "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "ZimLII Subsidiary Legislation",
-        "primaryUrl": "https://www.parlzim.gov.zw/fact-sheets/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "score": 53.05,
+        "charCount": 11869,
+        "topicCount": 6,
+        "pdfCount": 2,
+        "transport": "flaresolverr"
       },
       {
         "category": "Hansards",
-        "url": "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "url": "https://e-portal.parlzim.gov.zw/",
         "status": "available",
         "httpStatus": 200,
-        "score": 46.94,
-        "charCount": 1979,
+        "score": 52.04,
+        "charCount": 2453,
         "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "Parliament Debates RSS (30d)",
-        "primaryUrl": "https://e-portal.parlzim.gov.zw/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "pdfCount": 0,
+        "transport": "flaresolverr"
       }
     ],
     "tracked_topics": [
       {
-        "topic": "Deeds Registries Regulations, 2025",
+        "topic": "Parliament Building Mt Hampden.",
         "category": "Bill Digests",
         "status": "Legislative Pipeline",
         "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2025/76/eng@2025-07-18"
+        "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
       },
       {
-        "topic": "Persons with Disabilities Act",
+        "topic": "Office of the Hon Speaker",
         "category": "Bill Digests",
         "status": "Legislative Pipeline",
-        "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/2025/3/eng@2026-02-06"
+        "friction": 48.52,
+        "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
       },
       {
-        "topic": "Toll Roads (Chirundu Border Post Modernisation) Regulations, 2026",
+        "topic": "Office of the Hon President of Senate",
         "category": "Bill Digests",
         "status": "Legislative Pipeline",
-        "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/154/eng@2026-10-09"
+        "friction": 51.7,
+        "url": "https://www.parlzim.gov.zw/president-of-senate/"
       },
       {
-        "topic": "Toll Roads (Forbes Border Post Modernisation) Regulations, 2026",
+        "topic": "Office of the Hon Deputy Speaker",
         "category": "Bill Digests",
         "status": "Legislative Pipeline",
-        "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/179/eng@2026-11-06"
+        "friction": 47.78,
+        "url": "https://www.parlzim.gov.zw/deputy-speaker-of-parliament/"
       },
       {
-        "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+        "topic": "Report_on_Command_Agriculture_fact_finding_Public_Hearing",
+        "category": "Enacted Acts",
+        "status": "PDF Downloaded & Ingested",
+        "friction": 50.76,
+        "url": "https://www.parlzim.gov.zw/wp-content/uploads/2025/06/Report_on_Command_Agriculture_fact_finding_Public_Hearing.pdf"
+      },
+      {
+        "topic": "PUBLIC_BODIES_PRIVATE_BILL_PROCEDURE_ACT_2_09",
+        "category": "Enacted Acts",
+        "status": "PDF Downloaded & Ingested",
+        "friction": 52.7,
+        "url": "https://www.parlzim.gov.zw/wp-content/uploads/2025/06/PUBLIC_BODIES_PRIVATE_BILL_PROCEDURE_ACT_2_09.pdf"
+      },
+      {
+        "topic": "Parliament Building Mt Hampden.",
         "category": "Enacted Acts",
         "status": "Enacted / Gazetted",
         "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+        "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
       },
       {
-        "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+        "topic": "Office of the Hon Speaker",
         "category": "Enacted Acts",
         "status": "Enacted / Gazetted",
-        "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+        "friction": 48.52,
+        "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
       },
       {
-        "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+        "topic": "Office of the Hon President of Senate",
         "category": "Enacted Acts",
         "status": "Enacted / Gazetted",
-        "friction": 49.02,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+        "friction": 51.7,
+        "url": "https://www.parlzim.gov.zw/president-of-senate/"
       },
       {
-        "topic": "National Arts Council of Zimbabwe (General) (Amendment) Regulations, 2026 (No. 4)",
+        "topic": "Office of the Hon Deputy Speaker",
         "category": "Enacted Acts",
         "status": "Enacted / Gazetted",
-        "friction": 50.8,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
+        "friction": 47.78,
+        "url": "https://www.parlzim.gov.zw/deputy-speaker-of-parliament/"
       },
       {
-        "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
-        "category": "Fact Sheets",
-        "status": "Briefing Published",
+        "topic": "Policy Briefs",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
         "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+        "url": "https://www.parlzim.gov.zw/policy-briefs/"
       },
       {
-        "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
-        "category": "Fact Sheets",
-        "status": "Briefing Published",
+        "topic": "Parliament Building Mt Hampden.",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
         "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+        "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
       },
       {
-        "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+        "topic": "Office of the Hon Speaker",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 48.52,
+        "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
+      },
+      {
+        "topic": "Office of the Hon President of Senate",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 51.7,
+        "url": "https://www.parlzim.gov.zw/president-of-senate/"
+      },
+      {
+        "topic": "Zimbabwes-GBV-Crisis-2020\u20132024-Prevalence-Laws-and-Gaps-in-Response",
         "category": "Fact Sheets",
-        "status": "Briefing Published",
-        "friction": 49.02,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
-      },
-      {
-        "topic": "Income Tax (Fiscalised Recording of Fuel Transactions) Regulations, 2026",
-        "category": "Fact Sheets",
-        "status": "Briefing Published",
-        "friction": 46.51,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/88/eng@2026-05-15"
-      },
-      {
-        "topic": "Zimbabwe portfolio committee proposes annual levy on idle farms - Farmer's Weekly SA",
-        "category": "Hansards",
-        "status": "Parliamentary Debate",
-        "friction": 42.0,
-        "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxPTEZvdFgyOEU0eksyZU5Ld2htZFYwVG5JblVDRmJWR0xZekRkVGlVMy1jYllIbkV6SUgwdTNpOTBXR0k1bnloaHE2bTl6OVVJQ2xncUFTM0tRWXpXdzFGUjlfTWtLVEFjUExQSjBuN3dFbjFFNDFEZGMwM2VGQVV1bFpTSF8zMjR2ODJkdERKRFlaSF9tWjllQjhBZllmQTFqYWU3V2JvNE9FMldyRWo0a21VVQ?oc=5"
-      },
-      {
-        "topic": "Zimbabwe mining bill targets community, environmental safeguards - Mining.com.au",
-        "category": "Hansards",
-        "status": "Parliamentary Debate",
-        "friction": 42.0,
-        "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxOeFRUYnpFLXIwYkxPSU5ObHgtTVdGSXdMN096N0VyMjRtVDR4dFcyZjRnRlJTNFlEdG5GaEtod2pCbzNhQ0Z2OTNWamY0a0VZdWZqaENCdWpDM0Jxb0ZBMjZwWmhxd2tQS0dmdzJnOWJsQkRDOUhhSWNlcGdEdHlpLWZ2MjA3X3dmcm40eWhuNA?oc=5"
-      },
-      {
-        "topic": "The Constitutional Court will hear challenges to Constitution of Zimbabwe (Amendment) Act (No. 3) of 2026 on the 11th and 25th of November 2026 - The Zimbabwean",
-        "category": "Hansards",
-        "status": "Parliamentary Debate",
-        "friction": 52.69,
-        "url": "https://news.google.com/rss/articles/CBMihwJBVV95cUxOUjBoR243Ymh4ZUI3OFFYN1RDWkZJakVaMUN2NU51eWtkYlZWNE5ScGZCZnhmTnBMazhySWRESUhoQm9nU0pOUEhRZ2NuaUlwTkJVYW0yRU1xNmdVMmFXUHZzMUUyckVRTXRwTUxsSUI3ZVFsdnhMZWk1VzRMWlg5NDBWLU5rWWtoeUpQQUJTTHpudjRRRlgzYXdUS0s5cjlqVDRuVGNVZTF4YjYwaGtJcURIamk3dHdZQk1jaVFFcTRHVFh4NHlnWW1fSnE1MmE3RG9UYUg4SFVZeHRHSmRQaW9VWVA3eTZtRGxLT19aY0NZRFl1S0sxM3ZWUDhMQnVWYU52eEZKZw?oc=5"
+        "status": "PDF Downloaded & Ingested",
+        "friction": 47.97,
+        "url": "https://www.parlzim.gov.zw/wp-content/uploads/2026/02/Zimbabwes-GBV-Crisis-2020\u20132024-Prevalence-Laws-and-Gaps-in-Response.pdf"
       }
     ]
   },
   "last_available_parlzim": {
-    "score": 49.5,
+    "score": 52.38,
     "status": "available",
     "source": "parlzim_hansards",
     "httpStatus": 200,
-    "charCount": 20970,
-    "accessibleSources": 4,
+    "charCount": 61296,
+    "accessibleSources": 5,
     "totalSources": 5,
     "sources": [
       {
         "category": "Bill Digests",
-        "url": "https://zimlii.org/legislation/uncommenced",
+        "url": "https://www.parlzim.gov.zw/bill-digest/",
         "status": "available",
         "httpStatus": 200,
-        "score": 44.98,
-        "charCount": 2630,
+        "score": 51.26,
+        "charCount": 6874,
         "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "ZimLII Uncommenced Legislation",
-        "primaryUrl": "https://www.parlzim.gov.zw/bill-digest/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "pdfCount": 0,
+        "transport": "flaresolverr"
       },
       {
         "category": "Enacted Acts",
-        "url": "https://zimlii.org/legislation/recent",
+        "url": "https://www.parlzim.gov.zw/acts/",
         "status": "available",
         "httpStatus": 200,
-        "score": 53.71,
-        "charCount": 8010,
-        "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "ZimLII Recent Legislation",
-        "primaryUrl": "https://www.parlzim.gov.zw/acts/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "score": 54.29,
+        "charCount": 33220,
+        "topicCount": 6,
+        "pdfCount": 2,
+        "transport": "flaresolverr"
       },
       {
         "category": "Policy Briefs",
         "url": "https://www.parlzim.gov.zw/policy-briefs/",
-        "status": "blocked_by_cloudflare",
-        "httpStatus": 403,
-        "score": null,
-        "message": "Protected by Cloudflare challenge (HTTP 403)."
+        "status": "available",
+        "httpStatus": 200,
+        "score": 51.26,
+        "charCount": 6880,
+        "topicCount": 4,
+        "pdfCount": 0,
+        "transport": "flaresolverr"
       },
       {
         "category": "Fact Sheets",
-        "url": "https://zimlii.org/legislation/subsidiary",
+        "url": "https://www.parlzim.gov.zw/fact-sheets/",
         "status": "available",
         "httpStatus": 200,
-        "score": 52.37,
-        "charCount": 8351,
-        "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "ZimLII Subsidiary Legislation",
-        "primaryUrl": "https://www.parlzim.gov.zw/fact-sheets/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "score": 53.05,
+        "charCount": 11869,
+        "topicCount": 6,
+        "pdfCount": 2,
+        "transport": "flaresolverr"
       },
       {
         "category": "Hansards",
-        "url": "https://news.google.com/rss/search?q=%22Parliament+of+Zimbabwe%22+(bill+OR+budget+OR+committee+OR+amendment)+when:30d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+        "url": "https://e-portal.parlzim.gov.zw/",
         "status": "available",
         "httpStatus": 200,
-        "score": 46.94,
-        "charCount": 1979,
+        "score": 52.04,
+        "charCount": 2453,
         "topicCount": 4,
-        "transport": "curl_cffi_chrome",
-        "viaFallbackMirror": true,
-        "mirrorLabel": "Parliament Debates RSS (30d)",
-        "primaryUrl": "https://e-portal.parlzim.gov.zw/",
-        "primaryStatus": 403,
-        "primaryBlockedByCloudflare": true
+        "pdfCount": 0,
+        "transport": "flaresolverr"
       }
     ],
     "tracked_topics": [
       {
-        "topic": "Deeds Registries Regulations, 2025",
+        "topic": "Parliament Building Mt Hampden.",
         "category": "Bill Digests",
         "status": "Legislative Pipeline",
         "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2025/76/eng@2025-07-18"
+        "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
       },
       {
-        "topic": "Persons with Disabilities Act",
+        "topic": "Office of the Hon Speaker",
         "category": "Bill Digests",
         "status": "Legislative Pipeline",
-        "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/2025/3/eng@2026-02-06"
+        "friction": 48.52,
+        "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
       },
       {
-        "topic": "Toll Roads (Chirundu Border Post Modernisation) Regulations, 2026",
+        "topic": "Office of the Hon President of Senate",
         "category": "Bill Digests",
         "status": "Legislative Pipeline",
-        "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/154/eng@2026-10-09"
+        "friction": 51.7,
+        "url": "https://www.parlzim.gov.zw/president-of-senate/"
       },
       {
-        "topic": "Toll Roads (Forbes Border Post Modernisation) Regulations, 2026",
+        "topic": "Office of the Hon Deputy Speaker",
         "category": "Bill Digests",
         "status": "Legislative Pipeline",
-        "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/179/eng@2026-11-06"
+        "friction": 47.78,
+        "url": "https://www.parlzim.gov.zw/deputy-speaker-of-parliament/"
       },
       {
-        "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
+        "topic": "Report_on_Command_Agriculture_fact_finding_Public_Hearing",
+        "category": "Enacted Acts",
+        "status": "PDF Downloaded & Ingested",
+        "friction": 50.76,
+        "url": "https://www.parlzim.gov.zw/wp-content/uploads/2025/06/Report_on_Command_Agriculture_fact_finding_Public_Hearing.pdf"
+      },
+      {
+        "topic": "PUBLIC_BODIES_PRIVATE_BILL_PROCEDURE_ACT_2_09",
+        "category": "Enacted Acts",
+        "status": "PDF Downloaded & Ingested",
+        "friction": 52.7,
+        "url": "https://www.parlzim.gov.zw/wp-content/uploads/2025/06/PUBLIC_BODIES_PRIVATE_BILL_PROCEDURE_ACT_2_09.pdf"
+      },
+      {
+        "topic": "Parliament Building Mt Hampden.",
         "category": "Enacted Acts",
         "status": "Enacted / Gazetted",
         "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+        "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
       },
       {
-        "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
+        "topic": "Office of the Hon Speaker",
         "category": "Enacted Acts",
         "status": "Enacted / Gazetted",
-        "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+        "friction": 48.52,
+        "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
       },
       {
-        "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+        "topic": "Office of the Hon President of Senate",
         "category": "Enacted Acts",
         "status": "Enacted / Gazetted",
-        "friction": 49.02,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
+        "friction": 51.7,
+        "url": "https://www.parlzim.gov.zw/president-of-senate/"
       },
       {
-        "topic": "National Arts Council of Zimbabwe (General) (Amendment) Regulations, 2026 (No. 4)",
+        "topic": "Office of the Hon Deputy Speaker",
         "category": "Enacted Acts",
         "status": "Enacted / Gazetted",
-        "friction": 50.8,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/93/eng@2026-05-29"
+        "friction": 47.78,
+        "url": "https://www.parlzim.gov.zw/deputy-speaker-of-parliament/"
       },
       {
-        "topic": "Private Voluntary Organisations (Risk-Based Supervision and Protection from Terrorist Financing Abuse) Regulations, 2026",
-        "category": "Fact Sheets",
-        "status": "Briefing Published",
+        "topic": "Policy Briefs",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
         "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/98/eng@2026-06-05"
+        "url": "https://www.parlzim.gov.zw/policy-briefs/"
       },
       {
-        "topic": "Private Voluntary Organisations (Board and General) Regulations, 2026",
-        "category": "Fact Sheets",
-        "status": "Briefing Published",
+        "topic": "Parliament Building Mt Hampden.",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
         "friction": 42.0,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/97/eng@2026-06-05"
+        "url": "https://maps.app.goo.gl/QnVP8bmyp2bpZt4j7"
       },
       {
-        "topic": "Assignment of Functions (Minister of Lands, Agriculture, Fisheries, Water and Rural Development) Notice, 2026",
+        "topic": "Office of the Hon Speaker",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 48.52,
+        "url": "https://www.parlzim.gov.zw/office-of-the-speaker/"
+      },
+      {
+        "topic": "Office of the Hon President of Senate",
+        "category": "Policy Briefs",
+        "status": "Policy Review",
+        "friction": 51.7,
+        "url": "https://www.parlzim.gov.zw/president-of-senate/"
+      },
+      {
+        "topic": "Zimbabwes-GBV-Crisis-2020\u20132024-Prevalence-Laws-and-Gaps-in-Response",
         "category": "Fact Sheets",
-        "status": "Briefing Published",
-        "friction": 49.02,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/96/eng@2026-06-04"
-      },
-      {
-        "topic": "Income Tax (Fiscalised Recording of Fuel Transactions) Regulations, 2026",
-        "category": "Fact Sheets",
-        "status": "Briefing Published",
-        "friction": 46.51,
-        "url": "https://zimlii.org/akn/zw/act/si/2026/88/eng@2026-05-15"
-      },
-      {
-        "topic": "Zimbabwe portfolio committee proposes annual levy on idle farms - Farmer's Weekly SA",
-        "category": "Hansards",
-        "status": "Parliamentary Debate",
-        "friction": 42.0,
-        "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxPTEZvdFgyOEU0eksyZU5Ld2htZFYwVG5JblVDRmJWR0xZekRkVGlVMy1jYllIbkV6SUgwdTNpOTBXR0k1bnloaHE2bTl6OVVJQ2xncUFTM0tRWXpXdzFGUjlfTWtLVEFjUExQSjBuN3dFbjFFNDFEZGMwM2VGQVV1bFpTSF8zMjR2ODJkdERKRFlaSF9tWjllQjhBZllmQTFqYWU3V2JvNE9FMldyRWo0a21VVQ?oc=5"
-      },
-      {
-        "topic": "Zimbabwe mining bill targets community, environmental safeguards - Mining.com.au",
-        "category": "Hansards",
-        "status": "Parliamentary Debate",
-        "friction": 42.0,
-        "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxOeFRUYnpFLXIwYkxPSU5ObHgtTVdGSXdMN096N0VyMjRtVDR4dFcyZjRnRlJTNFlEdG5GaEtod2pCbzNhQ0Z2OTNWamY0a0VZdWZqaENCdWpDM0Jxb0ZBMjZwWmhxd2tQS0dmdzJnOWJsQkRDOUhhSWNlcGdEdHlpLWZ2MjA3X3dmcm40eWhuNA?oc=5"
-      },
-      {
-        "topic": "The Constitutional Court will hear challenges to Constitution of Zimbabwe (Amendment) Act (No. 3) of 2026 on the 11th and 25th of November 2026 - The Zimbabwean",
-        "category": "Hansards",
-        "status": "Parliamentary Debate",
-        "friction": 52.69,
-        "url": "https://news.google.com/rss/articles/CBMihwJBVV95cUxOUjBoR243Ymh4ZUI3OFFYN1RDWkZJakVaMUN2NU51eWtkYlZWNE5ScGZCZnhmTnBMazhySWRESUhoQm9nU0pOUEhRZ2NuaUlwTkJVYW0yRU1xNmdVMmFXUHZzMUUyckVRTXRwTUxsSUI3ZVFsdnhMZWk1VzRMWlg5NDBWLU5rWWtoeUpQQUJTTHpudjRRRlgzYXdUS0s5cjlqVDRuVGNVZTF4YjYwaGtJcURIamk3dHdZQk1jaVFFcTRHVFh4NHlnWW1fSnE1MmE3RG9UYUg4SFVZeHRHSmRQaW9VWVA3eTZtRGxLT19aY0NZRFl1S0sxM3ZWUDhMQnVWYU52eEZKZw?oc=5"
+        "status": "PDF Downloaded & Ingested",
+        "friction": 47.97,
+        "url": "https://www.parlzim.gov.zw/wp-content/uploads/2026/02/Zimbabwes-GBV-Crisis-2020\u20132024-Prevalence-Laws-and-Gaps-in-Response.pdf"
       }
     ],
-    "captured_at": "2026-11-18T06:11:01.965735Z"
+    "captured_at": "2026-11-18T07:10:49.705399Z"
   },
   "layer2_macro": {
     "GDP_Growth": 8.10671343048909,
