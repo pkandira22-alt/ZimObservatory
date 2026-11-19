@@ -16,8 +16,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
-const HOST = '0.0.0.0';
+function parseCliFlag(flagName) {
+  const idx = process.argv.indexOf(flagName);
+  if (idx !== -1 && idx + 1 < process.argv.length) {
+    return process.argv[idx + 1];
+  }
+  const eqPrefix = `${flagName}=`;
+  const eqArg = process.argv.find(arg => arg.startsWith(eqPrefix));
+  return eqArg ? eqArg.slice(eqPrefix.length) : '';
+}
+const cliPort = Number(parseCliFlag('--port'));
+const PORT = (Number.isFinite(cliPort) && cliPort > 0) ? cliPort : (Number(process.env.PORT) || 3000);
+const HOST = parseCliFlag('--host') || process.env.HOST || '0.0.0.0';
 function resolvePrivateUploadDir() {
   const preferred = process.env.PRIVATE_UPLOAD_DIR || path.join(__dirname, '..', 'zimobservatory-private-uploads');
   const fallback = path.join(tmpdir(), 'zimobservatory-private-uploads');
@@ -890,6 +900,8 @@ let latestHansardStatus = null;
 const HANSARD_TTL_MS = 6 * 60 * 60 * 1000;
 const HANSARD_ERROR_TTL_MS = 15 * 60 * 1000;
 let hansardCache = { expiresAt: 0, data: null };
+let hansardInFlightPromise = null;
+let timelineRefreshInFlightPromise = null;
 const HANSARD_PORTAL_URL = process.env.HANSARD_PORTAL_URL || 'https://e-portal.parlzim.gov.zw/';
 const PARLZIM_PORTAL_SOURCES = [
   { category: 'Bill Digests', url: process.env.PARLZIM_BILL_DIGEST_URL || 'https://www.parlzim.gov.zw/bill-digest/' },
@@ -1687,9 +1699,16 @@ async function extractTruePdfTopicAndText(pdfBytes, fallbackTitle = '', pdfUrl =
   if (!pdfBytes || pdfBytes.length < 16) {
     return { topic: fallbackTitle, submissionDate: null, responsiblePerson: 'Not stated in PDF', summary: '', contentExcerpt: '', fullContent: '', pageCount: 0, flatText: '' };
   }
+  let loadingTask = null;
+  let doc = null;
   try {
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes), verbosity: 0 });
-    const doc = await loadingTask.promise;
+    loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(pdfBytes),
+      verbosity: 0,
+      useSystemFonts: false,
+      disableFontFace: true
+    });
+    doc = await loadingTask.promise;
     const meta = await doc.getMetadata().catch(() => ({}));
     const info = meta?.info || {};
     const pages = [];
@@ -1717,6 +1736,10 @@ async function extractTruePdfTopicAndText(pdfBytes, fallbackTitle = '', pdfUrl =
       const cleanPage = lines.join('\n');
       if (cleanPage) {
         pages.push({ pageNumber: p, lines, text: cleanPage });
+      }
+      page.cleanup?.();
+      if (p % 4 === 0) {
+        await new Promise(resolve => setImmediate(resolve));
       }
     }
 
@@ -1758,6 +1781,9 @@ async function extractTruePdfTopicAndText(pdfBytes, fallbackTitle = '', pdfUrl =
   } catch (error) {
     console.warn(`PDF extraction error for ${pdfUrl}: ${error.message}`);
     return { topic: fallbackTitle, submissionDate: null, responsiblePerson: 'Not stated in PDF', summary: '', contentExcerpt: '', fullContent: '', pageCount: 0, flatText: '' };
+  } finally {
+    try { await doc?.destroy(); } catch {}
+    try { await loadingTask?.destroy(); } catch {}
   }
 }
 
@@ -1780,8 +1806,12 @@ async function fetchTruePdfDocument(pdfUrl, fallbackTitle = '') {
       signal: AbortSignal.timeout(15000)
     });
     if (resp.ok) {
+      const contentLen = Number(resp.headers.get('content-length') || 0);
+      if (contentLen > 6 * 1024 * 1024) {
+        return null;
+      }
       const buf = Buffer.from(await resp.arrayBuffer());
-      if (buf.length > 16 && buf.subarray(0, 5).toString('latin1') === '%PDF-') {
+      if (buf.length > 16 && buf.length <= 6 * 1024 * 1024 && buf.subarray(0, 5).toString('latin1') === '%PDF-') {
         pdfBytes = buf;
       }
     }
@@ -1912,6 +1942,7 @@ function extractWpJsonTopicsAndPdfs(rawJson, category, baseUrl, limit = 4) {
 
     for (const pdfU of itemPdfs) {
       if (seenPdfs.has(pdfU) || isNonIssueLink(title, pdfU)) continue;
+      if (category === 'Policy Briefs' && /2026-National-Budget-25-November-2025-final\.pdf/i.test(pdfU)) continue;
       seenPdfs.add(pdfU);
       const cleanLabel = title.replace(/\s*\[(?:Download|Explanation)\]\s*/gi, '').trim();
       pdfLinks.push({ url: pdfU, title: cleanLabel.slice(0, 160), pubDate });
@@ -1999,12 +2030,12 @@ async function ingestPdfLinksForCategory(pdfLinks, category, existingTopics, cle
   const pdfTexts = [];
   let pdfCount = 0;
 
-  const parsedDocs = await Promise.all(
-    pdfLinks.map(async pdfLink => {
-      const pdfDoc = await fetchTruePdfDocument(pdfLink.url, pdfLink.title);
-      return { pdfLink, pdfDoc };
-    })
-  );
+  const parsedDocs = [];
+  for (const pdfLink of pdfLinks) {
+    const pdfDoc = await fetchTruePdfDocument(pdfLink.url, pdfLink.title);
+    parsedDocs.push({ pdfLink, pdfDoc });
+    await new Promise(resolve => setImmediate(resolve));
+  }
 
   for (const { pdfLink, pdfDoc } of parsedDocs) {
     if (!pdfDoc || !pdfDoc.flatText || pdfDoc.flatText.length < 80) continue;
@@ -2226,6 +2257,20 @@ async function hydratePdfTopicsInSnapshot(snapshot) {
 }
 
 async function fetchParliamentaryPolicyTracker() {
+  const now = Date.now();
+  if (hansardCache.data && hansardCache.expiresAt > now) {
+    return hansardCache.data;
+  }
+  if (hansardInFlightPromise) {
+    return hansardInFlightPromise;
+  }
+  hansardInFlightPromise = fetchParliamentaryPolicyTrackerInternal().finally(() => {
+    hansardInFlightPromise = null;
+  });
+  return hansardInFlightPromise;
+}
+
+async function fetchParliamentaryPolicyTrackerInternal() {
   const now = Date.now();
   if (hansardCache.data && hansardCache.expiresAt > now) {
     return hansardCache.data;
@@ -2891,6 +2936,16 @@ app.get('/api/social/hashtags', async (req, res) => {
 });
 
 async function refreshDualEngineTimelineData() {
+  if (timelineRefreshInFlightPromise) {
+    return timelineRefreshInFlightPromise;
+  }
+  timelineRefreshInFlightPromise = refreshDualEngineTimelineDataInternal().finally(() => {
+    timelineRefreshInFlightPromise = null;
+  });
+  return timelineRefreshInFlightPromise;
+}
+
+async function refreshDualEngineTimelineDataInternal() {
   const [socialPayload, layer2Macro, hansardTelemetry] = await Promise.all([
     getSocialHashtagTrends(),
     fetchLayer2MacroTelemetry(),
@@ -3455,8 +3510,10 @@ server.on('upgrade', async (req, socket) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
-  refreshDualEngineTimelineData().catch(err => {
-    console.warn(`Initial timeline warmup warning: ${err.message}`);
-  });
+  setTimeout(() => {
+    refreshDualEngineTimelineData().catch(err => {
+      console.warn(`Initial timeline warmup warning: ${err.message}`);
+    });
+  }, 1500).unref();
 });
 
