@@ -87,7 +87,7 @@
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
                 <h2 class="text-2xl font-bold tracking-tight text-white">Real-Time Systemic Risk Monitoring</h2>
-                <p id="telemetry-subtitle" class="text-sm text-slate-400">Dual-Engine Bayesian Telemetry &amp; Semantic Hansard Legislative Oversight</p>
+                <p id="telemetry-subtitle" class="text-sm text-slate-400">Dual-Engine Bayesian Telemetry, Semantic Hansard Oversight &amp; Ministry of Finance Fiscal Monitoring</p>
             </div>
             <div id="alert-banner" class="px-4 py-2 rounded-lg bg-warning/10 border border-warning/30 text-warning text-sm font-semibold flex items-center space-x-2">
                 <span>Warning Level:</span>
@@ -95,8 +95,8 @@
             </div>
         </div>
 
-        <!-- KPI Scorecards Grid (5 Cards including Hansard Telemetry) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <!-- KPI Scorecards Grid (6 Cards including Hansard & Ministry of Finance Telemetry) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <!-- Card 1: Regime Durability Phi -->
             <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden">
                 <div class="absolute top-0 right-0 p-3 text-accent/20 font-bold text-3xl">Φ</div>
@@ -135,6 +135,14 @@
                 <p class="text-xs uppercase tracking-wider text-sky-300 font-medium">Hansard Friction (F<sub>parl</sub>)</p>
                 <p id="kpi-hansard" class="text-2xl font-extrabold text-white mt-2 font-mono tabular-nums">--</p>
                 <p id="kpi-hansard-note" class="text-xs text-slate-400 mt-2">Parliament Semantic NLP</p>
+            </div>
+
+            <!-- Card 6: Ministry of Finance Fiscal & Debt Telemetry -->
+            <div class="bg-cardbg/90 backdrop-blur border border-amber-500/40 rounded-xl p-4 shadow-lg relative overflow-hidden bg-gradient-to-br from-cardbg/95 to-amber-500/10">
+                <div class="absolute top-0 right-0 p-3 text-amber-400/25 font-bold text-2xl font-mono">F<sub>t</sub></div>
+                <p class="text-xs uppercase tracking-wider text-amber-300 font-medium">Treasury Fiscal (F<sub>treas</sub>)</p>
+                <p id="kpi-treasury" class="text-2xl font-extrabold text-white mt-2 font-mono tabular-nums">--</p>
+                <p id="kpi-treasury-note" class="text-xs text-slate-400 mt-2">Ministry of Finance NLP</p>
             </div>
         </div>
 
@@ -200,6 +208,16 @@
                             <div id="bar-hansard" class="bg-emerald-400 h-full w-1/4"></div>
                         </div>
                     </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
+                            <span>Ministry of Finance Fiscal &amp; Debt NLP</span>
+                            <span id="engine-treasury" class="text-amber-400">CHECKING</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div id="bar-treasury" class="bg-amber-400 h-full w-1/4"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="pt-2">
@@ -210,23 +228,44 @@
             </div>
         </div>
 
-        <!-- 5-Portal Parliamentary & Policy Repository Tracker -->
+        <!-- 6-Portal Parliamentary & Policy Repository Tracker (ParlZim + Ministry of Finance) -->
         <section class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-lg space-y-5">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h3 class="text-lg font-bold text-white">Parliamentary &amp; Policy Repository Tracker (5 Portals)</h3>
-                    <p class="text-xs text-slate-400">Live semantic TF-IDF tracking across parlzim.gov.zw (Bill Digests, Enacted Acts, Policy Briefs, Fact Sheets) &amp; e-portal Hansards</p>
+                    <h3 class="text-lg font-bold text-white">Parliamentary &amp; Policy Repository Tracker (6 Portals)</h3>
+                    <p class="text-xs text-slate-400">Live semantic TF-IDF tracking across parlzim.gov.zw (Bill Digests, Enacted Acts, Policy Briefs, Fact Sheets), e-portal Hansards &amp; Ministry of Finance (<a href="https://zimtreasury.co.zw/" target="_blank" rel="noopener noreferrer" class="text-amber-300 hover:underline">zimtreasury.co.zw</a>)</p>
                 </div>
                 <span id="policy-tracker-badge" class="text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 self-start sm:self-auto">
-                    Checking 5 portals...
+                    Checking 6 portals...
                 </span>
             </div>
 
-            <div id="portal-status-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"></div>
+            <div id="portal-status-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3"></div>
 
             <div id="policy-briefing-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 space-y-3"></div>
 
             <div id="tracked-topics-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4"></div>
+        </section>
+
+        <!-- 10-Portal Ministry of Finance & Economic Development Repository Tracker -->
+        <section id="treasury-tracker-section" class="bg-cardbg/90 backdrop-blur border border-amber-500/30 rounded-xl p-6 shadow-lg space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h3 class="text-lg font-bold text-white">Ministry of Finance &amp; Economic Development Repository Tracker (10 Portals)</h3>
+                    <p class="text-xs text-slate-400">Live fiscal, sovereign-debt, budget &amp; policy ingestion from <a href="https://zimtreasury.co.zw/" target="_blank" rel="noopener noreferrer" class="text-amber-300 hover:underline">zimtreasury.co.zw</a> (E-Library, Press Releases, Stakeholder Engagements, Newsletters, Budgets 1981–2027, Annual Budget Reviews, Public Debt Management, Quarterly Treasury Bulletins, Financial Statements, IPSAS, SMP, Policies &amp; Circulars, Development Assistance &amp; Downloads)</p>
+                </div>
+                <span id="treasury-tracker-badge" class="text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 self-start sm:self-auto">
+                    Checking 10 portals...
+                </span>
+            </div>
+
+            <div id="treasury-quick-links" class="bg-slate-900/50 border border-slate-800/80 rounded-lg p-3 space-y-2"></div>
+
+            <div id="treasury-portal-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"></div>
+
+            <div id="treasury-briefing-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 space-y-3"></div>
+
+            <div id="treasury-topics-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4"></div>
         </section>
 
     </main>
@@ -290,7 +329,7 @@
             for (const url of candidates) {
                 try {
                     const controller = new AbortController();
-                    const timer = setTimeout(() => controller.abort(), 6000);
+                    const timer = setTimeout(() => controller.abort(), 15000);
                     const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
                     clearTimeout(timer);
                     if (!response.ok) continue;
@@ -310,10 +349,16 @@
                 document.getElementById('warning-label').innerText = 'Awaiting Backend';
                 document.getElementById('kpi-hansard').innerText = '--';
                 document.getElementById('kpi-hansard-note').innerText = 'Backend unreachable';
+                const kpiTreas = document.getElementById('kpi-treasury');
+                const kpiTreasNote = document.getElementById('kpi-treasury-note');
+                if (kpiTreas) kpiTreas.innerText = '--';
+                if (kpiTreasNote) kpiTreasNote.innerText = 'Backend unreachable';
                 document.getElementById('engine-bayesian').innerText = 'OFFLINE';
                 document.getElementById('engine-markov').innerText = 'OFFLINE';
                 document.getElementById('engine-fsi').innerText = 'OFFLINE';
                 document.getElementById('engine-hansard').innerText = 'OFFLINE';
+                const engTreas = document.getElementById('engine-treasury');
+                if (engTreas) engTreas.innerText = 'OFFLINE';
                 return;
             }
 
@@ -412,7 +457,48 @@
                 hansardBar.style.width = '10%';
             }
 
-            renderLegislativePolicyTracker(hansard);
+            let treasury = data.treasuryStatus || null;
+            if (!treasury || treasury.status === 'awaiting_check') {
+                try {
+                    const treasResp = await fetch('/api/treasury', { cache: 'no-store' });
+                    if (treasResp.ok) treasury = await treasResp.json();
+                } catch {
+                    // Keep existing state
+                }
+            }
+            const treasuryObj = treasury || {};
+            const latestTreasuryScore = Number.isFinite(latest.treasury_friction)
+                ? latest.treasury_friction
+                : Number.isFinite(treasuryObj.score)
+                    ? treasuryObj.score
+                    : null;
+            const treasuryKpi = document.getElementById('kpi-treasury');
+            const treasuryNote = document.getElementById('kpi-treasury-note');
+            const treasuryLabel = document.getElementById('engine-treasury');
+            const treasuryBar = document.getElementById('bar-treasury');
+            const treasAccessible = Number.isFinite(treasuryObj.accessibleSources) ? treasuryObj.accessibleSources : null;
+            const treasTotal = Number.isFinite(treasuryObj.totalSources) ? treasuryObj.totalSources : 10;
+
+            if (treasuryKpi && treasuryNote && treasuryLabel && treasuryBar) {
+                if (treasuryObj.status === 'available' && Number.isFinite(latestTreasuryScore)) {
+                    treasuryKpi.innerText = latestTreasuryScore.toFixed(1);
+                    treasuryNote.innerText = treasAccessible !== null
+                        ? `${treasAccessible}/${treasTotal} ZimTreasury Portals Live`
+                        : 'ZimTreasury Fiscal NLP';
+                    treasuryLabel.innerText = `LIVE (${treasAccessible ?? 1}/${treasTotal})`;
+                    treasuryLabel.className = 'text-amber-400';
+                    treasuryBar.style.width = `${Math.min(100, Math.max(8, latestTreasuryScore))}%`;
+                } else {
+                    treasuryKpi.innerText = 'Unavailable';
+                    treasuryNote.innerText = 'Awaiting zimtreasury.co.zw';
+                    treasuryLabel.innerText = 'UNAVAILABLE';
+                    treasuryLabel.className = 'text-slate-400';
+                    treasuryBar.style.width = '10%';
+                }
+            }
+
+            renderLegislativePolicyTracker(hansard, treasuryObj);
+            renderTreasuryPolicyTracker(treasuryObj);
 
             statusEl.innerHTML = isLive
                 ? `<span class="h-2 w-2 rounded-full bg-success mr-2"></span>Live Sync Active (${connectedOrigin})`
@@ -470,13 +556,7 @@
             };
         }
 
-        function renderLegislativePolicyTracker(hansard) {
-            const badge = document.getElementById('policy-tracker-badge');
-            const grid = document.getElementById('portal-status-grid');
-            const briefingPanel = document.getElementById('policy-briefing-panel');
-            const topicsPanel = document.getElementById('tracked-topics-panel');
-            if (!badge || !grid || !topicsPanel) return;
-
+        function mergeTreasuryIntoPolicyTracker(hansard, treasury) {
             const defaults = [
                 { category: 'Bill Digests', url: 'https://www.parlzim.gov.zw/bill-digest/' },
                 { category: 'Enacted Acts', url: 'https://www.parlzim.gov.zw/acts/' },
@@ -484,19 +564,126 @@
                 { category: 'Fact Sheets', url: 'https://www.parlzim.gov.zw/fact-sheets/' },
                 { category: 'Hansards', url: 'https://e-portal.parlzim.gov.zw/hansards' }
             ];
-            const sources = Array.isArray(hansard?.sources) && hansard.sources.length
-                ? hansard.sources
+            const parlSources = Array.isArray(hansard?.sources) && hansard.sources.length
+                ? hansard.sources.slice()
                 : defaults.map(item => ({ ...item, status: hansard?.status || 'awaiting_check', httpStatus: null, score: null }));
 
-            const accessible = Number.isFinite(hansard?.accessibleSources)
-                ? hansard.accessibleSources
-                : sources.filter(s => s.status === 'available').length;
-            const total = Number.isFinite(hansard?.totalSources) ? hansard.totalSources : sources.length;
+            const treasuryObj = treasury || {};
+            const treasuryAvailable = treasuryObj.status === 'available' && Number.isFinite(treasuryObj.score);
+            const rawTreasuryTopics = Array.isArray(treasuryObj.tracked_topics) ? treasuryObj.tracked_topics : [];
+            const treasuryMappedTopics = rawTreasuryTopics.map(t => ({
+                ...t,
+                category: 'Ministry of Finance',
+                status: `${t.sub_section || t.category || 'Treasury'} · ${t.status || 'Published'}`,
+                isTreasuryItem: true
+            }));
+            const treasuryFullPdfs = treasuryMappedTopics.filter(t => Boolean(t.full_content && t.pdf_ingested)).length;
+            const treasuryPortal = {
+                category: 'Ministry of Finance',
+                url: treasuryObj.portalUrl || 'https://zimtreasury.co.zw/',
+                status: treasuryAvailable ? 'available' : (treasuryObj.status || 'awaiting_check'),
+                httpStatus: treasuryAvailable ? 200 : null,
+                score: treasuryAvailable ? treasuryObj.score : null,
+                topicCount: treasuryMappedTopics.length,
+                pdfCount: treasuryFullPdfs,
+                topics: treasuryMappedTopics.slice(0, 4).map(t => t.topic),
+                isTreasuryPortal: true,
+                portalMetaLabel: treasuryAvailable
+                    ? `${treasuryObj.accessibleSources ?? 0}/${treasuryObj.totalSources ?? 10} zimtreasury.co.zw · ${treasuryFullPdfs} full PDF${treasuryFullPdfs === 1 ? '' : 's'}`
+                    : 'Awaiting zimtreasury.co.zw sync'
+            };
 
-            if (accessible > 0 && Number.isFinite(hansard?.score)) {
-                badge.textContent = `${accessible}/${total} Live · Avg ${hansard.score.toFixed(1)} / 100`;
+            const combinedSources = [...parlSources, treasuryPortal];
+            const parlTopics = Array.isArray(hansard?.tracked_topics) ? hansard.tracked_topics : [];
+            const combinedTopics = [...parlTopics, ...treasuryMappedTopics]
+                .slice()
+                .sort((a, b) => {
+                    const fA = Number.isFinite(a.friction) ? a.friction : (a.friction_score || 0);
+                    const fB = Number.isFinite(b.friction) ? b.friction : (b.friction_score || 0);
+                    if (fB !== fA) return fB - fA;
+                    return String(b.submission_date || '').localeCompare(String(a.submission_date || ''));
+                })
+                .map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+
+            const livePortals = combinedSources.filter(s => s.status === 'available' && Number.isFinite(s.score));
+            const avgScore = livePortals.length > 0
+                ? Number((livePortals.reduce((sum, s) => sum + s.score, 0) / livePortals.length).toFixed(2))
+                : (Number.isFinite(hansard?.score) ? hansard.score : null);
+            const accessibleSources = combinedSources.filter(s => s.status === 'available').length;
+            const totalSources = combinedSources.length;
+
+            const topIssue = combinedTopics[0] || null;
+            const topFriction = topIssue ? (topIssue.friction ?? topIssue.friction_score) : null;
+            const posture = Number.isFinite(avgScore)
+                ? (avgScore >= 50 || (Number.isFinite(topFriction) && topFriction >= 50) ? 'Elevated' : 'Moderate')
+                : 'Unavailable';
+            const dates = [...new Set(combinedTopics.map(t => String(t.submission_date || '').trim()).filter(Boolean))].sort();
+            const dateWindow = dates.length === 1 ? dates[0] : (dates.length > 1 ? `${dates[0]} to ${dates[dates.length - 1]}` : null);
+            const fullPdfCount = combinedTopics.filter(t => Boolean(t.full_content && (t.pdf_ingested || !t.isTreasuryItem))).length;
+            const totalPages = combinedTopics.reduce((sum, t) => sum + (Number.isFinite(t.page_count) ? t.page_count : 0), 0);
+            const coverageGaps = combinedSources.filter(s => s.status === 'available' && !(s.topicCount > 0) && s.category).map(s => s.category);
+
+            const executiveSummary = accessibleSources > 0
+                ? `Semantic TF-IDF telemetry across ${accessibleSources} of ${totalSources} Parliamentary & Ministry of Finance portals (parlzim.gov.zw + zimtreasury.co.zw) records a composite friction score of ${avgScore !== null ? `${avgScore.toFixed(1)} / 100` : '--'} (${posture} posture).` +
+                  (topIssue
+                      ? ` ${combinedTopics.length} ranked legislative & fiscal documents tracked${dateWindow ? ` spanning ${dateWindow}` : ''}, led by #1 ${topIssue.topic} [${topIssue.category}] (${Number(topFriction || 0).toFixed(1)} / 100).`
+                      : '') +
+                  (fullPdfCount > 0 ? ` ${fullPdfCount} full PDFs read (${totalPages} pages).` : '')
+                : (hansard?.message || 'Parliament of Zimbabwe & Ministry of Finance portals are currently syncing.');
+
+            return {
+                ...(hansard || {}),
+                status: accessibleSources > 0 ? 'available' : (hansard?.status || 'awaiting_check'),
+                score: avgScore,
+                accessibleSources,
+                totalSources,
+                sources: combinedSources,
+                tracked_topics: combinedTopics,
+                summary_briefing: {
+                    headline: topIssue ? `${accessibleSources}/${totalSources} portals live · Lead: ${topIssue.topic}` : `${accessibleSources}/${totalSources} portals checked`,
+                    executive_summary: executiveSummary,
+                    risk_posture: posture,
+                    date_window: dateWindow,
+                    issue_count: combinedTopics.length,
+                    full_pdf_count: fullPdfCount,
+                    total_pages: totalPages,
+                    accessible_portals: accessibleSources,
+                    total_portals: totalSources,
+                    coverage_gaps: coverageGaps,
+                    key_findings: combinedTopics.slice(0, 4).map((entry, idx) => ({
+                        rank: entry.rank || (idx + 1),
+                        category: entry.category || 'Policy',
+                        topic: entry.topic || 'Policy record',
+                        friction: entry.friction ?? entry.friction_score ?? null,
+                        submission_date: entry.submission_date || null,
+                        responsible_person: entry.responsible_person || entry.responsible || 'Not stated in portal index',
+                        page_count: entry.page_count || 0,
+                        takeaway: String(entry.summary || '').trim()
+                    })),
+                    captured_at: treasuryObj.updatedAt || hansard?.cacheUpdatedAt || null
+                }
+            };
+        }
+
+        function renderLegislativePolicyTracker(hansard, treasury = window.__latestSysRiskTreasury) {
+            const badge = document.getElementById('policy-tracker-badge');
+            const grid = document.getElementById('portal-status-grid');
+            const briefingPanel = document.getElementById('policy-briefing-panel');
+            const topicsPanel = document.getElementById('tracked-topics-panel');
+            if (!badge || !grid || !topicsPanel) return;
+
+            window.__latestSysRiskHansard = hansard;
+            if (treasury !== undefined) window.__latestSysRiskTreasury = treasury;
+            const unified = mergeTreasuryIntoPolicyTracker(hansard, window.__latestSysRiskTreasury);
+
+            const sources = unified.sources;
+            const accessible = unified.accessibleSources;
+            const total = unified.totalSources;
+
+            if (accessible > 0 && Number.isFinite(unified.score)) {
+                badge.textContent = `${accessible}/${total} Live · Avg ${unified.score.toFixed(1)} / 100`;
                 badge.className = 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 self-start sm:self-auto';
-            } else if (hansard?.status === 'blocked_by_cloudflare') {
+            } else if (unified.status === 'blocked_by_cloudflare') {
                 badge.textContent = `0/${total} Accessible · Cloudflare 403`;
                 badge.className = 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 self-start sm:self-auto';
             } else {
@@ -504,17 +691,17 @@
                 badge.className = 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 self-start sm:self-auto';
             }
 
-            const rawTopics = Array.isArray(hansard?.tracked_topics) ? hansard.tracked_topics : [];
+            const rawTopics = Array.isArray(unified.tracked_topics) ? unified.tracked_topics : [];
             if (!window.__sysRiskTrackerState) {
                 window.__sysRiskTrackerState = { sortBy: 'rank', category: 'All' };
             }
-            window.__latestSysRiskHansard = hansard;
             const state = window.__sysRiskTrackerState;
 
             grid.replaceChildren();
             sources.forEach(item => {
                 const isOk = item.status === 'available' && Number.isFinite(item.score);
                 const isCf = item.status === 'blocked_by_cloudflare';
+                const isTreas = Boolean(item.isTreasuryPortal);
                 const portalEntries = rawTopics.filter(t => (t.category || '').toLowerCase() === (item.category || '').toLowerCase());
                 const topicTitles = portalEntries.length
                     ? portalEntries.map(t => ({ topic: t.topic, rank: t.rank }))
@@ -524,30 +711,30 @@
                 const card = document.createElement('div');
                 card.className = `p-3 rounded-lg border bg-slate-900/70 ${
                     isSelected
-                        ? 'border-sky-400/80'
+                        ? (isTreas ? 'border-amber-400/90' : 'border-sky-400/80')
                         : isOk
-                            ? 'border-emerald-500/40'
+                            ? (isTreas ? 'border-amber-500/45' : 'border-emerald-500/40')
                             : isCf
                                 ? 'border-amber-500/35'
                                 : 'border-slate-800'
                 }${topicTitles.length ? ' cursor-pointer hover:border-sky-500/60 transition-colors' : ''}`;
                 if (topicTitles.length) {
-                    card.title = `Click to ${isSelected ? 'show all portals' : `filter issues to ${item.category}`}`;
+                    card.title = `Click to ${isSelected ? 'show all 6 portals' : `filter issues to ${item.category}`}`;
                     card.addEventListener('click', () => {
                         state.category = isSelected ? 'All' : item.category;
-                        renderLegislativePolicyTracker(window.__latestSysRiskHansard);
+                        renderLegislativePolicyTracker(window.__latestSysRiskHansard, window.__latestSysRiskTreasury);
                     });
                 }
 
                 const top = document.createElement('div');
                 top.className = 'flex items-center justify-between gap-2';
                 const cat = document.createElement('span');
-                cat.className = 'text-xs font-semibold text-white';
+                cat.className = `text-xs font-semibold ${isTreas ? 'text-amber-300' : 'text-white'}`;
                 cat.textContent = item.category || 'Portal';
 
                 const val = document.createElement('span');
                 val.className = `text-xs font-mono tabular-nums font-bold ${
-                    isOk ? 'text-emerald-400' : isCf ? 'text-amber-400' : 'text-slate-400'
+                    isOk ? (isTreas ? 'text-amber-300' : 'text-emerald-400') : isCf ? 'text-amber-400' : 'text-slate-400'
                 }`;
                 val.textContent = isOk
                     ? item.score.toFixed(1)
@@ -571,11 +758,13 @@
                         });
                         const metaLine = document.createElement('div');
                         metaLine.className = 'text-[10px] text-slate-400';
-                        metaLine.textContent = item.viaFallbackMirror
-                            ? (item.primaryBlockedByCloudflare
-                                ? `${item.mirrorLabel || 'CF-free mirror'} (CF 403)`
-                                : `${item.mirrorLabel || 'Verified archive'} · ${topicTitles.length} tracked`)
-                            : `HTTP ${item.httpStatus || 200}${topicTitles.length > 3 ? ` · +${topicTitles.length - 3} more` : ''}`;
+                        metaLine.textContent = item.portalMetaLabel
+                            ? item.portalMetaLabel
+                            : item.viaFallbackMirror
+                                ? (item.primaryBlockedByCloudflare
+                                    ? `${item.mirrorLabel || 'CF-free mirror'} (CF 403)`
+                                    : `${item.mirrorLabel || 'Verified archive'} · ${topicTitles.length} tracked`)
+                                : `HTTP ${item.httpStatus || 200}${topicTitles.length > 3 ? ` · +${topicTitles.length - 3} more` : ''}`;
                         descWrap.append(metaLine);
                     } else {
                         const emptyLine = document.createElement('p');
@@ -588,7 +777,7 @@
                 } else {
                     const errLine = document.createElement('p');
                     errLine.className = 'text-[11px] text-slate-400 truncate';
-                    errLine.textContent = item.message || 'Awaiting poll';
+                    errLine.textContent = item.portalMetaLabel || item.message || 'Awaiting poll';
                     descWrap.append(errLine);
                 }
 
@@ -597,7 +786,7 @@
             });
 
             if (briefingPanel) {
-                const briefing = buildClientSummaryBriefing(hansard, sources, rawTopics);
+                const briefing = buildClientSummaryBriefing(unified, sources, rawTopics);
                 const allFindings = Array.isArray(briefing.key_findings) ? briefing.key_findings : [];
                 const activeFindings = state.category === 'All'
                     ? allFindings
@@ -783,7 +972,7 @@
 
                 const heading = document.createElement('h4');
                 heading.className = 'text-xs font-semibold uppercase tracking-wider text-slate-300';
-                heading.textContent = `Ranked Parliamentary Issues & Submissions (${rawTopics.length})`;
+                heading.textContent = `Ranked Parliamentary & Ministry of Finance Issues (${rawTopics.length})`;
 
                 const controls = document.createElement('div');
                 controls.className = 'flex flex-wrap items-center gap-2';
@@ -794,13 +983,13 @@
                 ['All', ...new Set(rawTopics.map(t => t.category).filter(Boolean))].forEach(cat => {
                     const opt = document.createElement('option');
                     opt.value = cat;
-                    opt.textContent = cat === 'All' ? 'All Portals' : cat;
+                    opt.textContent = cat === 'All' ? 'All 6 Portals' : cat;
                     if (state.category === cat) opt.selected = true;
                     catSelect.append(opt);
                 });
                 catSelect.addEventListener('change', () => {
                     state.category = catSelect.value;
-                    renderLegislativePolicyTracker(window.__latestSysRiskHansard);
+                    renderLegislativePolicyTracker(window.__latestSysRiskHansard, window.__latestSysRiskTreasury);
                 });
 
                 const sortSelect = document.createElement('select');
@@ -818,7 +1007,7 @@
                 });
                 sortSelect.addEventListener('change', () => {
                     state.sortBy = sortSelect.value;
-                    renderLegislativePolicyTracker(window.__latestSysRiskHansard);
+                    renderLegislativePolicyTracker(window.__latestSysRiskHansard, window.__latestSysRiskTreasury);
                 });
 
                 controls.append(catSelect, sortSelect);
@@ -844,7 +1033,7 @@
 
                 const list = document.createElement('div');
                 list.className = 'divide-y divide-slate-800/80 max-h-[520px] overflow-y-auto pr-1';
-                sortedTopics.slice(0, 15).forEach((entry, idx) => {
+                sortedTopics.slice(0, 25).forEach((entry, idx) => {
                     const topicFriction = Number.isFinite(entry.friction) ? entry.friction : entry.friction_score;
                     const isElevated = Number.isFinite(topicFriction) && topicFriction >= 50;
 
@@ -957,12 +1146,586 @@
             }
         }
 
+        const TREASURY_DIRECTORY_GROUPS = [
+            {
+                group: 'News & Updates',
+                links: [
+                    { label: 'E-Library', url: 'https://zimtreasury.co.zw/e-library/' },
+                    { label: 'Press Releases', url: 'https://zimtreasury.co.zw/press-releases/' },
+                    { label: 'Stakeholder Engagements', url: 'https://zimtreasury.co.zw/stake-holder-engagement/' },
+                    { label: 'Newsletters', url: 'https://zimtreasury.co.zw/newsletters/' }
+                ]
+            },
+            {
+                group: 'Budget Documents',
+                links: [
+                    { label: '2027', url: 'https://zimtreasury.co.zw/budget-documents-2027/' },
+                    { label: '2026', url: 'https://zimtreasury.co.zw/budget-documents-2026/' },
+                    { label: '2025', url: 'https://zimtreasury.co.zw/budget-document-2025/' },
+                    { label: '2024', url: 'https://zimtreasury.co.zw/budget-documents-2024/' },
+                    { label: '2023', url: 'https://zimtreasury.co.zw/budget-documents-2023/' },
+                    { label: '1981–2021', url: 'https://zimtreasury.co.zw/budget-documents-1981-2021/' },
+                    { label: 'Annual Budget Reviews', url: 'https://zimtreasury.co.zw/annual-budget-review/' }
+                ]
+            },
+            {
+                group: 'Public Debt Management',
+                links: [
+                    { label: 'Annual Borrowing Plans', url: 'https://zimtreasury.co.zw/annual-borrowing-plan/' },
+                    { label: 'Quarterly Debt Bulletins', url: 'https://zimtreasury.co.zw/quartely-debt-bulletins/' },
+                    { label: 'Annual Public Debt Bulletins', url: 'https://zimtreasury.co.zw/annual-public-debt-bulletins/' },
+                    { label: 'Public Debt Reports', url: 'https://zimtreasury.co.zw/public-debt-reports/' },
+                    { label: 'Other Reports', url: 'https://zimtreasury.co.zw/other-reports/' }
+                ]
+            },
+            {
+                group: 'Financial Statements & Publications',
+                links: [
+                    { label: 'Financial Statements', url: 'https://zimtreasury.co.zw/financial-statements/' },
+                    { label: 'Annually', url: 'https://zimtreasury.co.zw/annually/' },
+                    { label: 'Budget Outturn', url: 'https://zimtreasury.co.zw/budget-outturn/' },
+                    { label: 'Monthly', url: 'https://zimtreasury.co.zw/monthly/' },
+                    { label: 'IPSAS Documents', url: 'https://zimtreasury.co.zw/ipsas-documents/' },
+                    { label: 'Quarterly Treasury Bulletins', url: 'https://zimtreasury.co.zw/treasury-bulletins/' },
+                    { label: 'Policies & Circulars', url: 'https://zimtreasury.co.zw/policies-publications/' },
+                    { label: 'Staff Monitored Program', url: 'https://zimtreasury.co.zw/staff-monitored-programs/' },
+                    { label: 'Development Assistance', url: 'https://zimtreasury.co.zw/development-assistance-reports/' },
+                    { label: 'General Downloads', url: 'https://zimtreasury.co.zw/general-downloads/' }
+                ]
+            }
+        ];
+
+        function buildClientTreasuryBriefing(treasury, sources, rawTopics) {
+            if (treasury && treasury.summary_briefing && typeof treasury.summary_briefing === 'object') {
+                return treasury.summary_briefing;
+            }
+            const accessible = Number.isFinite(treasury?.accessibleSources)
+                ? treasury.accessibleSources
+                : sources.filter(s => s.status === 'available').length;
+            const total = Number.isFinite(treasury?.totalSources) ? treasury.totalSources : (sources.length || 10);
+            const avgScore = Number.isFinite(treasury?.score) ? treasury.score : null;
+            const topIssue = rawTopics[0] || null;
+            const posture = Number.isFinite(avgScore)
+                ? (avgScore >= 52 ? 'Elevated' : avgScore >= 45 ? 'Moderate' : 'Low')
+                : 'Unavailable';
+            const dates = [...new Set(rawTopics.map(t => String(t.submission_date || '').trim()).filter(Boolean))].sort();
+            const dateWindow = dates.length === 1 ? dates[0] : (dates.length > 1 ? `${dates[0]} to ${dates[dates.length - 1]}` : null);
+            return {
+                headline: topIssue ? `${accessible}/${total} Treasury portals live · Lead: ${topIssue.topic}` : `${accessible}/${total} Ministry of Finance portals checked`,
+                executive_summary: accessible > 0
+                    ? `Live Ministry of Finance (zimtreasury.co.zw) telemetry across ${accessible} of ${total} portals records a composite fiscal risk score of ${avgScore !== null ? `${avgScore.toFixed(1)} / 100` : '--'} (${posture} posture).`
+                    : 'Ministry of Finance (zimtreasury.co.zw) portals are currently syncing.',
+                risk_posture: posture,
+                date_window: dateWindow,
+                issue_count: rawTopics.length,
+                full_pdf_count: rawTopics.filter(t => t.pdf_ingested && t.full_content).length,
+                total_pages: rawTopics.reduce((sum, t) => sum + (Number.isFinite(t.page_count) ? t.page_count : 0), 0),
+                accessible_portals: accessible,
+                total_portals: total,
+                key_findings: rawTopics.slice(0, 4).map((entry, idx) => ({
+                    rank: entry.rank || (idx + 1),
+                    category: entry.category || 'Ministry of Finance',
+                    topic: entry.topic || 'Treasury publication',
+                    friction: entry.friction ?? null,
+                    submission_date: entry.submission_date || null,
+                    responsible_person: entry.responsible_person || 'Ministry of Finance',
+                    page_count: entry.page_count || 0,
+                    takeaway: String(entry.summary || '').trim()
+                })),
+                captured_at: treasury?.updatedAt || null
+            };
+        }
+
+        function renderTreasuryPolicyTracker(treasury) {
+            const badge = document.getElementById('treasury-tracker-badge');
+            const quickLinksEl = document.getElementById('treasury-quick-links');
+            const grid = document.getElementById('treasury-portal-grid');
+            const briefingPanel = document.getElementById('treasury-briefing-panel');
+            const topicsPanel = document.getElementById('treasury-topics-panel');
+            if (!badge || !grid || !topicsPanel) return;
+
+            if (quickLinksEl) {
+                quickLinksEl.replaceChildren();
+                const dirTitle = document.createElement('div');
+                dirTitle.className = 'text-[11px] font-semibold uppercase tracking-wider text-amber-300';
+                dirTitle.textContent = 'Official Ministry of Finance Portal Directory (zimtreasury.co.zw)';
+                quickLinksEl.append(dirTitle);
+
+                const groupsWrap = document.createElement('div');
+                groupsWrap.className = 'space-y-1.5';
+                TREASURY_DIRECTORY_GROUPS.forEach(grp => {
+                    const row = document.createElement('div');
+                    row.className = 'flex flex-wrap items-center gap-1.5 text-[11px]';
+                    const lbl = document.createElement('span');
+                    lbl.className = 'text-slate-400 font-semibold mr-1';
+                    lbl.textContent = `${grp.group}:`;
+                    row.append(lbl);
+                    grp.links.forEach(item => {
+                        const a = document.createElement('a');
+                        a.href = item.url;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        a.className = 'px-2 py-0.5 rounded bg-slate-950/80 border border-slate-700/80 text-slate-200 hover:text-amber-300 hover:border-amber-500/50 transition-colors';
+                        a.textContent = item.label;
+                        row.append(a);
+                    });
+                    groupsWrap.append(row);
+                });
+                quickLinksEl.append(groupsWrap);
+            }
+
+            const sources = Array.isArray(treasury?.sources) && treasury.sources.length
+                ? treasury.sources
+                : [
+                    { category: 'Budget Documents (2023–2027 & Reviews)', shortLabel: 'Budget Documents', url: 'https://zimtreasury.co.zw/budget-documents-2027/', status: 'awaiting_check', score: null },
+                    { category: 'Public Debt Management', shortLabel: 'Public Debt', url: 'https://zimtreasury.co.zw/public-debt-management/', status: 'awaiting_check', score: null },
+                    { category: 'Quarterly Treasury Bulletins', shortLabel: 'Treasury Bulletins', url: 'https://zimtreasury.co.zw/treasury-bulletins/', status: 'awaiting_check', score: null },
+                    { category: 'Policies & Circulars', shortLabel: 'Policies & Circulars', url: 'https://zimtreasury.co.zw/policies-publications/', status: 'awaiting_check', score: null },
+                    { category: 'Press Releases', shortLabel: 'Press Releases', url: 'https://zimtreasury.co.zw/press-releases/', status: 'awaiting_check', score: null },
+                    { category: 'Newsletters', shortLabel: 'Newsletters', url: 'https://zimtreasury.co.zw/newsletters/', status: 'awaiting_check', score: null },
+                    { category: 'Stakeholder Engagements', shortLabel: 'Stakeholder Engagements', url: 'https://zimtreasury.co.zw/stake-holder-engagement/', status: 'awaiting_check', score: null },
+                    { category: 'Financial Statements & IPSAS', shortLabel: 'Financial Statements & IPSAS', url: 'https://zimtreasury.co.zw/financial-statements/', status: 'awaiting_check', score: null },
+                    { category: 'Development Assistance & Downloads', shortLabel: 'Dev Assistance & Downloads', url: 'https://zimtreasury.co.zw/development-assistance-reports/', status: 'awaiting_check', score: null },
+                    { category: 'E-Library & Staff Monitored Program', shortLabel: 'E-Library & SMP', url: 'https://zimtreasury.co.zw/e-library/', status: 'awaiting_check', score: null }
+                ];
+
+            const accessible = Number.isFinite(treasury?.accessibleSources)
+                ? treasury.accessibleSources
+                : sources.filter(s => s.status === 'available').length;
+            const total = Number.isFinite(treasury?.totalSources) ? treasury.totalSources : sources.length;
+
+            if (accessible > 0 && Number.isFinite(treasury?.score)) {
+                badge.textContent = `${accessible}/${total} Live · Avg ${treasury.score.toFixed(1)} / 100`;
+                badge.className = 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 self-start sm:self-auto';
+            } else {
+                badge.textContent = `${accessible}/${total} Portals Checked`;
+                badge.className = 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 self-start sm:self-auto';
+            }
+
+            const rawTopics = Array.isArray(treasury?.tracked_topics) ? treasury.tracked_topics : [];
+            if (!window.__sysRiskTreasuryState) {
+                window.__sysRiskTreasuryState = { sortBy: 'rank', category: 'All' };
+            }
+            window.__latestSysRiskTreasury = treasury;
+            const state = window.__sysRiskTreasuryState;
+
+            grid.replaceChildren();
+            sources.forEach(item => {
+                const isOk = item.status === 'available' && Number.isFinite(item.score);
+                const portalEntries = rawTopics.filter(t => (t.category || '').toLowerCase() === (item.category || '').toLowerCase());
+                const topicTitles = portalEntries.length
+                    ? portalEntries.map(t => ({ topic: t.topic, rank: t.rank }))
+                    : (Array.isArray(item.topics) ? item.topics.map(t => ({ topic: t, rank: null })) : []);
+                const isSelected = state.category === item.category;
+
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-lg border bg-slate-900/70 ${
+                    isSelected
+                        ? 'border-amber-400/90'
+                        : isOk
+                            ? 'border-amber-500/35'
+                            : 'border-slate-800'
+                }${topicTitles.length ? ' cursor-pointer hover:border-amber-400/70 transition-colors' : ''}`;
+                if (topicTitles.length) {
+                    card.title = `Click to ${isSelected ? 'show all Treasury portals' : `filter documents to ${item.category}`}`;
+                    card.addEventListener('click', () => {
+                        state.category = isSelected ? 'All' : item.category;
+                        renderTreasuryPolicyTracker(window.__latestSysRiskTreasury);
+                    });
+                }
+
+                const top = document.createElement('div');
+                top.className = 'flex items-center justify-between gap-2';
+                const cat = document.createElement('span');
+                cat.className = 'text-xs font-semibold text-white truncate';
+                cat.title = item.category || 'Treasury Portal';
+                cat.textContent = item.shortLabel || item.category || 'Portal';
+
+                const val = document.createElement('span');
+                val.className = `text-xs font-mono tabular-nums font-bold shrink-0 ${
+                    isOk ? 'text-amber-300' : 'text-slate-400'
+                }`;
+                val.textContent = isOk ? item.score.toFixed(1) : 'WAIT';
+                top.append(cat, val);
+
+                const descWrap = document.createElement('div');
+                descWrap.className = 'text-[11px] text-slate-400 mt-1.5 space-y-1';
+                if (isOk && topicTitles.length > 0) {
+                    topicTitles.slice(0, 3).forEach(entry => {
+                        const line = document.createElement('div');
+                        line.className = 'text-slate-200 truncate';
+                        line.title = entry.topic;
+                        line.textContent = `${Number.isFinite(entry.rank) ? `#${entry.rank} ` : '• '}${entry.topic}`;
+                        descWrap.append(line);
+                    });
+                    const metaLine = document.createElement('div');
+                    metaLine.className = 'text-[10px] text-slate-400';
+                    const pdfNote = item.pdfCount > 0 ? ` · ${item.pdfCount} full PDF${item.pdfCount === 1 ? '' : 's'}` : '';
+                    metaLine.textContent = `HTTP 200 · ${topicTitles.length} doc${topicTitles.length === 1 ? '' : 's'}${pdfNote}`;
+                    descWrap.append(metaLine);
+                } else {
+                    const errLine = document.createElement('p');
+                    errLine.className = 'text-[11px] text-slate-400 truncate';
+                    errLine.textContent = isOk ? 'HTTP 200 · Portal indexed' : 'Awaiting zimtreasury.co.zw sync';
+                    descWrap.append(errLine);
+                }
+
+                card.append(top, descWrap);
+                grid.append(card);
+            });
+
+            if (briefingPanel) {
+                const briefing = buildClientTreasuryBriefing(treasury, sources, rawTopics);
+                const allFindings = Array.isArray(briefing.key_findings) ? briefing.key_findings : [];
+                const activeFindings = state.category === 'All'
+                    ? allFindings
+                    : rawTopics
+                        .filter(t => t.category === state.category)
+                        .slice(0, 4)
+                        .map((entry, idx) => ({
+                            rank: entry.rank || (idx + 1),
+                            category: entry.category || 'Ministry of Finance',
+                            topic: entry.topic || 'Treasury publication',
+                            friction: entry.friction ?? null,
+                            submission_date: entry.submission_date || null,
+                            responsible_person: entry.responsible_person || 'Ministry of Finance',
+                            page_count: entry.page_count || 0,
+                            takeaway: String(entry.summary || '').trim()
+                        }));
+
+                briefingPanel.replaceChildren();
+
+                const bHeader = document.createElement('div');
+                bHeader.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2';
+
+                const bTitleGroup = document.createElement('div');
+                bTitleGroup.className = 'space-y-0.5';
+
+                const bTitle = document.createElement('h4');
+                bTitle.className = 'text-sm font-semibold text-white';
+                bTitle.textContent = state.category === 'All'
+                    ? 'Ministry of Finance Summary Briefing'
+                    : `Ministry of Finance Briefing · ${state.category}`;
+
+                const bMeta = document.createElement('div');
+                bMeta.className = 'flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400 font-mono tabular-nums';
+                const postureColor = briefing.risk_posture === 'Elevated'
+                    ? 'text-amber-400'
+                    : briefing.risk_posture === 'Moderate'
+                        ? 'text-emerald-400'
+                        : 'text-slate-400';
+                const postureSpan = document.createElement('span');
+                postureSpan.className = postureColor;
+                postureSpan.textContent = `${briefing.risk_posture || 'Unavailable'} fiscal posture`;
+                const sep1 = document.createElement('span');
+                sep1.setAttribute('aria-hidden', 'true');
+                sep1.textContent = '·';
+                const countSpan = document.createElement('span');
+                countSpan.textContent = `${briefing.issue_count ?? rawTopics.length} tracked publication${(briefing.issue_count ?? rawTopics.length) === 1 ? '' : 's'}`;
+                bMeta.append(postureSpan, sep1, countSpan);
+
+                if (briefing.date_window) {
+                    const sep2 = document.createElement('span');
+                    sep2.setAttribute('aria-hidden', 'true');
+                    sep2.textContent = '·';
+                    const dateMetaSpan = document.createElement('span');
+                    dateMetaSpan.textContent = `Dates ${briefing.date_window}`;
+                    bMeta.append(sep2, dateMetaSpan);
+                }
+                if (Number.isFinite(briefing.full_pdf_count) && briefing.full_pdf_count > 0) {
+                    const sepPdf = document.createElement('span');
+                    sepPdf.setAttribute('aria-hidden', 'true');
+                    sepPdf.textContent = '·';
+                    const pdfSpan = document.createElement('span');
+                    pdfSpan.className = 'text-amber-300';
+                    const pagePart = Number.isFinite(briefing.total_pages) && briefing.total_pages > 0 ? ` (${briefing.total_pages} pages)` : '';
+                    pdfSpan.textContent = `${briefing.full_pdf_count} full PDF${briefing.full_pdf_count === 1 ? '' : 's'} read${pagePart}`;
+                    bMeta.append(sepPdf, pdfSpan);
+                }
+
+                bTitleGroup.append(bTitle, bMeta);
+
+                const bActions = document.createElement('div');
+                bActions.className = 'flex items-center gap-2 shrink-0';
+
+                if (state.category !== 'All') {
+                    const resetBtn = document.createElement('button');
+                    resetBtn.type = 'button';
+                    resetBtn.className = 'px-3 py-1.5 text-xs font-medium text-amber-300 hover:text-white bg-slate-950 border border-slate-700 rounded whitespace-nowrap shrink-0 transition-colors';
+                    resetBtn.textContent = 'Show All Portals';
+                    resetBtn.addEventListener('click', () => {
+                        state.category = 'All';
+                        renderTreasuryPolicyTracker(window.__latestSysRiskTreasury);
+                    });
+                    bActions.append(resetBtn);
+                }
+
+                const copyBtn = document.createElement('button');
+                copyBtn.type = 'button';
+                copyBtn.className = 'px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded whitespace-nowrap shrink-0 transition-colors';
+                copyBtn.textContent = 'Copy Briefing';
+                copyBtn.addEventListener('click', async () => {
+                    const lines = [
+                        'KUVHURA Ministry of Finance (zimtreasury.co.zw) Summary Briefing',
+                        `Headline: ${briefing.headline || ''}`,
+                        `Posture: ${briefing.risk_posture || 'Unavailable'} | Publications: ${briefing.issue_count ?? rawTopics.length}${briefing.date_window ? ` | Dates: ${briefing.date_window}` : ''}`,
+                        '',
+                        briefing.executive_summary || '',
+                        '',
+                        ...activeFindings.map(f => `- #${f.rank} ${f.topic} [${f.category}] (${Number.isFinite(f.friction) ? f.friction.toFixed(1) : '--'}/100, Dated: ${f.submission_date || 'Unstated'}): ${f.takeaway || ''}`)
+                    ].filter(Boolean);
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(lines.join('\n'));
+                            copyBtn.textContent = 'Copied';
+                            setTimeout(() => { copyBtn.textContent = 'Copy Briefing'; }, 1800);
+                        }
+                    } catch {
+                        copyBtn.textContent = 'Copy Failed';
+                        setTimeout(() => { copyBtn.textContent = 'Copy Briefing'; }, 1800);
+                    }
+                });
+                bActions.append(copyBtn);
+
+                bHeader.append(bTitleGroup, bActions);
+                briefingPanel.append(bHeader);
+
+                const execP = document.createElement('p');
+                execP.className = 'text-xs sm:text-sm text-slate-200 leading-relaxed';
+                execP.textContent = briefing.executive_summary || '';
+                briefingPanel.append(execP);
+
+                if (activeFindings.length > 0) {
+                    const findingsWrap = document.createElement('div');
+                    findingsWrap.className = 'border-t border-slate-800/80 pt-3 space-y-2';
+
+                    const findingsLabel = document.createElement('p');
+                    findingsLabel.className = 'text-xs font-semibold text-slate-300';
+                    findingsLabel.textContent = state.category === 'All' ? 'Key Fiscal & Debt Findings' : `Key Findings · ${state.category}`;
+                    findingsWrap.append(findingsLabel);
+
+                    const ul = document.createElement('ul');
+                    ul.className = 'space-y-2';
+                    activeFindings.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'text-xs text-slate-300 leading-relaxed';
+
+                        const lineTop = document.createElement('div');
+                        lineTop.className = 'flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5';
+
+                        const itemTitle = document.createElement('span');
+                        itemTitle.className = 'font-medium text-white';
+                        itemTitle.textContent = `#${item.rank} ${item.topic}`;
+
+                        const itemMeta = document.createElement('span');
+                        itemMeta.className = 'font-mono tabular-nums text-[11px] text-slate-400';
+                        const fricTxt = Number.isFinite(item.friction) ? `${item.friction.toFixed(1)} / 100` : '--';
+                        const pagesTxt = Number.isFinite(item.page_count) && item.page_count > 0 ? ` · ${item.page_count} pp.` : '';
+                        itemMeta.textContent = `${item.category} · ${fricTxt}${pagesTxt}${item.submission_date ? ` · ${item.submission_date}` : ''}`;
+
+                        lineTop.append(itemTitle, itemMeta);
+                        li.append(lineTop);
+
+                        if (item.takeaway) {
+                            const takeP = document.createElement('p');
+                            takeP.className = 'text-slate-400 mt-0.5';
+                            takeP.textContent = item.takeaway;
+                            li.append(takeP);
+                        }
+                        ul.append(li);
+                    });
+                    findingsWrap.append(ul);
+                    briefingPanel.append(findingsWrap);
+                }
+            }
+
+            topicsPanel.replaceChildren();
+            if (rawTopics.length > 0) {
+                const headerBar = document.createElement('div');
+                headerBar.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3';
+
+                const heading = document.createElement('h4');
+                heading.className = 'text-xs font-semibold uppercase tracking-wider text-slate-300';
+                heading.textContent = `Ranked Ministry of Finance Publications & Releases (${rawTopics.length})`;
+
+                const controls = document.createElement('div');
+                controls.className = 'flex flex-wrap items-center gap-2';
+
+                const catSelect = document.createElement('select');
+                catSelect.setAttribute('aria-label', 'Filter Treasury documents by portal');
+                catSelect.className = 'bg-slate-950 text-slate-200 border border-slate-700 rounded px-2 py-1 text-xs';
+                ['All', ...new Set(rawTopics.map(t => t.category).filter(Boolean))].forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat === 'All' ? 'All 10 Treasury Portals' : cat;
+                    if (state.category === cat) opt.selected = true;
+                    catSelect.append(opt);
+                });
+                catSelect.addEventListener('change', () => {
+                    state.category = catSelect.value;
+                    renderTreasuryPolicyTracker(window.__latestSysRiskTreasury);
+                });
+
+                const sortSelect = document.createElement('select');
+                sortSelect.setAttribute('aria-label', 'Sort Treasury documents');
+                sortSelect.className = 'bg-slate-950 text-slate-200 border border-slate-700 rounded px-2 py-1 text-xs';
+                [
+                    { value: 'rank', label: 'Rank: Fiscal Risk (High → Low)' },
+                    { value: 'date', label: 'Sort: Publication Date (Newest)' }
+                ].forEach(cfg => {
+                    const opt = document.createElement('option');
+                    opt.value = cfg.value;
+                    opt.textContent = cfg.label;
+                    if (state.sortBy === cfg.value) opt.selected = true;
+                    sortSelect.append(opt);
+                });
+                sortSelect.addEventListener('change', () => {
+                    state.sortBy = sortSelect.value;
+                    renderTreasuryPolicyTracker(window.__latestSysRiskTreasury);
+                });
+
+                controls.append(catSelect, sortSelect);
+                headerBar.append(heading, controls);
+                topicsPanel.append(headerBar);
+
+                const sortedTopics = rawTopics
+                    .filter(entry => state.category === 'All' || entry.category === state.category)
+                    .slice()
+                    .sort((a, b) => {
+                        if (state.sortBy === 'date') {
+                            const dA = a.submission_date || '';
+                            const dB = b.submission_date || '';
+                            if (dB !== dA) return dB.localeCompare(dA);
+                        }
+                        const rA = Number.isFinite(a.rank) ? a.rank : 9999;
+                        const rB = Number.isFinite(b.rank) ? b.rank : 9999;
+                        if (rA !== rB) return rA - rB;
+                        return (b.friction || 0) - (a.friction || 0);
+                    });
+
+                const list = document.createElement('div');
+                list.className = 'divide-y divide-slate-800/80 max-h-[560px] overflow-y-auto pr-1';
+                sortedTopics.slice(0, 25).forEach((entry, idx) => {
+                    const topicFriction = Number.isFinite(entry.friction) ? entry.friction : null;
+                    const isElevated = Number.isFinite(topicFriction) && topicFriction >= 52;
+
+                    const row = document.createElement('div');
+                    row.className = 'py-3 space-y-1.5';
+
+                    const top = document.createElement('div');
+                    top.className = 'flex items-start justify-between gap-4';
+
+                    const titleWrap = document.createElement('div');
+                    titleWrap.className = 'flex items-baseline gap-2 min-w-0';
+
+                    const rankBadge = document.createElement('span');
+                    const displayRank = Number.isFinite(entry.rank) ? entry.rank : (idx + 1);
+                    rankBadge.className = `text-[11px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                        isElevated ? 'bg-amber-500/20 text-amber-300' : 'bg-sky-500/15 text-sky-300'
+                    }`;
+                    rankBadge.textContent = `#${displayRank}`;
+
+                    const safeUrl = typeof entry.url === 'string' && /^https?:\/\//i.test(entry.url) ? entry.url : null;
+                    let titleNode;
+                    if (safeUrl) {
+                        titleNode = document.createElement('a');
+                        titleNode.href = safeUrl;
+                        titleNode.target = '_blank';
+                        titleNode.rel = 'noopener noreferrer';
+                        titleNode.className = 'text-sm font-medium text-white hover:text-amber-300 transition-colors';
+                    } else {
+                        titleNode = document.createElement('p');
+                        titleNode.className = 'text-sm font-medium text-white';
+                    }
+                    titleNode.textContent = entry.topic || 'Ministry of Finance Publication';
+                    titleWrap.append(rankBadge, titleNode);
+
+                    const score = document.createElement('span');
+                    score.className = `text-xs font-mono tabular-nums font-bold shrink-0 ${
+                        isElevated ? 'text-amber-400' : 'text-emerald-400'
+                    }`;
+                    score.textContent = Number.isFinite(topicFriction) ? `${topicFriction.toFixed(1)} / 100` : '--';
+
+                    top.append(titleWrap, score);
+
+                    const meta = document.createElement('div');
+                    meta.className = 'flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400';
+                    const catSpan = document.createElement('span');
+                    const subPart = entry.sub_section && entry.sub_section !== entry.category ? ` (${entry.sub_section})` : '';
+                    const pageSuffix = Number.isFinite(entry.page_count) && entry.page_count > 0 ? ` · ${entry.page_count} page${entry.page_count === 1 ? '' : 's'}` : '';
+                    const sizeSuffix = !pageSuffix && entry.file_size ? ` · ${entry.file_size}` : '';
+                    catSpan.textContent = `${entry.category || 'Treasury'}${subPart} · ${entry.status || 'Published'}${pageSuffix}${sizeSuffix}`;
+                    const dateSpan = document.createElement('span');
+                    dateSpan.className = entry.submission_date ? 'text-slate-200' : 'text-slate-400';
+                    dateSpan.textContent = `Published: ${entry.submission_date || 'Date unstated'}`;
+                    const personSpan = document.createElement('span');
+                    personSpan.className = 'text-slate-300';
+                    personSpan.textContent = `Directorate: ${entry.responsible_person || 'Ministry of Finance'}`;
+                    meta.append(catSpan, dateSpan, personSpan);
+
+                    row.append(top, meta);
+
+                    if (entry.summary) {
+                        const sumP = document.createElement('p');
+                        sumP.className = 'text-xs text-slate-300 leading-relaxed';
+                        sumP.textContent = entry.summary;
+                        row.append(sumP);
+                    }
+
+                    const fullBodyText = entry.full_content || '';
+                    const detailBody = fullBodyText || entry.content_excerpt || '';
+                    if (detailBody || safeUrl) {
+                        const details = document.createElement('details');
+                        details.className = 'text-xs text-slate-400 pt-0.5';
+                        const sumToggle = document.createElement('summary');
+                        sumToggle.className = 'cursor-pointer text-amber-300 hover:text-amber-200 select-none';
+                        if (fullBodyText && entry.pdf_ingested) {
+                            const pageBadge = Number.isFinite(entry.page_count) && entry.page_count > 0 ? `${entry.page_count} pages · ` : '';
+                            sumToggle.textContent = `Read full extracted Treasury PDF contents (${pageBadge}${fullBodyText.length.toLocaleString()} chars)`;
+                        } else if (fullBodyText) {
+                            sumToggle.textContent = `Read full Ministry of Finance release (${fullBodyText.length.toLocaleString()} chars)`;
+                        } else {
+                            sumToggle.textContent = 'View document details & official zimtreasury.co.zw link';
+                        }
+
+                        const excerptBox = document.createElement('div');
+                        excerptBox.className = 'mt-1.5 p-2.5 rounded bg-slate-950/80 border border-slate-800 text-slate-300 leading-relaxed space-y-2 max-h-72 overflow-y-auto';
+                        const excerptP = document.createElement('p');
+                        excerptP.className = 'whitespace-pre-wrap break-words';
+                        excerptP.textContent = detailBody || entry.summary || '';
+                        excerptBox.append(excerptP);
+
+                        if (safeUrl) {
+                            const linkEl = document.createElement('a');
+                            linkEl.href = safeUrl;
+                            linkEl.target = '_blank';
+                            linkEl.rel = 'noopener noreferrer';
+                            linkEl.className = 'inline-block text-amber-400 hover:underline';
+                            linkEl.textContent = 'Open official zimtreasury.co.zw document';
+                            excerptBox.append(linkEl);
+                        }
+                        details.append(sumToggle, excerptBox);
+                        row.append(details);
+                    }
+
+                    list.append(row);
+                });
+                topicsPanel.append(list);
+            } else {
+                const note = document.createElement('p');
+                note.className = 'text-xs text-slate-400';
+                note.textContent = 'Official Ministry of Finance publications (Budgets, Debt Reports, Bulletins, Press Releases, Circulars, Newsletters, IPSAS & Stakeholder Engagements) populate here automatically when zimtreasury.co.zw responds.';
+                topicsPanel.append(note);
+            }
+        }
+
         function renderChart(timeline) {
             const labels = timeline.map(item => item.date);
             const phiData = timeline.map(item => item.phi);
             const fsiData = timeline.map(item => Number.isFinite(item.fsi) ? item.fsi : null);
             const markovData = timeline.map(item => item.markov_crisis_prob);
             const hansardData = timeline.map(item => Number.isFinite(item.hansard_friction) ? item.hansard_friction : null);
+            const treasuryData = timeline.map(item => Number.isFinite(item.treasury_friction) ? item.treasury_friction : null);
 
             const ctx = document.getElementById('timelineChart').getContext('2d');
             if (myChart) myChart.destroy();
@@ -975,7 +1738,8 @@
                         { label: 'Regime Durability (Φ)', data: phiData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.08)', borderWidth: 3, fill: true, tension: 0.3 },
                         { label: 'Fragility State Index (FSI)', data: fsiData, borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, borderDash: [5, 5], tension: 0.3, spanGaps: false },
                         { label: 'Markov Crisis Prob (%)', data: markovData, borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3 },
-                        { label: 'Hansard Friction (Fparl)', data: hansardData, borderColor: '#10b981', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: false }
+                        { label: 'Hansard Friction (Fparl)', data: hansardData, borderColor: '#10b981', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, spanGaps: false },
+                        { label: 'Treasury Fiscal Risk (Ftreas)', data: treasuryData, borderColor: '#d4af37', backgroundColor: 'transparent', borderWidth: 2, borderDash: [3, 3], tension: 0.3, spanGaps: false }
                     ]
                 },
                 options: {

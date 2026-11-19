@@ -902,6 +902,9 @@ const HANSARD_ERROR_TTL_MS = 15 * 60 * 1000;
 let hansardCache = { expiresAt: 0, data: null };
 let hansardInFlightPromise = null;
 let timelineRefreshInFlightPromise = null;
+let latestTreasuryStatus = null;
+let treasuryCache = { expiresAt: 0, data: null };
+let treasuryInFlightPromise = null;
 const HANSARD_PORTAL_URL = process.env.HANSARD_PORTAL_URL || 'https://e-portal.parlzim.gov.zw/';
 const PARLZIM_PORTAL_SOURCES = [
   { category: 'Bill Digests', url: process.env.PARLZIM_BILL_DIGEST_URL || 'https://www.parlzim.gov.zw/bill-digest/' },
@@ -2817,10 +2820,712 @@ async function fetchSemanticHansardTelemetry() {
   return fetchParliamentaryPolicyTracker();
 }
 
+const TREASURY_BASE_URL = (process.env.ZIMTREASURY_BASE_URL || 'https://zimtreasury.co.zw').replace(/\/+$/, '');
+const TREASURY_RISK_CORPUS = [
+  'fiscal risk budget deficit revenue shortfall expenditure containment supplementary budget treasury bills',
+  'public debt external arrears debt distress creditor re-engagement borrowing plan sovereign guarantee ZPDMO',
+  'inflation exchange rate currency stability ZWG monetary fiscal coordination domestic borrowing liquidity',
+  'staff monitored program IMF IPSAS audit financial statements budget outturn structural reform'
+];
+
+const TREASURY_PORTAL_CATALOG = [
+  {
+    category: 'Budget Documents (2023–2027 & Reviews)',
+    shortLabel: 'Budget Documents',
+    url: `${TREASURY_BASE_URL}/budget-documents-2027/`,
+    statusLabel: 'Budget Publication',
+    defaultDirectorate: 'Minister of Finance & Budget Office',
+    folders: [
+      { id: 'fZcEyajREr+tO+/fNsucwA==', label: 'Budget Documents 2027', limit: 6 },
+      { id: 'NxFykmTXL7godpVHQ+uhkQ==', label: 'Budget Documents 2026', limit: 3 },
+      { id: 'kUAGfxrKnQkaBM5y9kTpfQ==', label: 'Annual Budget Reviews', limit: 2 }
+    ],
+    sublinks: [
+      { label: 'Budget 2027', url: `${TREASURY_BASE_URL}/budget-documents-2027/` },
+      { label: 'Budget 2026', url: `${TREASURY_BASE_URL}/budget-documents-2026/` },
+      { label: 'Budget 2025', url: `${TREASURY_BASE_URL}/budget-document-2025/` },
+      { label: 'Budget 2024', url: `${TREASURY_BASE_URL}/budget-documents-2024/` },
+      { label: 'Budget 2023', url: `${TREASURY_BASE_URL}/budget-documents-2023/` },
+      { label: 'Budget 1981–2021', url: `${TREASURY_BASE_URL}/budget-documents-1981-2021/` },
+      { label: 'Annual Budget Reviews', url: `${TREASURY_BASE_URL}/annual-budget-review/` }
+    ],
+    maxPdfDownloads: 3
+  },
+  {
+    category: 'Public Debt Management',
+    shortLabel: 'Public Debt',
+    url: `${TREASURY_BASE_URL}/public-debt-management/`,
+    statusLabel: 'Debt Management',
+    defaultDirectorate: 'Zimbabwe Public Debt Management Office (ZPDMO)',
+    folders: [
+      { id: 'fBklHt0H6G2LbOpxHgCahg==', label: 'Quarterly Debt Bulletins', limit: 3 },
+      { id: 'mLmmgEIgf3aw1Z8LJ39fZA==', label: 'Annual Borrowing Plans', limit: 2 },
+      { id: 'kk+Ec5lVJvVuT7fx2SdV2w==', label: 'Public Debt Reports', limit: 2 },
+      { id: 'PwXN7Au0hhOxZyZww2hE8g==', label: 'Annual Public Debt Bulletins', limit: 2 },
+      { id: '/Cmcey4+qG0S1o+Yp7V+WA==', label: 'Other Debt Reports', limit: 2 }
+    ],
+    sublinks: [
+      { label: 'Annual Borrowing Plans', url: `${TREASURY_BASE_URL}/annual-borrowing-plan/` },
+      { label: 'Quarterly Debt Bulletins', url: `${TREASURY_BASE_URL}/quartely-debt-bulletins/` },
+      { label: 'Annual Public Debt Bulletins', url: `${TREASURY_BASE_URL}/annual-public-debt-bulletins/` },
+      { label: 'Public Debt Reports', url: `${TREASURY_BASE_URL}/public-debt-reports/` },
+      { label: 'Other Reports', url: `${TREASURY_BASE_URL}/other-reports/` }
+    ],
+    maxPdfDownloads: 2
+  },
+  {
+    category: 'Quarterly Treasury Bulletins',
+    shortLabel: 'Treasury Bulletins',
+    url: `${TREASURY_BASE_URL}/treasury-bulletins/`,
+    statusLabel: 'Treasury Bulletin',
+    defaultDirectorate: 'Economic Affairs Directorate (Treasury)',
+    folders: [
+      { id: 'bzlLRwctG5LGJUjsJmqXCA==', label: 'Quarterly Treasury Bulletins', limit: 4 }
+    ],
+    sublinks: [
+      { label: 'Quarterly Treasury Bulletins', url: `${TREASURY_BASE_URL}/treasury-bulletins/` }
+    ],
+    maxPdfDownloads: 1
+  },
+  {
+    category: 'Policies & Circulars',
+    shortLabel: 'Policies & Circulars',
+    url: `${TREASURY_BASE_URL}/policies-publications/`,
+    statusLabel: 'Policy & Circular',
+    defaultDirectorate: 'Expenditure Management Directorate',
+    folders: [
+      { id: 'uNwBH3Gl7JqFDGN8ymwlKA==', label: 'Policies & Circulars', limit: 4 }
+    ],
+    sublinks: [
+      { label: 'Policies & Circulars', url: `${TREASURY_BASE_URL}/policies-publications/` }
+    ],
+    maxPdfDownloads: 1
+  },
+  {
+    category: 'Press Releases',
+    shortLabel: 'Press Releases',
+    url: `${TREASURY_BASE_URL}/press-releases/`,
+    statusLabel: 'Official Release',
+    defaultDirectorate: 'Communications & Advocacy (Ministry of Finance)',
+    folders: [
+      { id: 'izkL3xyGXzbuh7xE5uiGxA==', label: 'Press Releases', limit: 4 }
+    ],
+    wpMediaSearch: 'press',
+    includeWpPosts: 'press',
+    sublinks: [
+      { label: 'Press Releases', url: `${TREASURY_BASE_URL}/press-releases/` },
+      { label: 'Press Archive', url: `${TREASURY_BASE_URL}/press-releases-2/` }
+    ],
+    maxPdfDownloads: 1
+  },
+  {
+    category: 'Newsletters',
+    shortLabel: 'Newsletters',
+    url: `${TREASURY_BASE_URL}/newsletters/`,
+    statusLabel: 'Treasury Newsletter',
+    defaultDirectorate: 'Communications & Advocacy (Ministry of Finance)',
+    folders: [
+      { id: 'leQibs5NfzeLM+/iRoTqcw==', label: 'Newsletters', limit: 4 }
+    ],
+    sublinks: [
+      { label: 'Newsletters', url: `${TREASURY_BASE_URL}/newsletters/` }
+    ],
+    maxPdfDownloads: 1
+  },
+  {
+    category: 'Stakeholder Engagements',
+    shortLabel: 'Stakeholder Engagements',
+    url: `${TREASURY_BASE_URL}/stake-holder-engagement/`,
+    statusLabel: 'Stakeholder Outreach',
+    defaultDirectorate: 'Communications & Stakeholder Engagement Desk',
+    folders: [],
+    wpMediaSearch: 'stakeholder',
+    includeWpPosts: 'stakeholder',
+    sublinks: [
+      { label: 'Stakeholder Engagements', url: `${TREASURY_BASE_URL}/stake-holder-engagement/` }
+    ],
+    maxPdfDownloads: 1
+  },
+  {
+    category: 'Financial Statements & IPSAS',
+    shortLabel: 'Financial Statements & IPSAS',
+    url: `${TREASURY_BASE_URL}/financial-statements/`,
+    statusLabel: 'Financial Reporting & IPSAS',
+    defaultDirectorate: 'Accountant-General Directorate',
+    folders: [
+      { id: 'IFMl8i0ma9CRppuqG12SMg==', label: 'IPSAS Documents', limit: 3 },
+      { id: 'QVt20p40zEOT3x7hUIvIgw==', label: 'Financial Statements', limit: 3 }
+    ],
+    wpMediaSearch: 'IPSAS',
+    sublinks: [
+      { label: 'Financial Statements', url: `${TREASURY_BASE_URL}/financial-statements/` },
+      { label: 'Annually', url: `${TREASURY_BASE_URL}/annually/` },
+      { label: 'Budget Outturn', url: `${TREASURY_BASE_URL}/budget-outturn/` },
+      { label: 'Monthly', url: `${TREASURY_BASE_URL}/monthly/` },
+      { label: 'IPSAS Documents', url: `${TREASURY_BASE_URL}/ipsas-documents/` }
+    ],
+    maxPdfDownloads: 1
+  },
+  {
+    category: 'Development Assistance & Downloads',
+    shortLabel: 'Dev Assistance & Downloads',
+    url: `${TREASURY_BASE_URL}/development-assistance-reports/`,
+    statusLabel: 'Development Cooperation',
+    defaultDirectorate: 'Development Cooperation & Public Investment Desk',
+    folders: [
+      { id: '5PvyjoFnkaR0E+SsBEHsaA==', label: 'Development Assistance Reports', limit: 3 },
+      { id: 'Tq9LBZex/RxhNxj/27izlg==', label: 'General Downloads', limit: 3 }
+    ],
+    sublinks: [
+      { label: 'Development Assistance Reports', url: `${TREASURY_BASE_URL}/development-assistance-reports/` },
+      { label: 'General Downloads', url: `${TREASURY_BASE_URL}/general-downloads/` }
+    ],
+    maxPdfDownloads: 1
+  },
+  {
+    category: 'E-Library & Staff Monitored Program',
+    shortLabel: 'E-Library & SMP',
+    url: `${TREASURY_BASE_URL}/e-library/`,
+    statusLabel: 'E-Library & IMF SMP',
+    defaultDirectorate: 'Ministry of Finance E-Library & Debt Resolution Desk',
+    folders: [],
+    includeRecentMedia: true,
+    includeWpPosts: 'smp',
+    sublinks: [
+      { label: 'E-Library', url: `${TREASURY_BASE_URL}/e-library/` },
+      { label: 'Staff Monitored Program', url: `${TREASURY_BASE_URL}/staff-monitored-programs/` }
+    ],
+    maxPdfDownloads: 1
+  }
+];
+
+function scoreTreasuryText(liveText) {
+  const docsTokens = TREASURY_RISK_CORPUS.map(tokenizeHansard);
+  const liveTokens = tokenizeHansard(liveText);
+  if (!liveTokens.length) return null;
+
+  const allDocs = [...docsTokens, liveTokens];
+  const numDocs = allDocs.length;
+  const docFreq = new Map();
+  for (const tokens of allDocs) {
+    for (const term of new Set(tokens)) {
+      docFreq.set(term, (docFreq.get(term) || 0) + 1);
+    }
+  }
+
+  const buildVector = (tokens) => {
+    const tfMap = new Map();
+    for (const tok of tokens) tfMap.set(tok, (tfMap.get(tok) || 0) + 1);
+    const vec = new Map();
+    let normSq = 0;
+    for (const [term, tf] of tfMap.entries()) {
+      const idf = Math.log((1 + numDocs) / (1 + (docFreq.get(term) || 0))) + 1;
+      const weight = tf * idf;
+      vec.set(term, weight);
+      normSq += weight * weight;
+    }
+    const norm = Math.sqrt(normSq);
+    if (norm > 0) {
+      for (const [term, weight] of vec.entries()) vec.set(term, weight / norm);
+    }
+    return vec;
+  };
+
+  const refVectors = docsTokens.map(buildVector);
+  const liveVec = buildVector(liveTokens);
+  let sumSim = 0;
+  for (const refVec of refVectors) {
+    let sim = 0;
+    for (const [term, weight] of refVec.entries()) {
+      sim += (liveVec.get(term) || 0) * weight;
+    }
+    sumSim += sim;
+  }
+  const meanSimilarity = sumSim / refVectors.length;
+  return Number(Math.min(100, Math.max(40, (meanSimilarity * 240) + 42)).toFixed(2));
+}
+
+function parseTreasuryFileSizeBytes(sizeLabel) {
+  const m = String(sizeLabel || '').trim().match(/^([\d.]+)\s*(B|KB|MB|GB)$/i);
+  if (!m) return 0;
+  const val = Number(m[1]);
+  const unit = m[2].toUpperCase();
+  if (unit === 'GB') return val * 1024 * 1024 * 1024;
+  if (unit === 'MB') return val * 1024 * 1024;
+  if (unit === 'KB') return val * 1024;
+  return val;
+}
+
+function cleanTreasuryTitle(rawTitle) {
+  let title = cleanIssueTitle(decodeXmlEntities(stripHtmlToText(rawTitle || '')))
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .replace(/\s*-\s*Copy$/i, '')
+    .replace(/-\d+$/, '')
+    .replace(/([a-zA-Z0-9])-([a-zA-Z])/g, '$1 $2')
+    .replace(/([a-zA-Z])-(\d)/g, '$1 $2')
+    .replace(/[-_.\s]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (title && title === title.toUpperCase() && title.length >= 10) {
+    title = title
+      .toLowerCase()
+      .replace(/\b\w/g, ch => ch.toUpperCase())
+      .replace(/\b(Zpdmo|Zwe|Imf|Ipsas|Ipsasb|Brics|Sadc|Vat|Lpg|Zwg|Zedcon|Sdp|Racp|Mofed)\b/gi, w => w.toUpperCase());
+  }
+  return title.slice(0, 180);
+}
+
+async function fetchFilebirdAttachments(folderId, limit = 4) {
+  try {
+    const resp = await fetch(`${TREASURY_BASE_URL}/wp-json/filebird/v1/get-attachments`, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        pagination: { current: 1, limit },
+        search: '',
+        orderBy: 'post_date',
+        orderType: 'DESC',
+        selectedFolder: [folderId]
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!resp.ok) return [];
+    const payload = await resp.json();
+    return Array.isArray(payload?.files) ? payload.files : [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchTreasuryWpPosts(limit = 10) {
+  try {
+    const resp = await fetch(
+      `${TREASURY_BASE_URL}/wp-json/wp/v2/posts?per_page=${limit}&_fields=id,date,title,link,excerpt,content`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+          'Accept': 'application/json'
+        },
+        signal: AbortSignal.timeout(8000)
+      }
+    );
+    if (!resp.ok) return [];
+    const items = await resp.json();
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchTreasuryWpMedia(searchTerm = '', limit = 8) {
+  try {
+    const qs = new URLSearchParams({
+      mime_type: 'application/pdf',
+      per_page: String(limit),
+      _fields: 'id,date,title,source_url'
+    });
+    if (searchTerm) qs.set('search', searchTerm);
+    const resp = await fetch(`${TREASURY_BASE_URL}/wp-json/wp/v2/media?${qs.toString()}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!resp.ok) return [];
+    const items = await resp.json();
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+}
+
+function buildTreasurySummaryBriefing({ sources, rankedTopics, avgScore, accessibleSources, totalSources, status, capturedAt }) {
+  const topIssue = rankedTopics[0] || null;
+  const topFriction = topIssue ? topIssue.friction : null;
+  let posture = 'Unavailable';
+  if (Number.isFinite(avgScore)) {
+    posture = avgScore >= 52 || (Number.isFinite(topFriction) && topFriction >= 55)
+      ? 'Elevated'
+      : avgScore >= 45
+        ? 'Moderate'
+        : 'Low';
+  } else if (rankedTopics.length > 0) {
+    posture = Number.isFinite(topFriction) && topFriction >= 55 ? 'Elevated' : 'Moderate';
+  }
+
+  const dates = [...new Set(rankedTopics.map(t => String(t.submission_date || '').trim()).filter(Boolean))].sort();
+  const dateWindow = dates.length === 1 ? dates[0] : (dates.length > 1 ? `${dates[0]} to ${dates[dates.length - 1]}` : null);
+  const fullPdfItems = rankedTopics.filter(t => t.pdf_ingested && t.full_content);
+  const totalPages = fullPdfItems.reduce((sum, t) => sum + (Number.isFinite(t.page_count) ? t.page_count : 0), 0);
+  const highestPortal = sources
+    .filter(s => s.status === 'available' && Number.isFinite(s.score))
+    .sort((a, b) => b.score - a.score)[0] || null;
+  const coverageGaps = sources
+    .filter(s => s.status === 'available' && !(s.topicCount > 0))
+    .map(s => s.category);
+
+  let executiveSummary = '';
+  if (accessibleSources > 0) {
+    const avgTxt = Number.isFinite(avgScore) ? `${avgScore.toFixed(1)} / 100` : '--';
+    const highPortalTxt = highestPortal ? `, highest on ${highestPortal.category} (${highestPortal.score.toFixed(1)} / 100)` : '';
+    const leadTxt = topIssue
+      ? ` ${rankedTopics.length} ranked Treasury publications & releases tracked${dateWindow ? ` spanning ${dateWindow}` : ''}, led by #1 ${topIssue.topic} (${Number(topIssue.friction).toFixed(1)} / 100).`
+      : '';
+    const pdfTxt = fullPdfItems.length > 0
+      ? ` ${fullPdfItems.length} official Ministry of Finance PDF${fullPdfItems.length === 1 ? '' : 's'} downloaded and read in full (${totalPages} pages).`
+      : '';
+    executiveSummary = `Live Ministry of Finance (zimtreasury.co.zw) fiscal & sovereign-debt telemetry across ${accessibleSources} of ${totalSources} portals records a composite fiscal risk score of ${avgTxt} (${posture} posture)${highPortalTxt}.${leadTxt}${pdfTxt}`;
+  } else {
+    executiveSummary = 'Ministry of Finance (zimtreasury.co.zw) portals are currently unreachable; summary briefing will populate automatically once HTTP 200 feeds respond.';
+  }
+
+  return {
+    headline: topIssue
+      ? `${accessibleSources}/${totalSources} Treasury portals live (Avg Ftreas ${Number.isFinite(avgScore) ? avgScore.toFixed(1) : '--'} / 100) · Lead: ${topIssue.topic}`
+      : `${accessibleSources}/${totalSources} Ministry of Finance portals checked`,
+    executive_summary: executiveSummary,
+    risk_posture: posture,
+    date_window: dateWindow,
+    issue_count: rankedTopics.length,
+    full_pdf_count: fullPdfItems.length,
+    total_pages: totalPages,
+    accessible_portals: accessibleSources,
+    total_portals: totalSources,
+    coverage_gaps: coverageGaps,
+    key_findings: rankedTopics.slice(0, 4).map((entry, idx) => ({
+      rank: entry.rank || (idx + 1),
+      category: entry.category,
+      topic: entry.topic,
+      friction: entry.friction,
+      submission_date: entry.submission_date || null,
+      responsible_person: entry.responsible_person || 'Ministry of Finance',
+      page_count: entry.page_count || 0,
+      pdf_ingested: Boolean(entry.pdf_ingested),
+      takeaway: String(entry.summary || '').slice(0, 360)
+    })),
+    captured_at: capturedAt || new Date().toISOString()
+  };
+}
+
+async function fetchMinistryOfFinanceTracker() {
+  const now = Date.now();
+  if (treasuryCache.data && treasuryCache.expiresAt > now) {
+    return treasuryCache.data;
+  }
+  if (treasuryInFlightPromise) {
+    return treasuryInFlightPromise;
+  }
+  treasuryInFlightPromise = fetchMinistryOfFinanceTrackerInternal().finally(() => {
+    treasuryInFlightPromise = null;
+  });
+  return treasuryInFlightPromise;
+}
+
+async function fetchMinistryOfFinanceTrackerInternal() {
+  const now = Date.now();
+  if (treasuryCache.data && treasuryCache.expiresAt > now) {
+    return treasuryCache.data;
+  }
+
+  const [wpPosts, recentMedia, portalFileBatches] = await Promise.all([
+    fetchTreasuryWpPosts(10),
+    fetchTreasuryWpMedia('', 10),
+    Promise.all(TREASURY_PORTAL_CATALOG.map(async cfg => {
+      const folderBatches = Array.isArray(cfg.folders) && cfg.folders.length > 0
+        ? await Promise.all(cfg.folders.map(async f => ({
+            subLabel: f.label,
+            files: await fetchFilebirdAttachments(f.id, f.limit || 4)
+          })))
+        : [];
+      const searchedMedia = cfg.wpMediaSearch
+        ? await fetchTreasuryWpMedia(cfg.wpMediaSearch, 5)
+        : [];
+      return { cfg, folderBatches, searchedMedia };
+    }))
+  ]);
+
+  const sourcesStatus = [];
+  const allTopics = [];
+  const globalSeenUrls = new Set();
+  const portalScores = [];
+  let totalChars = 0;
+
+  for (const { cfg, folderBatches, searchedMedia } of portalFileBatches) {
+    const rawFiles = [];
+    const seenPortalUrls = new Set();
+
+    // 1. Collect FileBird document library folders for this portal
+    for (const { subLabel, files } of folderBatches) {
+      for (const f of files) {
+        const url = String(f.url || f.link || '').trim();
+        if (!url || seenPortalUrls.has(url)) continue;
+        seenPortalUrls.add(url);
+        rawFiles.push({
+          url,
+          title: cleanTreasuryTitle(f.title || url.split('/').pop()),
+          fileType: String(f.type || (url.toLowerCase().endsWith('.pdf') ? 'pdf' : 'doc')).toLowerCase(),
+          sizeLabel: String(f.size || '').trim(),
+          sizeBytes: parseTreasuryFileSizeBytes(f.size),
+          modified: parseIsoDateString(f.modified) || extractSubmissionDate({ url }),
+          subLabel
+        });
+      }
+    }
+
+    // 2. Supplement with WP media search if configured
+    for (const m of searchedMedia) {
+      const url = String(m.source_url || '').trim();
+      if (!url || seenPortalUrls.has(url)) continue;
+      seenPortalUrls.add(url);
+      rawFiles.push({
+        url,
+        title: cleanTreasuryTitle(m.title?.rendered || url.split('/').pop()),
+        fileType: 'pdf',
+        sizeLabel: '',
+        sizeBytes: 0,
+        modified: String(m.date || '').slice(0, 10) || extractSubmissionDate({ url }),
+        subLabel: cfg.shortLabel
+      });
+    }
+
+    // 3. E-Library recent media feed
+    if (cfg.includeRecentMedia) {
+      for (const m of recentMedia.slice(0, 5)) {
+        const url = String(m.source_url || '').trim();
+        if (!url || seenPortalUrls.has(url) || globalSeenUrls.has(url)) continue;
+        seenPortalUrls.add(url);
+        rawFiles.push({
+          url,
+          title: cleanTreasuryTitle(m.title?.rendered || url.split('/').pop()),
+          fileType: 'pdf',
+          sizeLabel: '',
+          sizeBytes: 0,
+          modified: String(m.date || '').slice(0, 10) || extractSubmissionDate({ url }),
+          subLabel: 'E-Library Index'
+        });
+      }
+    }
+
+    const portalTopics = [];
+    const portalTextParts = [];
+    let pdfDownloadedCount = 0;
+
+    // 4. Include matching WP Posts (Press Releases, Stakeholder Engagements, SMP/Debt Clearance)
+    if (cfg.includeWpPosts && wpPosts.length > 0) {
+      for (const post of wpPosts) {
+        const pTitle = cleanTreasuryTitle(post.title?.rendered || '');
+        const pUrl = String(post.link || '').trim();
+        const pText = decodeXmlEntities(stripHtmlToText(post.content?.rendered || post.excerpt?.rendered || ''));
+        if (!pTitle || !pUrl || seenPortalUrls.has(pUrl)) continue;
+        const hay = `${pTitle} ${pText}`.toLowerCase();
+        const matches =
+          (cfg.includeWpPosts === 'stakeholder' && /(stakeholder|outreach|consultation|voice|blueprint|engaging)/i.test(hay)) ||
+          (cfg.includeWpPosts === 'smp' && /(debt clearance|arrears|creditor|imf|monitored|resilient)/i.test(hay)) ||
+          (cfg.includeWpPosts === 'press' && /(inflation|economy|sadc|health financing|debt clearance|budget)/i.test(hay));
+        if (!matches) continue;
+        seenPortalUrls.add(pUrl);
+        portalTextParts.push(`${pTitle} ${pText}`);
+        const fric = scoreTreasuryText(`${pTitle} ${pText}`);
+        const pDate = String(post.date || '').slice(0, 10) || null;
+        const summary = pText.length > 480 ? `${pText.slice(0, 477).trimEnd()}...` : pText;
+        const entry = {
+          topic: pTitle,
+          category: cfg.category,
+          sub_section: cfg.shortLabel,
+          status: cfg.statusLabel,
+          friction: fric !== null ? fric : 44.0,
+          url: pUrl,
+          submission_date: pDate,
+          responsible_person: cfg.defaultDirectorate,
+          responsible: cfg.defaultDirectorate,
+          summary: summary || `${cfg.category} release published by the Ministry of Finance on ${pDate || 'zimtreasury.co.zw'}.`,
+          content_excerpt: summary,
+          full_content: pText.slice(0, 15000),
+          page_count: 0,
+          pdf_ingested: false
+        };
+        portalTopics.push(entry);
+        if (portalTopics.length >= 3) break;
+      }
+    }
+
+    // 5. Selectively download & parse compact PDFs (<= 3.5 MB) sequentially with event-loop yields
+    const MAX_TREASURY_PDF_BYTES = 3.5 * 1024 * 1024;
+    const candidateFiles = rawFiles.slice(0, 6);
+    for (const f of candidateFiles) {
+      let pdfDoc = null;
+      const isPdf = f.fileType === 'pdf' || f.url.toLowerCase().endsWith('.pdf');
+      const withinSizeLimit = !f.sizeBytes || f.sizeBytes <= MAX_TREASURY_PDF_BYTES;
+      if (isPdf && withinSizeLimit && pdfDownloadedCount < (cfg.maxPdfDownloads || 2)) {
+        pdfDoc = await fetchTruePdfDocument(f.url, f.title);
+        await new Promise(resolve => setImmediate(resolve));
+      }
+
+      if (pdfDoc && pdfDoc.flatText && pdfDoc.flatText.length >= 80) {
+        pdfDownloadedCount += 1;
+        portalTextParts.push(pdfDoc.flatText);
+        const fric = scoreTreasuryText(pdfDoc.flatText);
+        const resolvedTitle = cleanTreasuryTitle(f.title || pdfDoc.topic);
+        const subDate = f.modified || pdfDoc.submissionDate || extractSubmissionDate({ url: f.url });
+        let respPerson = pdfDoc.responsiblePerson;
+        if (!respPerson || respPerson === 'Not stated in PDF' || respPerson === 'Not stated in portal index' || respPerson === 'Parliament of Zimbabwe') {
+          respPerson = cfg.defaultDirectorate;
+        } else if (/^Hon\.?\s+Prof\.?\s+Mthuli\s+Ncube\b/i.test(respPerson)) {
+          respPerson = 'Hon. Prof. Mthuli Ncube, Minister of Finance';
+        }
+        const cleanedPdfSummary = String(pdfDoc.summary || '').replace(/^Memorandum:\s+of\b/i, 'Memorandum of');
+        portalTopics.push({
+          topic: resolvedTitle,
+          category: cfg.category,
+          sub_section: f.subLabel,
+          status: 'PDF Downloaded & Ingested',
+          friction: fric !== null ? fric : 46.0,
+          url: f.url,
+          submission_date: subDate,
+          responsible_person: respPerson,
+          responsible: respPerson,
+          summary: cleanedPdfSummary,
+          content_excerpt: pdfDoc.contentExcerpt,
+          full_content: pdfDoc.fullContent,
+          page_count: pdfDoc.pageCount,
+          file_size: f.sizeLabel || '',
+          pdf_ingested: true
+        });
+      } else {
+        const metaText = `${f.title} ${f.subLabel} ${cfg.category} Ministry of Finance Zimbabwe Treasury ${f.fileType}`;
+        portalTextParts.push(metaText);
+        const fric = scoreTreasuryText(metaText);
+        const sizeNote = f.sizeLabel ? ` (${f.fileType.toUpperCase()}, ${f.sizeLabel})` : ` (${f.fileType.toUpperCase()})`;
+        const summary = `${f.subLabel} official publication${sizeNote} hosted on zimtreasury.co.zw.${f.modified ? ` Published ${f.modified}.` : ''} Open the official Ministry of Finance file directly for full tables and annexures.`;
+        portalTopics.push({
+          topic: f.title,
+          category: cfg.category,
+          sub_section: f.subLabel,
+          status: `${f.fileType.toUpperCase()} Indexed${f.sizeLabel ? ` · ${f.sizeLabel}` : ''}`,
+          friction: fric !== null ? fric : 43.0,
+          url: f.url,
+          submission_date: f.modified,
+          responsible_person: cfg.defaultDirectorate,
+          responsible: cfg.defaultDirectorate,
+          summary,
+          content_excerpt: summary,
+          page_count: 0,
+          file_size: f.sizeLabel || '',
+          pdf_ingested: false
+        });
+      }
+    }
+
+    // Deduplicate within portal and record globally seen URLs
+    const dedupPortalTopics = [];
+    const seenTitles = new Set();
+    for (const item of portalTopics) {
+      const tk = item.topic.toLowerCase();
+      if (seenTitles.has(tk)) continue;
+      seenTitles.add(tk);
+      dedupPortalTopics.push(item);
+      if (item.url) globalSeenUrls.add(item.url);
+    }
+
+    const joinedPortalText = portalTextParts.join(' ');
+    const pScore = joinedPortalText.length >= 20 ? scoreTreasuryText(joinedPortalText) : null;
+    const isAvailable = dedupPortalTopics.length > 0;
+    if (isAvailable && Number.isFinite(pScore)) {
+      portalScores.push(pScore);
+    }
+    totalChars += joinedPortalText.length;
+
+    sourcesStatus.push({
+      category: cfg.category,
+      shortLabel: cfg.shortLabel,
+      url: cfg.url,
+      sublinks: cfg.sublinks,
+      status: isAvailable ? 'available' : 'unavailable',
+      httpStatus: isAvailable ? 200 : null,
+      score: isAvailable ? pScore : null,
+      charCount: joinedPortalText.length,
+      topicCount: dedupPortalTopics.length,
+      pdfCount: pdfDownloadedCount,
+      topics: dedupPortalTopics.slice(0, 4).map(t => t.topic)
+    });
+    allTopics.push(...dedupPortalTopics);
+  }
+
+  // Rank all Treasury items by friction (desc), then date (desc), then title
+  const dedupAll = new Map();
+  for (const item of allTopics) {
+    const normKey = item.topic.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const prev = dedupAll.get(normKey);
+    if (!prev || (item.pdf_ingested && !prev.pdf_ingested) || (item.full_content?.length || 0) > (prev.full_content?.length || 0)) {
+      dedupAll.set(normKey, item);
+    }
+  }
+  const dateSortNum = (val) => {
+    let digits = String(val || '').replace(/\D/g, '');
+    if (digits.length === 6) digits += '01';
+    return digits.length === 8 ? Number(digits) : 0;
+  };
+  const rankedTopics = [...dedupAll.values()]
+    .sort((a, b) => {
+      if (b.friction !== a.friction) return b.friction - a.friction;
+      const dDiff = dateSortNum(b.submission_date) - dateSortNum(a.submission_date);
+      if (dDiff !== 0) return dDiff;
+      return a.topic.localeCompare(b.topic);
+    })
+    .slice(0, 35);
+  rankedTopics.forEach((item, idx) => {
+    item.rank = idx + 1;
+  });
+
+  const accessibleSources = sourcesStatus.filter(s => s.status === 'available').length;
+  const totalSources = TREASURY_PORTAL_CATALOG.length;
+  const avgScore = portalScores.length > 0
+    ? Number((portalScores.reduce((s, v) => s + v, 0) / portalScores.length).toFixed(2))
+    : null;
+  const capturedAt = new Date().toISOString();
+
+  const result = {
+    score: avgScore,
+    status: accessibleSources > 0 ? 'available' : 'unavailable',
+    source: accessibleSources > 0 ? 'zimtreasury_portals' : 'unavailable',
+    portalUrl: TREASURY_BASE_URL,
+    accessibleSources,
+    totalSources,
+    charCount: totalChars,
+    sources: sourcesStatus,
+    tracked_topics: rankedTopics,
+    summary_briefing: buildTreasurySummaryBriefing({
+      sources: sourcesStatus,
+      rankedTopics,
+      avgScore,
+      accessibleSources,
+      totalSources,
+      status: accessibleSources > 0 ? 'available' : 'unavailable',
+      capturedAt
+    }),
+    updatedAt: capturedAt
+  };
+
+  latestTreasuryStatus = { ...result };
+  treasuryCache = {
+    expiresAt: Date.now() + (result.status === 'available' ? HANSARD_TTL_MS : HANSARD_ERROR_TTL_MS),
+    data: result
+  };
+  return result;
+}
+
 function getDualEngineTimelineResponse() {
   const hansardStatus = latestHansardStatus
     ? { ...latestHansardStatus }
     : { score: null, status: 'awaiting_check', source: 'unavailable', sources: [], tracked_topics: [] };
+  const treasuryStatus = latestTreasuryStatus
+    ? { ...latestTreasuryStatus }
+    : { score: null, status: 'awaiting_check', source: 'unavailable', accessibleSources: 0, totalSources: TREASURY_PORTAL_CATALOG.length, sources: [], tracked_topics: [] };
   return {
     timeline: TELEMETRY_TIMELINE.map(entry => ({ ...entry })),
     engines: {
@@ -2831,7 +3536,10 @@ function getDualEngineTimelineResponse() {
         : 'Awaiting sourced World Bank macro data',
       hansard_status: hansardStatus.status === 'available'
         ? `Active (${hansardStatus.accessibleSources || 1}/${hansardStatus.totalSources || 5} ParlZim portals · score ${hansardStatus.score})`
-        : hansardStatus.message || 'Awaiting Parliament portal access'
+        : hansardStatus.message || 'Awaiting Parliament portal access',
+      treasury_status: treasuryStatus.status === 'available'
+        ? `Active (${treasuryStatus.accessibleSources || 0}/${treasuryStatus.totalSources || TREASURY_PORTAL_CATALOG.length} zimtreasury.co.zw portals · score ${treasuryStatus.score})`
+        : 'Awaiting Ministry of Finance portal sync'
     },
     inputStatus: latestDualEngineInputs ? 'updated' : 'awaiting_social_sample',
     latestInputs: latestDualEngineInputs ? { ...latestDualEngineInputs } : null,
@@ -2839,7 +3547,8 @@ function getDualEngineTimelineResponse() {
       ? { ...latestFsiInputs }
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
     hansardStatus,
-    historyNote: 'Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable). Macro stress scaling and TF-IDF cosine weighting are experimental assumptions.'
+    treasuryStatus,
+    historyNote: 'Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable). Real-Time Systemic Risk Monitoring also tracks live Ministry of Finance (zimtreasury.co.zw) budgets, public debt reports, treasury bulletins, circulars, press releases, newsletters, and stakeholder engagements.'
   };
 }
 
@@ -2946,13 +3655,15 @@ async function refreshDualEngineTimelineData() {
 }
 
 async function refreshDualEngineTimelineDataInternal() {
-  const [socialPayload, layer2Macro, hansardTelemetry] = await Promise.all([
+  const [socialPayload, layer2Macro, hansardTelemetry, treasuryTelemetry] = await Promise.all([
     getSocialHashtagTrends(),
     fetchLayer2MacroTelemetry(),
-    fetchSemanticHansardTelemetry()
+    fetchSemanticHansardTelemetry(),
+    fetchMinistryOfFinanceTracker()
   ]);
 
   latestHansardStatus = hansardTelemetry ? { ...hansardTelemetry } : { score: null, status: 'unavailable', source: 'unavailable' };
+  latestTreasuryStatus = treasuryTelemetry ? { ...treasuryTelemetry } : { score: null, status: 'unavailable', source: 'unavailable' };
 
   if (socialPayload?.available && Array.isArray(socialPayload.hashtags) && Number.isFinite(socialPayload.scannedPosts)) {
     const today = new Date().toISOString().slice(0, 10);
@@ -2990,6 +3701,9 @@ async function refreshDualEngineTimelineDataInternal() {
     };
     if (hansardScore !== null) {
       entry.hansard_friction = hansardScore;
+    }
+    if (treasuryTelemetry?.status === 'available' && Number.isFinite(treasuryTelemetry.score)) {
+      entry.treasury_friction = treasuryTelemetry.score;
     }
     if (Array.isArray(hansardTelemetry?.tracked_topics) && hansardTelemetry.tracked_topics.length > 0) {
       entry.tracked_topics = hansardTelemetry.tracked_topics;
@@ -3040,6 +3754,14 @@ app.get('/api/timeline', async (req, res) => {
     res.json(await refreshDualEngineTimelineData());
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/treasury', async (req, res) => {
+  try {
+    res.json(await fetchMinistryOfFinanceTracker());
+  } catch (err) {
+    res.status(500).json({ status: 'unavailable', error: err.message });
   }
 });
 
