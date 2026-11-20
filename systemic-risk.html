@@ -282,8 +282,10 @@
 
         function getTimelineApiCandidates() {
             const candidates = [];
-            const configured = window.KUVHURA_API_URL ? `${window.KUVHURA_API_URL.replace(/\/+$/, '')}/api/timeline` : null;
-            if (configured) candidates.push(configured);
+            const configuredUrl = window.KUVHURA_API_URL || window.KUVHURA_API_BASE_URL || null;
+            if (configuredUrl) {
+                candidates.push(`${String(configuredUrl).replace(/\/+$/, '')}/api/timeline`);
+            }
 
             const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             const isGithubPages = window.location.hostname.endsWith('.github.io');
@@ -293,14 +295,132 @@
             if (isLocal) {
                 candidates.push(`${window.location.protocol}//${window.location.hostname}:8765/api/timeline`);
             }
-            const fallbacks = Array.isArray(window.KUVHURA_API_FALLBACK_URLS) ? window.KUVHURA_API_FALLBACK_URLS : [
-                'https://zimobservatory-backend.onrender.com'
-            ];
+            const fallbacks = Array.isArray(window.KUVHURA_API_FALLBACK_URLS) ? window.KUVHURA_API_FALLBACK_URLS : [];
             fallbacks.forEach(base => {
-                candidates.push(`${String(base).replace(/\/+$/, '')}/api/timeline`);
+                if (typeof base === 'string' && base.trim()) {
+                    candidates.push(`${base.trim().replace(/\/+$/, '')}/api/timeline`);
+                }
             });
+            candidates.push('https://zimobservatory-backend.onrender.com/api/timeline');
             candidates.push('https://zimobservatory-forecast.onrender.com/api/timeline');
             return [...new Set(candidates)];
+        }
+
+        function isVerifiedTreasurySnapshot(candidate) {
+            return Boolean(
+                candidate &&
+                candidate.status === 'available' &&
+                Number.isFinite(candidate.score) &&
+                Array.isArray(candidate.sources) &&
+                candidate.sources.length > 0
+            );
+        }
+
+        async function fetchTreasuryFallback(connectedOriginUrl, existingTreasury) {
+            if (isVerifiedTreasurySnapshot(window.__verifiedTreasurySnapshot)) {
+                return window.__verifiedTreasurySnapshot;
+            }
+            const isGhPages = window.location.hostname.endsWith('.github.io');
+            const alreadyUnavailableOnConnected = Boolean(
+                connectedOriginUrl && existingTreasury && existingTreasury.status === 'unavailable'
+            );
+            const treasuryUrls = [];
+            if (!isGhPages && window.location.protocol.startsWith('http')) {
+                treasuryUrls.push(`${window.location.origin}/api/treasury`);
+            }
+            if (connectedOriginUrl && !alreadyUnavailableOnConnected) {
+                treasuryUrls.push(`${connectedOriginUrl}/api/treasury`);
+            }
+            // Fast verified static cache deployed directly on GitHub Pages and Express
+            treasuryUrls.push('./treasury_cache.json');
+            if (window.KUVHURA_API_BASE_URL) {
+                const base = String(window.KUVHURA_API_BASE_URL).replace(/\/+$/, '');
+                if (!alreadyUnavailableOnConnected || base !== connectedOriginUrl) {
+                    treasuryUrls.push(`${base}/api/treasury`);
+                }
+            }
+            if (Array.isArray(window.KUVHURA_API_FALLBACK_URLS)) {
+                window.KUVHURA_API_FALLBACK_URLS.forEach(base => {
+                    if (typeof base === 'string' && base.trim()) {
+                        treasuryUrls.push(`${base.trim().replace(/\/+$/, '')}/api/treasury`);
+                    }
+                });
+            }
+
+            let bestFallback = existingTreasury || null;
+            for (const tUrl of [...new Set(treasuryUrls)]) {
+                try {
+                    const ctrl = new AbortController();
+                    const timeoutMs = tUrl.endsWith('.json') ? 10000 : 18000;
+                    const tTimer = setTimeout(() => ctrl.abort(), timeoutMs);
+                    const treasResp = await fetch(tUrl, { cache: 'no-store', signal: ctrl.signal });
+                    clearTimeout(tTimer);
+                    if (!treasResp.ok) continue;
+                    const candidateTreas = await treasResp.json();
+                    if (isVerifiedTreasurySnapshot(candidateTreas)) {
+                        window.__verifiedTreasurySnapshot = candidateTreas;
+                        return candidateTreas;
+                    }
+                    if (!bestFallback && candidateTreas && typeof candidateTreas === 'object') {
+                        bestFallback = candidateTreas;
+                    }
+                } catch {
+                    // Try next Treasury candidate
+                }
+            }
+            return bestFallback;
+        }
+
+        async function fetchStaticHansardFallback() {
+            try {
+                const resp = await fetch('./telemetry_cache.json', { cache: 'no-store' });
+                if (!resp.ok) return null;
+                const raw = await resp.json();
+                if (raw && raw.parlzim && raw.parlzim.status === 'available') {
+                    return { ...raw.parlzim, fromCache: true, cacheUpdatedAt: raw.timestamp || raw.updated_at || null };
+                }
+                if (raw && raw.last_available_parlzim && raw.last_available_parlzim.status === 'available') {
+                    return { ...raw.last_available_parlzim, fromCache: true, cacheUpdatedAt: raw.timestamp || raw.updated_at || null };
+                }
+            } catch {
+                // Static cache unavailable
+            }
+            return null;
+        }
+
+        function applyTreasuryKpiAndTrackers(treasuryObj, latestEntry, hansardObj) {
+            const latestTreasuryScore = Number.isFinite(treasuryObj?.score)
+                ? treasuryObj.score
+                : Number.isFinite(latestEntry?.treasury_friction)
+                    ? latestEntry.treasury_friction
+                    : null;
+            const treasuryKpi = document.getElementById('kpi-treasury');
+            const treasuryNote = document.getElementById('kpi-treasury-note');
+            const treasuryLabel = document.getElementById('engine-treasury');
+            const treasuryBar = document.getElementById('bar-treasury');
+            const treasAccessible = Number.isFinite(treasuryObj?.accessibleSources) ? treasuryObj.accessibleSources : null;
+            const treasTotal = Number.isFinite(treasuryObj?.totalSources) ? treasuryObj.totalSources : 10;
+
+            if (treasuryKpi && treasuryNote && treasuryLabel && treasuryBar) {
+                if (treasuryObj?.status === 'available' && Number.isFinite(latestTreasuryScore)) {
+                    treasuryKpi.innerText = latestTreasuryScore.toFixed(1);
+                    treasuryNote.innerText = treasAccessible !== null
+                        ? `${treasAccessible}/${treasTotal} ZimTreasury Portals Live`
+                        : 'ZimTreasury Fiscal NLP';
+                    treasuryLabel.innerText = `LIVE (${treasAccessible ?? 1}/${treasTotal})`;
+                    treasuryLabel.className = 'text-amber-400';
+                    treasuryBar.style.width = `${Math.min(100, Math.max(8, latestTreasuryScore))}%`;
+                } else {
+                    treasuryKpi.innerText = 'Unavailable';
+                    treasuryNote.innerText = 'Awaiting zimtreasury.co.zw';
+                    treasuryLabel.innerText = 'UNAVAILABLE';
+                    treasuryLabel.className = 'text-slate-400';
+                    treasuryBar.style.width = '10%';
+                }
+            }
+
+            renderLegislativePolicyTracker(hansardObj || {}, treasuryObj || {});
+            renderTreasuryPolicyTracker(treasuryObj || {});
         }
 
         function styleWarningBanner(label) {
@@ -325,18 +445,21 @@
             const candidates = getTimelineApiCandidates();
             let data = null;
             let connectedOrigin = null;
+            let connectedOriginUrl = null;
 
             for (const url of candidates) {
                 try {
                     const controller = new AbortController();
-                    const timer = setTimeout(() => controller.abort(), 15000);
+                    const timer = setTimeout(() => controller.abort(), 25000);
                     const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
                     clearTimeout(timer);
                     if (!response.ok) continue;
                     const parsed = await response.json();
                     if (parsed && Array.isArray(parsed.timeline) && parsed.timeline.length > 0) {
                         data = parsed;
-                        connectedOrigin = new URL(url).host;
+                        const parsedUrl = new URL(url);
+                        connectedOrigin = parsedUrl.host;
+                        connectedOriginUrl = parsedUrl.origin;
                         break;
                     }
                 } catch {
@@ -347,18 +470,26 @@
             if (!data) {
                 statusEl.innerHTML = '<span class="h-2 w-2 rounded-full bg-danger mr-2"></span>Backend Unreachable';
                 document.getElementById('warning-label').innerText = 'Awaiting Backend';
-                document.getElementById('kpi-hansard').innerText = '--';
-                document.getElementById('kpi-hansard-note').innerText = 'Backend unreachable';
-                const kpiTreas = document.getElementById('kpi-treasury');
-                const kpiTreasNote = document.getElementById('kpi-treasury-note');
-                if (kpiTreas) kpiTreas.innerText = '--';
-                if (kpiTreasNote) kpiTreasNote.innerText = 'Backend unreachable';
                 document.getElementById('engine-bayesian').innerText = 'OFFLINE';
                 document.getElementById('engine-markov').innerText = 'OFFLINE';
                 document.getElementById('engine-fsi').innerText = 'OFFLINE';
-                document.getElementById('engine-hansard').innerText = 'OFFLINE';
-                const engTreas = document.getElementById('engine-treasury');
-                if (engTreas) engTreas.innerText = 'OFFLINE';
+                const [staticHansard, staticTreasury] = await Promise.all([
+                    fetchStaticHansardFallback(),
+                    fetchTreasuryFallback(null, null)
+                ]);
+                if (staticHansard && Number.isFinite(staticHansard.score)) {
+                    document.getElementById('kpi-hansard').innerText = staticHansard.score.toFixed(1);
+                    document.getElementById('kpi-hansard-note').innerText = `${staticHansard.accessibleSources ?? 1}/${staticHansard.totalSources || 5} ParlZim Portals Cached`;
+                    const hLabel = document.getElementById('engine-hansard');
+                    hLabel.innerText = `CACHED (${staticHansard.accessibleSources ?? 1}/${staticHansard.totalSources || 5})`;
+                    hLabel.className = 'text-emerald-400';
+                    document.getElementById('bar-hansard').style.width = `${Math.min(100, Math.max(8, staticHansard.score))}%`;
+                } else {
+                    document.getElementById('kpi-hansard').innerText = '--';
+                    document.getElementById('kpi-hansard-note').innerText = 'Backend unreachable';
+                    document.getElementById('engine-hansard').innerText = 'OFFLINE';
+                }
+                applyTreasuryKpiAndTrackers(staticTreasury || {}, null, staticHansard || {});
                 return;
             }
 
@@ -458,47 +589,12 @@
             }
 
             let treasury = data.treasuryStatus || null;
-            if (!treasury || treasury.status === 'awaiting_check') {
-                try {
-                    const treasResp = await fetch('/api/treasury', { cache: 'no-store' });
-                    if (treasResp.ok) treasury = await treasResp.json();
-                } catch {
-                    // Keep existing state
-                }
+            if (isVerifiedTreasurySnapshot(treasury)) {
+                window.__verifiedTreasurySnapshot = treasury;
+            } else {
+                treasury = await fetchTreasuryFallback(connectedOriginUrl, treasury);
             }
-            const treasuryObj = treasury || {};
-            const latestTreasuryScore = Number.isFinite(latest.treasury_friction)
-                ? latest.treasury_friction
-                : Number.isFinite(treasuryObj.score)
-                    ? treasuryObj.score
-                    : null;
-            const treasuryKpi = document.getElementById('kpi-treasury');
-            const treasuryNote = document.getElementById('kpi-treasury-note');
-            const treasuryLabel = document.getElementById('engine-treasury');
-            const treasuryBar = document.getElementById('bar-treasury');
-            const treasAccessible = Number.isFinite(treasuryObj.accessibleSources) ? treasuryObj.accessibleSources : null;
-            const treasTotal = Number.isFinite(treasuryObj.totalSources) ? treasuryObj.totalSources : 10;
-
-            if (treasuryKpi && treasuryNote && treasuryLabel && treasuryBar) {
-                if (treasuryObj.status === 'available' && Number.isFinite(latestTreasuryScore)) {
-                    treasuryKpi.innerText = latestTreasuryScore.toFixed(1);
-                    treasuryNote.innerText = treasAccessible !== null
-                        ? `${treasAccessible}/${treasTotal} ZimTreasury Portals Live`
-                        : 'ZimTreasury Fiscal NLP';
-                    treasuryLabel.innerText = `LIVE (${treasAccessible ?? 1}/${treasTotal})`;
-                    treasuryLabel.className = 'text-amber-400';
-                    treasuryBar.style.width = `${Math.min(100, Math.max(8, latestTreasuryScore))}%`;
-                } else {
-                    treasuryKpi.innerText = 'Unavailable';
-                    treasuryNote.innerText = 'Awaiting zimtreasury.co.zw';
-                    treasuryLabel.innerText = 'UNAVAILABLE';
-                    treasuryLabel.className = 'text-slate-400';
-                    treasuryBar.style.width = '10%';
-                }
-            }
-
-            renderLegislativePolicyTracker(hansard, treasuryObj);
-            renderTreasuryPolicyTracker(treasuryObj);
+            applyTreasuryKpiAndTrackers(treasury || {}, latest, hansard);
 
             statusEl.innerHTML = isLive
                 ? `<span class="h-2 w-2 rounded-full bg-success mr-2"></span>Live Sync Active (${connectedOrigin})`

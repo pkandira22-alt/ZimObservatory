@@ -323,7 +323,7 @@ def fetch_social_hashtag_trends():
         if SOCIAL_CACHE["payload"] and SOCIAL_CACHE["expires_at"] > now.timestamp():
             return SOCIAL_CACHE["payload"]
 
-    web_app_url = os.environ.get("GOOGLE_SHEETS_WEB_APP_URL")
+    web_app_url = (os.environ.get("GOOGLE_SHEETS_WEB_APP_URL") or "").strip()
     if web_app_url:
         try:
             result = fetch_sheet_social_hashtag_trends(web_app_url)

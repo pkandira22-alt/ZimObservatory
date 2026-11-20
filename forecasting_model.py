@@ -9,7 +9,20 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-import xlrd
+try:
+    import xlrd
+except ModuleNotFoundError:  # Optional dependency; required only for live ZIMSTAT .xls parsing
+    class _MissingXLRD:
+        class XLRDError(Exception):
+            pass
+
+        @staticmethod
+        def open_workbook(*_args, **_kwargs):
+            raise ValueError(
+                "The optional 'xlrd' package is required to parse ZIMSTAT .xls workbooks."
+            )
+
+    xlrd = _MissingXLRD()
 
 
 USER_AGENT = "KUVHURA-Observatory/1.0"

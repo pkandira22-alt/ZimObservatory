@@ -1124,11 +1124,14 @@ def _extract_pdf_true_title(info, full_structured, fallback_title=""):
     raw_meta_title = " ".join(str((info or {}).get("title") or "").split())
     if (
         12 <= len(raw_meta_title) <= 140
-        and not re.search(r"\b(?:untitled|document\s*\d*|microsoft|adobe|libreoffice|slide|vote\s+\d+)\b|\.(?:pdf|docx?|pptx?|indd)$", raw_meta_title, re.IGNORECASE)
+        and not re.match(r"^(?:file://|https?://|\\\\|[a-z]:\\)", raw_meta_title, re.IGNORECASE)
+        and not re.search(r"\b(?:untitled|document\s*\d*|microsoft|adobe|libreoffice|slide|vote\s+\d+)\b|\.(?:pdf|docx?|pptx?|indd|html?)$", raw_meta_title, re.IGNORECASE)
         and not _is_non_issue_link(raw_meta_title)
         and re.search(r"[a-zA-Z]{4,}", raw_meta_title)
     ):
-        return _clean_issue_title(raw_meta_title)
+        cleaned_meta = re.sub(r"^Name[:\s]+", "", raw_meta_title, flags=re.IGNORECASE).strip(" ,;:-")
+        if len(cleaned_meta) >= 10:
+            return _clean_issue_title(cleaned_meta)
 
     first_page = str(full_structured or "").split("--- Page 2 ---", 1)[0]
     first_lines = [

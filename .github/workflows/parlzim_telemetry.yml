@@ -39,9 +39,24 @@ jobs:
         run: |
           python scripts/update_telemetry.py
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node Dependencies
+        run: |
+          npm install --omit=dev --no-audit --no-fund
+
+      - name: Refresh Ministry of Finance (zimtreasury.co.zw) Cache
+        env:
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+        run: |
+          node server.js --update-treasury-cache
+
       - name: Commit and Push Cache
         run: |
           git config --global user.name "KUVHURA Bot"
           git config --global user.email "bot@kuvhura.org"
-          git add telemetry_cache.json
-          git diff --cached --quiet || (git commit -m "chore: automated daily ParlZim telemetry cache update" && git push)
+          git add telemetry_cache.json treasury_cache.json
+          git diff --cached --quiet || (git commit -m "chore: automated daily ParlZim & Treasury telemetry cache update" && git push)

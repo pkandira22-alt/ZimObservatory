@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import dns from 'node:dns';
 import { tmpdir } from 'node:os';
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
@@ -1324,9 +1324,28 @@ function enrichAndRankTrackedTopics(topics) {
   const deduped = new Map();
   for (const raw of topics) {
     if (!raw || typeof raw !== 'object') continue;
-    const rawTitle = String(raw.topic || '').replace(/\s+/g, ' ').trim();
+    let rawTitle = String(raw.topic || '').replace(/\s+/g, ' ').trim();
     const url = String(raw.url || '').trim();
     if (!rawTitle || isNonIssueLink(rawTitle, url)) continue;
+    if (/^(?:file:\/\/|\\\\|[a-z]:\\)/i.test(rawTitle) || /\.(?:html?|pdf|docx?)$/i.test(rawTitle)) {
+      const urlFile = url.split('?')[0].split('/').pop() || '';
+      let decodedFile = urlFile;
+      try { decodedFile = decodeURIComponent(urlFile); } catch {}
+      const derived = decodedFile
+        .replace(/\.[a-z0-9]{2,5}$/i, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b(\d{1,2})\s+(\d{2})\b$/, '[Chapter $1:$2]')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (derived.length >= 6) {
+        rawTitle = derived.toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
+          .replace(/\b(Of|And|For|The|In|To|On)\b/g, (w, _g, offset) => (offset > 0 ? w.toLowerCase() : w));
+      }
+    }
+    rawTitle = rawTitle.replace(/^Name[:\s]+/i, '').replace(/[,;:\s]+$/, '').trim();
+    if (/Organisatioamendmen/i.test(rawTitle)) {
+      rawTitle = 'Private Voluntary Organisations Amendment Bill';
+    }
     const title = cleanIssueTitle(rawTitle);
     const category = String(raw.category || 'Parliament').trim();
     const status = String(raw.status || raw.action_status || 'Tracked').trim();
@@ -3075,15 +3094,116 @@ function cleanTreasuryTitle(rawTitle) {
   return title.slice(0, 180);
 }
 
-async function fetchFilebirdAttachments(folderId, limit = 4) {
+function getTreasuryCachePath() {
+  return process.env.TREASURY_CACHE_PATH || path.join(__dirname, 'treasury_cache.json');
+}
+
+function readVerifiedTreasuryCache() {
+  const cachePath = getTreasuryCachePath();
   try {
-    const resp = await fetch(`${TREASURY_BASE_URL}/wp-json/filebird/v1/get-attachments`, {
+    if (!existsSync(cachePath)) return null;
+    const raw = JSON.parse(readFileSync(cachePath, 'utf8'));
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      raw.status === 'available' &&
+      Number.isFinite(raw.score) &&
+      Array.isArray(raw.sources) &&
+      raw.sources.length > 0
+    ) {
+      return {
+        ...raw,
+        fromCache: true,
+        cacheUpdatedAt: raw.updatedAt || raw.cacheUpdatedAt || null
+      };
+    }
+  } catch {
+    // Ignore corrupted cache file
+  }
+  return null;
+}
+
+function writeVerifiedTreasuryCache(snapshot) {
+  if (!snapshot || snapshot.status !== 'available' || !Number.isFinite(snapshot.score)) return;
+  const cachePath = getTreasuryCachePath();
+  const tmpPath = `${cachePath}.${process.pid}.tmp`;
+  try {
+    const serialized = JSON.stringify({
+      ...snapshot,
+      fromCache: false,
+      cacheUpdatedAt: snapshot.updatedAt || new Date().toISOString()
+    }, null, 2);
+    writeFileSync(tmpPath, `${serialized}\n`, 'utf8');
+    renameSync(tmpPath, cachePath);
+  } catch {
+    // Non-fatal in read-only filesystems
+  }
+}
+
+async function runWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const limit = Math.max(1, Math.min(concurrency, items.length || 1));
+  await Promise.all(Array.from({ length: limit }, async () => {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      results[idx] = await worker(items[idx], idx);
+    }
+  }));
+  return results;
+}
+
+async function fetchTreasuryJsonWithFallback(url, options = {}) {
+  const { method = 'GET', body = null, timeoutMs = 12000 } = options;
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+    ...(body ? { 'Content-Type': 'application/json' } : {})
+  };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const resp = await fetch(url, {
+        method,
+        headers,
+        ...(body ? { body } : {}),
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (resp.ok) {
+        return await resp.json();
+      }
+      if (resp.status >= 400 && resp.status < 500 && resp.status !== 429) {
+        break;
+      }
+    } catch {
+      // Retry once on transient timeout/socket error
+    }
+    if (attempt === 0) {
+      await new Promise(resolve => setTimeout(resolve, 350));
+    }
+  }
+  const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
+  if (method === 'GET' && apiKey) {
+    try {
+      const proxyUrl = new URL('https://api.scraperapi.com/');
+      proxyUrl.searchParams.set('api_key', apiKey);
+      proxyUrl.searchParams.set('url', url);
+      proxyUrl.searchParams.set('render', 'false');
+      const resp = await fetch(proxyUrl.toString(), { signal: AbortSignal.timeout(20000) });
+      if (resp.ok) {
+        return await resp.json();
+      }
+    } catch {
+      // Fall through to null
+    }
+  }
+  return null;
+}
+
+async function fetchFilebirdAttachments(folderId, limit = 4) {
+  const payload = await fetchTreasuryJsonWithFallback(
+    `${TREASURY_BASE_URL}/wp-json/filebird/v1/get-attachments`,
+    {
       method: 'POST',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
       body: JSON.stringify({
         pagination: { current: 1, limit },
         search: '',
@@ -3091,57 +3211,32 @@ async function fetchFilebirdAttachments(folderId, limit = 4) {
         orderType: 'DESC',
         selectedFolder: [folderId]
       }),
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!resp.ok) return [];
-    const payload = await resp.json();
-    return Array.isArray(payload?.files) ? payload.files : [];
-  } catch {
-    return [];
-  }
+      timeoutMs: 12000
+    }
+  );
+  return Array.isArray(payload?.files) ? payload.files : [];
 }
 
 async function fetchTreasuryWpPosts(limit = 10) {
-  try {
-    const resp = await fetch(
-      `${TREASURY_BASE_URL}/wp-json/wp/v2/posts?per_page=${limit}&_fields=id,date,title,link,excerpt,content`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
-          'Accept': 'application/json'
-        },
-        signal: AbortSignal.timeout(8000)
-      }
-    );
-    if (!resp.ok) return [];
-    const items = await resp.json();
-    return Array.isArray(items) ? items : [];
-  } catch {
-    return [];
-  }
+  const items = await fetchTreasuryJsonWithFallback(
+    `${TREASURY_BASE_URL}/wp-json/wp/v2/posts?per_page=${limit}&_fields=id,date,title,link,excerpt,content`,
+    { method: 'GET', timeoutMs: 12000 }
+  );
+  return Array.isArray(items) ? items : [];
 }
 
 async function fetchTreasuryWpMedia(searchTerm = '', limit = 8) {
-  try {
-    const qs = new URLSearchParams({
-      mime_type: 'application/pdf',
-      per_page: String(limit),
-      _fields: 'id,date,title,source_url'
-    });
-    if (searchTerm) qs.set('search', searchTerm);
-    const resp = await fetch(`${TREASURY_BASE_URL}/wp-json/wp/v2/media?${qs.toString()}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
-        'Accept': 'application/json'
-      },
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!resp.ok) return [];
-    const items = await resp.json();
-    return Array.isArray(items) ? items : [];
-  } catch {
-    return [];
-  }
+  const qs = new URLSearchParams({
+    mime_type: 'application/pdf',
+    per_page: String(limit),
+    _fields: 'id,date,title,source_url'
+  });
+  if (searchTerm) qs.set('search', searchTerm);
+  const items = await fetchTreasuryJsonWithFallback(
+    `${TREASURY_BASE_URL}/wp-json/wp/v2/media?${qs.toString()}`,
+    { method: 'GET', timeoutMs: 12000 }
+  );
+  return Array.isArray(items) ? items : [];
 }
 
 function buildTreasurySummaryBriefing({ sources, rankedTopics, avgScore, accessibleSources, totalSources, status, capturedAt }) {
@@ -3212,42 +3307,44 @@ function buildTreasurySummaryBriefing({ sources, rankedTopics, avgScore, accessi
   };
 }
 
-async function fetchMinistryOfFinanceTracker() {
+async function fetchMinistryOfFinanceTracker(options = {}) {
+  const { forceRefresh = false } = options;
   const now = Date.now();
-  if (treasuryCache.data && treasuryCache.expiresAt > now) {
+  if (!forceRefresh && treasuryCache.data && treasuryCache.expiresAt > now) {
     return treasuryCache.data;
   }
   if (treasuryInFlightPromise) {
     return treasuryInFlightPromise;
   }
-  treasuryInFlightPromise = fetchMinistryOfFinanceTrackerInternal().finally(() => {
+  treasuryInFlightPromise = fetchMinistryOfFinanceTrackerInternal(forceRefresh).finally(() => {
     treasuryInFlightPromise = null;
   });
   return treasuryInFlightPromise;
 }
 
-async function fetchMinistryOfFinanceTrackerInternal() {
+async function fetchMinistryOfFinanceTrackerInternal(forceRefresh = false) {
   const now = Date.now();
-  if (treasuryCache.data && treasuryCache.expiresAt > now) {
+  if (!forceRefresh && treasuryCache.data && treasuryCache.expiresAt > now) {
     return treasuryCache.data;
   }
 
-  const [wpPosts, recentMedia, portalFileBatches] = await Promise.all([
+  const [wpPosts, recentMedia] = await Promise.all([
     fetchTreasuryWpPosts(10),
-    fetchTreasuryWpMedia('', 10),
-    Promise.all(TREASURY_PORTAL_CATALOG.map(async cfg => {
-      const folderBatches = Array.isArray(cfg.folders) && cfg.folders.length > 0
-        ? await Promise.all(cfg.folders.map(async f => ({
-            subLabel: f.label,
-            files: await fetchFilebirdAttachments(f.id, f.limit || 4)
-          })))
-        : [];
-      const searchedMedia = cfg.wpMediaSearch
-        ? await fetchTreasuryWpMedia(cfg.wpMediaSearch, 5)
-        : [];
-      return { cfg, folderBatches, searchedMedia };
-    }))
+    fetchTreasuryWpMedia('', 10)
   ]);
+
+  const portalFileBatches = await runWithConcurrency(TREASURY_PORTAL_CATALOG, 4, async cfg => {
+    const folderBatches = Array.isArray(cfg.folders) && cfg.folders.length > 0
+      ? await runWithConcurrency(cfg.folders, 2, async f => ({
+          subLabel: f.label,
+          files: await fetchFilebirdAttachments(f.id, f.limit || 4)
+        }))
+      : [];
+    const searchedMedia = cfg.wpMediaSearch
+      ? await fetchTreasuryWpMedia(cfg.wpMediaSearch, 5)
+      : [];
+    return { cfg, folderBatches, searchedMedia };
+  });
 
   const sourcesStatus = [];
   const allTopics = [];
@@ -3489,7 +3586,7 @@ async function fetchMinistryOfFinanceTrackerInternal() {
     : null;
   const capturedAt = new Date().toISOString();
 
-  const result = {
+  let result = {
     score: avgScore,
     status: accessibleSources > 0 ? 'available' : 'unavailable',
     source: accessibleSources > 0 ? 'zimtreasury_portals' : 'unavailable',
@@ -3511,6 +3608,17 @@ async function fetchMinistryOfFinanceTrackerInternal() {
     updatedAt: capturedAt
   };
 
+  if (result.status === 'available' && Number.isFinite(result.score)) {
+    writeVerifiedTreasuryCache(result);
+  } else {
+    const diskFallback = readVerifiedTreasuryCache();
+    if (diskFallback) {
+      result = diskFallback;
+    } else if (latestTreasuryStatus && latestTreasuryStatus.status === 'available' && Number.isFinite(latestTreasuryStatus.score)) {
+      result = { ...latestTreasuryStatus, fromCache: true };
+    }
+  }
+
   latestTreasuryStatus = { ...result };
   treasuryCache = {
     expiresAt: Date.now() + (result.status === 'available' ? HANSARD_TTL_MS : HANSARD_ERROR_TTL_MS),
@@ -3523,9 +3631,9 @@ function getDualEngineTimelineResponse() {
   const hansardStatus = latestHansardStatus
     ? { ...latestHansardStatus }
     : { score: null, status: 'awaiting_check', source: 'unavailable', sources: [], tracked_topics: [] };
-  const treasuryStatus = latestTreasuryStatus
+  const treasuryStatus = (latestTreasuryStatus && latestTreasuryStatus.status === 'available' && Number.isFinite(latestTreasuryStatus.score))
     ? { ...latestTreasuryStatus }
-    : { score: null, status: 'awaiting_check', source: 'unavailable', accessibleSources: 0, totalSources: TREASURY_PORTAL_CATALOG.length, sources: [], tracked_topics: [] };
+    : (readVerifiedTreasuryCache() || (latestTreasuryStatus ? { ...latestTreasuryStatus } : { score: null, status: 'awaiting_check', source: 'unavailable', accessibleSources: 0, totalSources: TREASURY_PORTAL_CATALOG.length, sources: [], tracked_topics: [] }));
   return {
     timeline: TELEMETRY_TIMELINE.map(entry => ({ ...entry })),
     engines: {
@@ -3655,11 +3763,19 @@ async function refreshDualEngineTimelineData() {
 }
 
 async function refreshDualEngineTimelineDataInternal() {
+  const cachedTreasury = (treasuryCache.data && treasuryCache.expiresAt > Date.now())
+    ? treasuryCache.data
+    : readVerifiedTreasuryCache();
+
+  const treasuryPromise = cachedTreasury
+    ? (fetchMinistryOfFinanceTracker().catch(() => {}), Promise.resolve(cachedTreasury))
+    : fetchMinistryOfFinanceTracker();
+
   const [socialPayload, layer2Macro, hansardTelemetry, treasuryTelemetry] = await Promise.all([
     getSocialHashtagTrends(),
     fetchLayer2MacroTelemetry(),
     fetchSemanticHansardTelemetry(),
-    fetchMinistryOfFinanceTracker()
+    treasuryPromise
   ]);
 
   latestHansardStatus = hansardTelemetry ? { ...hansardTelemetry } : { score: null, status: 'unavailable', source: 'unavailable' };
@@ -3759,7 +3875,8 @@ app.get('/api/timeline', async (req, res) => {
 
 app.get('/api/treasury', async (req, res) => {
   try {
-    res.json(await fetchMinistryOfFinanceTracker());
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    res.json(await fetchMinistryOfFinanceTracker({ forceRefresh }));
   } catch (err) {
     res.status(500).json({ status: 'unavailable', error: err.message });
   }
@@ -4114,6 +4231,8 @@ const PUBLIC_FRONTEND_FILES = new Set([
   '/systemic-risk.html',
   '/api-config.js',
   '/political-economy-timeseries.js',
+  '/treasury_cache.json',
+  '/telemetry_cache.json',
   '/manifest.json',
   '/service-worker.js',
   '/icon.svg',
@@ -4230,12 +4349,31 @@ server.on('upgrade', async (req, socket) => {
   await pushTelemetry();
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
-  setTimeout(() => {
-    refreshDualEngineTimelineData().catch(err => {
-      console.warn(`Initial timeline warmup warning: ${err.message}`);
+if (process.argv.includes('--update-treasury-cache')) {
+  fetchMinistryOfFinanceTracker({ forceRefresh: true })
+    .then(result => {
+      console.log(
+        `Treasury cache update complete: status=${result.status}, portals=${result.accessibleSources}/${result.totalSources}, ` +
+        `score=${result.score}, topics=${result.tracked_topics?.length || 0}, fromCache=${Boolean(result.fromCache)}`
+      );
+      process.exit(0);
+    })
+    .catch(err => {
+      console.error(`Treasury cache update failed: ${err.message}`);
+      process.exit(1);
     });
-  }, 1500).unref();
-});
+} else {
+  const initialTreasuryCache = readVerifiedTreasuryCache();
+  if (initialTreasuryCache) {
+    latestTreasuryStatus = { ...initialTreasuryCache };
+  }
+  server.listen(PORT, HOST, () => {
+    console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
+    setTimeout(() => {
+      refreshDualEngineTimelineData().catch(err => {
+        console.warn(`Initial timeline warmup warning: ${err.message}`);
+      });
+    }, 1500).unref();
+  });
+}
 
