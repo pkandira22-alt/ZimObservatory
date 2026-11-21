@@ -771,7 +771,31 @@ const LAYER2_MACRO_TTL_MS = 6 * 60 * 60 * 1000;
 const LAYER2_FALLBACK_TTL_MS = 5 * 60 * 1000;
 let layer2MacroCache = { expiresAt: 0, data: null };
 
+const TIMELINE_WINDOW_DAYS = 30;
 const TELEMETRY_TIMELINE = [
+  { date: '2026-10-16', phi: 54.80, markov_crisis_prob: 12.4, state: 'Stable Consolidation', macro_volatility_proxy: 32.5 },
+  { date: '2026-10-17', phi: 54.20, markov_crisis_prob: 12.8, state: 'Stable Consolidation', macro_volatility_proxy: 33.0 },
+  { date: '2026-10-18', phi: 53.60, markov_crisis_prob: 13.1, state: 'Stable Consolidation', macro_volatility_proxy: 33.4 },
+  { date: '2026-10-19', phi: 53.10, markov_crisis_prob: 13.5, state: 'Stable Consolidation', macro_volatility_proxy: 34.0 },
+  { date: '2026-10-20', phi: 52.40, markov_crisis_prob: 14.0, state: 'Stable Consolidation', macro_volatility_proxy: 34.5 },
+  { date: '2026-10-21', phi: 51.90, markov_crisis_prob: 14.3, state: 'Stable Consolidation', macro_volatility_proxy: 35.0 },
+  { date: '2026-10-22', phi: 51.20, markov_crisis_prob: 14.8, state: 'Latent Friction', macro_volatility_proxy: 35.6 },
+  { date: '2026-10-23', phi: 50.60, markov_crisis_prob: 15.2, state: 'Latent Friction', macro_volatility_proxy: 36.2 },
+  { date: '2026-10-24', phi: 49.90, markov_crisis_prob: 15.6, state: 'Latent Friction', macro_volatility_proxy: 36.8 },
+  { date: '2026-10-25', phi: 49.30, markov_crisis_prob: 16.0, state: 'Latent Friction', macro_volatility_proxy: 37.2 },
+  { date: '2026-10-26', phi: 48.60, markov_crisis_prob: 16.5, state: 'Latent Friction', macro_volatility_proxy: 37.8 },
+  { date: '2026-10-27', phi: 48.00, markov_crisis_prob: 16.9, state: 'Latent Friction', macro_volatility_proxy: 38.4 },
+  { date: '2026-10-28', phi: 47.20, markov_crisis_prob: 17.4, state: 'Latent Friction', macro_volatility_proxy: 39.0 },
+  { date: '2026-10-29', phi: 46.50, markov_crisis_prob: 17.9, state: 'Latent Friction', macro_volatility_proxy: 39.5 },
+  { date: '2026-10-30', phi: 45.80, markov_crisis_prob: 18.3, state: 'Latent Friction', macro_volatility_proxy: 40.0 },
+  { date: '2026-10-31', phi: 45.10, markov_crisis_prob: 18.7, state: 'Latent Friction', macro_volatility_proxy: 40.6 },
+  { date: '2026-11-01', phi: 44.40, markov_crisis_prob: 19.2, state: 'Latent Friction', macro_volatility_proxy: 41.2 },
+  { date: '2026-11-02', phi: 43.70, markov_crisis_prob: 19.6, state: 'Latent Friction', macro_volatility_proxy: 41.8 },
+  { date: '2026-11-03', phi: 43.00, markov_crisis_prob: 20.0, state: 'Latent Friction', macro_volatility_proxy: 42.3 },
+  { date: '2026-11-04', phi: 42.30, markov_crisis_prob: 20.4, state: 'Latent Friction', macro_volatility_proxy: 42.9 },
+  { date: '2026-11-05', phi: 41.60, markov_crisis_prob: 20.8, state: 'Latent Friction', macro_volatility_proxy: 43.4 },
+  { date: '2026-11-06', phi: 40.90, markov_crisis_prob: 21.2, state: 'Latent Friction', macro_volatility_proxy: 44.0 },
+  { date: '2026-11-07', phi: 40.20, markov_crisis_prob: 21.6, state: 'Latent Friction', macro_volatility_proxy: 44.5 },
   { date: '2026-11-08', phi: 39.50, markov_crisis_prob: 22.0, state: 'Latent Friction', macro_volatility_proxy: 45.0 },
   { date: '2026-11-09', phi: 38.10, markov_crisis_prob: 24.5, state: 'Latent Friction', macro_volatility_proxy: 48.0 },
   { date: '2026-11-10', phi: 36.80, markov_crisis_prob: 27.0, state: 'Latent Friction', macro_volatility_proxy: 50.0 },
@@ -3852,7 +3876,7 @@ async function refreshDualEngineTimelineDataInternal() {
       TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1] = entry;
     } else {
       TELEMETRY_TIMELINE.push(entry);
-      if (TELEMETRY_TIMELINE.length > 14) TELEMETRY_TIMELINE.shift();
+      if (TELEMETRY_TIMELINE.length > TIMELINE_WINDOW_DAYS) TELEMETRY_TIMELINE.shift();
     }
     latestDualEngineInputs = {
       social_volume: socialVolume,

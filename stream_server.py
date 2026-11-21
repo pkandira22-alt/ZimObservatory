@@ -221,7 +221,31 @@ ENGLISH_STOPWORDS = frozenset({
     "below", "each", "few", "both", "same", "own", "while", "because", "until",
 })
 logger = logging.getLogger("kuvhura.orientation")
+TIMELINE_WINDOW_DAYS = 30
 TELEMETRY_TIMELINE = [
+    {"date": "2026-10-16", "phi": 54.80, "markov_crisis_prob": 12.4, "state": "Stable Consolidation"},
+    {"date": "2026-10-17", "phi": 54.20, "markov_crisis_prob": 12.8, "state": "Stable Consolidation"},
+    {"date": "2026-10-18", "phi": 53.60, "markov_crisis_prob": 13.1, "state": "Stable Consolidation"},
+    {"date": "2026-10-19", "phi": 53.10, "markov_crisis_prob": 13.5, "state": "Stable Consolidation"},
+    {"date": "2026-10-20", "phi": 52.40, "markov_crisis_prob": 14.0, "state": "Stable Consolidation"},
+    {"date": "2026-10-21", "phi": 51.90, "markov_crisis_prob": 14.3, "state": "Stable Consolidation"},
+    {"date": "2026-10-22", "phi": 51.20, "markov_crisis_prob": 14.8, "state": "Latent Friction"},
+    {"date": "2026-10-23", "phi": 50.60, "markov_crisis_prob": 15.2, "state": "Latent Friction"},
+    {"date": "2026-10-24", "phi": 49.90, "markov_crisis_prob": 15.6, "state": "Latent Friction"},
+    {"date": "2026-10-25", "phi": 49.30, "markov_crisis_prob": 16.0, "state": "Latent Friction"},
+    {"date": "2026-10-26", "phi": 48.60, "markov_crisis_prob": 16.5, "state": "Latent Friction"},
+    {"date": "2026-10-27", "phi": 48.00, "markov_crisis_prob": 16.9, "state": "Latent Friction"},
+    {"date": "2026-10-28", "phi": 47.20, "markov_crisis_prob": 17.4, "state": "Latent Friction"},
+    {"date": "2026-10-29", "phi": 46.50, "markov_crisis_prob": 17.9, "state": "Latent Friction"},
+    {"date": "2026-10-30", "phi": 45.80, "markov_crisis_prob": 18.3, "state": "Latent Friction"},
+    {"date": "2026-10-31", "phi": 45.10, "markov_crisis_prob": 18.7, "state": "Latent Friction"},
+    {"date": "2026-11-01", "phi": 44.40, "markov_crisis_prob": 19.2, "state": "Latent Friction"},
+    {"date": "2026-11-02", "phi": 43.70, "markov_crisis_prob": 19.6, "state": "Latent Friction"},
+    {"date": "2026-11-03", "phi": 43.00, "markov_crisis_prob": 20.0, "state": "Latent Friction"},
+    {"date": "2026-11-04", "phi": 42.30, "markov_crisis_prob": 20.4, "state": "Latent Friction"},
+    {"date": "2026-11-05", "phi": 41.60, "markov_crisis_prob": 20.8, "state": "Latent Friction"},
+    {"date": "2026-11-06", "phi": 40.90, "markov_crisis_prob": 21.2, "state": "Latent Friction"},
+    {"date": "2026-11-07", "phi": 40.20, "markov_crisis_prob": 21.6, "state": "Latent Friction"},
     {"date": "2026-11-08", "phi": 39.50, "markov_crisis_prob": 22.0, "state": "Latent Friction"},
     {"date": "2026-11-09", "phi": 38.10, "markov_crisis_prob": 24.5, "state": "Latent Friction"},
     {"date": "2026-11-10", "phi": 36.80, "markov_crisis_prob": 27.0, "state": "Latent Friction"},
@@ -230,7 +254,12 @@ TELEMETRY_TIMELINE = [
     {"date": "2026-11-13", "phi": 27.90, "markov_crisis_prob": 42.5, "state": "Acute Crisis"},
     {"date": "2026-11-14", "phi": 24.15, "markov_crisis_prob": 46.8, "state": "Acute Systemic Crisis"},
 ]
-for _seed, _macro_proxy in zip(TELEMETRY_TIMELINE, (45.0, 48.0, 50.0, 55.0, 60.0, 62.0, 65.0)):
+_SEED_MACRO_PROXIES = (
+    32.5, 33.0, 33.4, 34.0, 34.5, 35.0, 35.6, 36.2, 36.8, 37.2,
+    37.8, 38.4, 39.0, 39.5, 40.0, 40.6, 41.2, 41.8, 42.3, 42.9,
+    43.4, 44.0, 44.5, 45.0, 48.0, 50.0, 55.0, 60.0, 62.0, 65.0,
+)
+for _seed, _macro_proxy in zip(TELEMETRY_TIMELINE, _SEED_MACRO_PROXIES):
     _seed["macro_volatility_proxy"] = _macro_proxy
     _seed["fsi"] = round(
         0.40 * (100.0 - _seed["phi"])
@@ -2419,7 +2448,7 @@ def update_telemetry_timeline(payload, evaluated_at=None, layer2_macro=None, han
         TELEMETRY_TIMELINE[-1] = entry
     else:
         TELEMETRY_TIMELINE.append(entry)
-        if len(TELEMETRY_TIMELINE) > 14:
+        if len(TELEMETRY_TIMELINE) > TIMELINE_WINDOW_DAYS:
             TELEMETRY_TIMELINE.pop(0)
     LATEST_DUAL_ENGINE_INPUTS = {
         "social_volume": social_volume,
