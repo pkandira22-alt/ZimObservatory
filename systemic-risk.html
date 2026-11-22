@@ -221,7 +221,7 @@
 
                     <div>
                         <div class="flex justify-between text-xs font-semibold text-slate-300 mb-1">
-                            <span>YouTube Data API v3 &amp; Social Stream</span>
+                            <span>Social Media Trends (X &bull; YouTube &bull; Bluesky &bull; Mastodon)</span>
                             <span id="engine-youtube" class="text-rose-400">CHECKING</span>
                         </div>
                         <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -278,15 +278,15 @@
             <div id="treasury-topics-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4"></div>
         </section>
 
-        <!-- Live Social Media & YouTube Data API v3 Telemetry -->
+        <!-- Social Media Trends -->
         <section id="social-youtube-section" class="bg-cardbg/90 backdrop-blur border border-rose-500/30 rounded-xl p-6 shadow-lg space-y-5">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                    <h3 class="text-lg font-bold text-white">Live Social &amp; YouTube Data API v3 Telemetry</h3>
-                    <p id="social-youtube-subtitle" class="text-xs text-slate-400">Real-time Zimbabwe public discourse ingestion across Bluesky, Mastodon &amp; YouTube Data API v3 (feeding the Bayesian social-volume posterior)</p>
+                    <h3 class="text-lg font-bold text-white">Social Media Trends</h3>
+                    <p id="social-youtube-subtitle" class="text-xs text-slate-400">Real-time Zimbabwe social media discourse across X, YouTube, Bluesky &amp; Mastodon (feeding the Bayesian social-volume posterior)</p>
                 </div>
                 <span id="youtube-tracker-badge" class="text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-slate-700 bg-slate-900 text-slate-300 self-start sm:self-auto">
-                    Checking YouTube API v3...
+                    Syncing Social Media Trends...
                 </span>
             </div>
 
@@ -294,9 +294,16 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 space-y-3">
-                    <div class="text-xs font-semibold uppercase tracking-wider text-sky-300">Platform Feed Health &amp; Top Zimbabwe Hashtags</div>
+                    <div class="text-xs font-semibold uppercase tracking-wider text-sky-300">Connected Feeds &amp; Top Zimbabwe Hashtags</div>
                     <div id="sr-social-sources" class="flex flex-wrap gap-2"></div>
                     <div id="sr-social-hashtags" class="flex flex-wrap gap-2 pt-1"></div>
+                    <div class="pt-3 border-t border-slate-800/80 space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-slate-200">Recent Live X Posts (Zimbabwe)</span>
+                            <span id="sr-x-updated" class="text-[11px] font-mono text-slate-400"></span>
+                        </div>
+                        <div id="sr-x-posts" class="space-y-2"></div>
+                    </div>
                 </div>
                 <div class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 space-y-3">
                     <div class="flex items-center justify-between gap-2">
@@ -663,6 +670,17 @@
             return typeof url === 'string' && /^https:\/\/www\.youtube\.com\/watch\?v=[A-Za-z0-9_-]{6,20}$/.test(url);
         }
 
+        function isSafeXExternalUrl(url) {
+            if (typeof url !== 'string') return false;
+            try {
+                const parsed = new URL(url);
+                const host = parsed.hostname.toLowerCase();
+                return parsed.protocol === 'https:' && (host === 'x.com' || host === 'www.x.com' || host === 'twitter.com' || host === 'news.google.com');
+            } catch {
+                return false;
+            }
+        }
+
         function formatCompactCount(value) {
             const num = Number(value);
             if (!Number.isFinite(num) || num < 0) return '0';
@@ -717,25 +735,31 @@
             const metricsEl = document.getElementById('social-youtube-metrics');
             const sourcesEl = document.getElementById('sr-social-sources');
             const hashtagsEl = document.getElementById('sr-social-hashtags');
+            const xPostsEl = document.getElementById('sr-x-posts');
+            const xUpdatedEl = document.getElementById('sr-x-updated');
             const videosEl = document.getElementById('sr-youtube-videos');
             const updatedEl = document.getElementById('sr-youtube-updated');
             if (!badge || !metricsEl || !sourcesEl || !hashtagsEl || !videosEl) return;
 
             const yt = social.youtube || {};
+            const xData = social.x || {};
             const sources = Array.isArray(social.sources) ? social.sources : [];
             const connectedSources = sources.filter(s => s.status === 'connected');
             const hashtags = Array.isArray(social.hashtags) ? social.hashtags : [];
             const topVideos = Array.isArray(yt.topVideos) ? yt.topVideos : [];
+            const topXPosts = Array.isArray(xData.topPosts) ? xData.topPosts : [];
             const ytConnected = yt.status === 'connected';
+            const xConnected = xData.status === 'connected';
             const isPublicFeed = yt.transport === 'youtube_public_feeds';
 
             if (engineEl && barEl) {
-                if (ytConnected) {
-                    engineEl.textContent = isPublicFeed
-                        ? `LIVE (${yt.videosSampled || 0} videos · 0 quota)`
-                        : `LIVE (${yt.videosSampled || 0} videos · API v3)`;
+                if (ytConnected || xConnected) {
+                    const parts = [];
+                    if (xConnected) parts.push(`X ${xData.postsSampled || 0}`);
+                    if (ytConnected) parts.push(`YT ${yt.videosSampled || 0}`);
+                    engineEl.textContent = `LIVE (${parts.join(' · ')})`;
                     engineEl.className = 'text-emerald-400';
-                    barEl.style.width = `${Math.min(100, Math.max(25, (yt.videosSampled || 0) * 2))}%`;
+                    barEl.style.width = `${Math.min(100, Math.max(30, connectedSources.length * 16))}%`;
                 } else {
                     engineEl.textContent = 'SYNCING';
                     engineEl.className = 'text-amber-400';
@@ -743,25 +767,29 @@
                 }
             }
 
-            badge.textContent = ytConnected
-                ? (isPublicFeed
-                    ? `YouTube Public Channels LIVE · ${yt.videosSampled || 0} videos · 0 quota`
-                    : `YouTube API v3 LIVE · ${yt.videosSampled || 0} videos · ${yt.cacheWindowMinutes || 30}m cache`)
-                : 'Syncing YouTube stream...';
-            badge.className = ytConnected
+            badge.textContent = (ytConnected || xConnected)
+                ? [
+                    xConnected ? `X ${xData.postsSampled || 0} posts` : '',
+                    ytConnected ? (isPublicFeed ? `YouTube ${yt.videosSampled || 0} videos (0 quota)` : `YouTube ${yt.videosSampled || 0} videos (${yt.cacheWindowMinutes || 30}m cache)`) : ''
+                  ].filter(Boolean).join(' · ')
+                : 'Syncing Social Media Trends...';
+            badge.className = (ytConnected || xConnected)
                 ? 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 self-start sm:self-auto'
                 : 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 self-start sm:self-auto';
 
             if (updatedEl) {
                 updatedEl.textContent = yt.updatedAt ? String(yt.updatedAt).replace('T', ' ').slice(0, 19) + ' UTC' : '';
             }
+            if (xUpdatedEl) {
+                xUpdatedEl.textContent = xConnected ? `${xData.postsSampled || 0} posts sampled` : '';
+            }
 
             metricsEl.replaceChildren();
             [
                 ['Total Social Sample', String(social.scannedPosts ?? 0), 'text-sky-300'],
+                ['X Posts Sampled', xConnected ? String(xData.postsSampled ?? 0) : '--', 'text-slate-100'],
                 ['YouTube Videos Sampled', ytConnected ? String(yt.videosSampled ?? 0) : '--', 'text-rose-300'],
-                ['YouTube Views / Likes', ytConnected ? `${formatCompactCount(yt.totalViews || 0)} / ${formatCompactCount(yt.totalLikes || 0)}` : '--', 'text-emerald-300'],
-                [isPublicFeed ? 'Channels / Quota Cost' : 'Channels / Comments', ytConnected ? (isPublicFeed ? `${yt.uniqueChannels || 0} / 0 units` : `${yt.uniqueChannels || 0} / ${formatCompactCount(yt.totalComments || 0)}`) : '--', 'text-amber-300']
+                ['YouTube Views / Likes', ytConnected ? `${formatCompactCount(yt.totalViews || 0)} / ${formatCompactCount(yt.totalLikes || 0)}` : '--', 'text-emerald-300']
             ].forEach(([label, value, colorCls]) => {
                 const card = document.createElement('div');
                 card.className = 'bg-slate-900/70 border border-slate-800 rounded-lg p-3';
@@ -787,7 +815,9 @@
                     ? `YouTube (Public Channels): ${src.posts}`
                     : src.name === 'YouTube' && src.transport === 'youtube_api_v3'
                         ? `YouTube (API v3): ${src.posts}`
-                        : (ok ? `${src.name}: ${src.posts}` : `${src.name}: Syncing`);
+                        : src.name === 'X' && ok
+                            ? `X: ${src.posts}`
+                            : (ok ? `${src.name}: ${src.posts}` : `${src.name}: Syncing`);
                 pill.textContent = label;
                 sourcesEl.append(pill);
             });
@@ -802,15 +832,57 @@
                 hashtags.slice(0, 12).forEach(tag => {
                     const el = document.createElement('span');
                     const hasYt = Boolean(tag.platforms && tag.platforms.YouTube);
+                    const hasX = Boolean(tag.platforms && tag.platforms.X);
                     el.className = hasYt
                         ? 'text-xs px-2.5 py-1 rounded border border-rose-500/40 bg-rose-500/10 text-rose-200 font-semibold'
-                        : 'text-xs px-2.5 py-1 rounded border border-sky-500/30 bg-sky-500/10 text-sky-200';
+                        : hasX
+                            ? 'text-xs px-2.5 py-1 rounded border border-slate-400/50 bg-slate-700/40 text-slate-100 font-semibold'
+                            : 'text-xs px-2.5 py-1 rounded border border-sky-500/30 bg-sky-500/10 text-sky-200';
                     el.textContent = `${tag.tag} (${tag.mentions})`;
                     if (tag.platforms) {
                         el.title = Object.entries(tag.platforms).map(([k, v]) => `${k}: ${v}`).join(', ');
                     }
                     hashtagsEl.append(el);
                 });
+            }
+
+            if (xPostsEl) {
+                xPostsEl.replaceChildren();
+                if (!topXPosts.length) {
+                    const emptyX = document.createElement('p');
+                    emptyX.className = 'text-xs text-slate-400';
+                    emptyX.textContent = 'Loading recent Zimbabwe X posts...';
+                    xPostsEl.append(emptyX);
+                } else {
+                    topXPosts.slice(0, 3).forEach(post => {
+                        const row = document.createElement('div');
+                        row.className = 'bg-slate-950/70 border border-slate-800 rounded-md p-2.5 space-y-1';
+                        if (isSafeXExternalUrl(post.url)) {
+                            const a = document.createElement('a');
+                            a.href = post.url;
+                            a.target = '_blank';
+                            a.rel = 'noopener noreferrer';
+                            a.className = 'text-xs font-medium text-slate-100 hover:text-sky-300 transition block';
+                            a.textContent = post.text || 'Recent Zimbabwe X post';
+                            row.append(a);
+                        } else {
+                            const txt = document.createElement('div');
+                            txt.className = 'text-xs font-medium text-slate-100';
+                            txt.textContent = post.text || 'Recent Zimbabwe X post';
+                            row.append(txt);
+                        }
+                        const meta = document.createElement('div');
+                        meta.className = 'flex items-center justify-between text-[11px] text-slate-400';
+                        const left = document.createElement('span');
+                        left.textContent = 'X (Zimbabwe)';
+                        const right = document.createElement('span');
+                        right.className = 'font-mono';
+                        right.textContent = post.createdAt ? String(post.createdAt).slice(0, 10) : '';
+                        meta.append(left, right);
+                        row.append(meta);
+                        xPostsEl.append(row);
+                    });
+                }
             }
 
             videosEl.replaceChildren();

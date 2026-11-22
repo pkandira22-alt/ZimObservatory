@@ -501,6 +501,8 @@ const YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS = [
   { channelId: 'UCGXpCeZNe7kzeHqMlg96Ebg', label: 'BUSTOP TV' },
   { channelId: 'UC8z43AxZwpXkEfNqJopiCew', label: 'SlyMediaTv' }
 ];
+const X_PUBLIC_INDEX_RSS_URL = 'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en';
+const X_PUBLIC_INDEX_CACHE_MS = 15 * 60 * 1000;
 const SOCIAL_CACHE_MS = 60 * 1000;
 const YOUTUBE_MIN_FORCE_REFRESH_MS = 5 * 60 * 1000;
 const YOUTUBE_PUBLIC_FEEDS_CACHE_MS = 15 * 60 * 1000;
@@ -508,7 +510,7 @@ let lastYouTubeForceRefreshAt = 0;
 const SOCIAL_SOURCE_CACHE_MS = {
   default: 60 * 1000,
   reddit: 15 * 60 * 1000,
-  x: 5 * 60 * 1000,
+  x: 15 * 60 * 1000,
   youtube: 30 * 60 * 1000
 };
 
@@ -699,6 +701,90 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
   };
 }
 
+function sanitizeSafeExternalHttpsUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || '').trim());
+    if (parsed.protocol !== 'https:') return '';
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'x.com' || host === 'www.x.com' || host === 'twitter.com' || host === 'news.google.com') {
+      return parsed.href;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+function parseXPublicRssFeed(xmlText) {
+  const posts = [];
+  const itemRegex = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
+  let match;
+  while ((match = itemRegex.exec(xmlText || '')) !== null) {
+    const itemXml = match[1];
+    const titleMatch = itemXml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const pubDateMatch = itemXml.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i);
+    const linkMatch = itemXml.match(/<link[^>]*>([\s\S]*?)<\/link>/i);
+    const rawTitle = decodeXmlEntities(titleMatch ? titleMatch[1] : '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+-\s+X\s*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!rawTitle) continue;
+    const parsedDate = pubDateMatch ? new Date(pubDateMatch[1].trim()) : null;
+    const createdAt = parsedDate && !Number.isNaN(parsedDate.getTime())
+      ? parsedDate.toISOString()
+      : new Date().toISOString();
+    const url = sanitizeSafeExternalHttpsUrl(decodeXmlEntities(linkMatch ? linkMatch[1] : ''));
+    const hashtags = [...new Set(rawTitle.match(HASHTAG_REGEX) || [])].slice(0, 6);
+    posts.push({
+      text: rawTitle,
+      createdAt,
+      url,
+      platform: 'X',
+      hashtags
+    });
+  }
+  return posts;
+}
+
+async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
+  try {
+    const res = await fetch(X_PUBLIC_INDEX_RSS_URL, {
+      signal,
+      headers: {
+        Accept: 'application/rss+xml, application/xml, text/xml',
+        'User-Agent': 'KUVHURA-Observatory/1.0'
+      }
+    });
+    if (!res.ok) return null;
+    const xml = await res.text();
+    const parsed = parseXPublicRssFeed(xml);
+    if (parsed.length === 0) return null;
+    parsed.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    const topPosts = parsed.slice(0, 6).map(item => ({
+      text: item.text.slice(0, 220),
+      createdAt: item.createdAt,
+      url: item.url,
+      hashtags: item.hashtags || []
+    }));
+    return {
+      posts: parsed,
+      xMeta: {
+        configured,
+        status: 'connected',
+        transport: 'x_public_index',
+        postsSampled: parsed.length,
+        topPosts,
+        updatedAt: new Date().toISOString(),
+        refreshIntervalSeconds: X_PUBLIC_INDEX_CACHE_MS / 1000,
+        message: null
+      }
+    };
+  } catch {
+    return null;
+  }
+}
+
 function formatSocialFeedHttpError(feed, statusCode, rawBody = '') {
   if (feed.type === 'x' && statusCode === 402) {
     return 'X API recent search requires paid tier or credits (HTTP 402).';
@@ -795,6 +881,27 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       throw err;
     }
 
+    // Zero-cost public X index RSS feed when X_BEARER_TOKEN is not set
+    if (feed.type === "x" && !xToken) {
+      const xFallback = await fetchXPublicIndexFeed({
+        signal: controller.signal,
+        configured: false
+      });
+      if (xFallback) {
+        const result = {
+          name: feed.name,
+          platform: feed.platform,
+          posts: xFallback.posts,
+          xMeta: xFallback.xMeta,
+          updatedAt: new Date().toISOString(),
+          refreshIntervalSeconds: X_PUBLIC_INDEX_CACHE_MS / 1000
+        };
+        socialSourceCache.set(feed.name, { expiresAt: Date.now() + X_PUBLIC_INDEX_CACHE_MS, result });
+        return result;
+      }
+      throw new Error('X public index feed is temporarily unreachable.');
+    }
+
     const primaryUrl = feed.type === "x"
       ? `https://api.x.com/2/tweets/search/recent?${new URLSearchParams({
           query: "Zimbabwe has:hashtags -is:retweet",
@@ -855,6 +962,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
 
     const posts = [];
     let youtubeMeta = null;
+    let xMeta = null;
 
     if (feed.type === 'bluesky') {
       const items = Array.isArray(payloadData?.posts) ? payloadData.posts : [];
@@ -894,14 +1002,33 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
         }
       }
     } else if (feed.type === 'x') {
+      const xTopPosts = [];
       for (const item of payloadData?.data || []) {
+        const text = decodeXmlEntities(item.text || '').replace(/\s+/g, ' ').trim();
+        const url = item.id ? `https://x.com/i/status/${encodeURIComponent(String(item.id))}` : '';
+        const createdAt = item.created_at || '';
+        const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])].slice(0, 6);
         posts.push({
-          text: item.text || '',
-          createdAt: item.created_at || '',
-          url: `https://x.com/i/status/${item.id}`,
-          platform: feed.platform
+          text,
+          createdAt,
+          url,
+          platform: feed.platform,
+          hashtags
         });
+        if (text && xTopPosts.length < 6) {
+          xTopPosts.push({ text: text.slice(0, 220), createdAt, url, hashtags });
+        }
       }
+      xMeta = {
+        configured: true,
+        status: 'connected',
+        transport: 'x_api_v2',
+        postsSampled: posts.length,
+        topPosts: xTopPosts,
+        updatedAt: new Date().toISOString(),
+        refreshIntervalSeconds: cacheTtl / 1000,
+        message: null
+      };
     } else if (feed.type === 'youtube') {
       const searchItems = Array.isArray(payloadData?.items) ? payloadData.items : [];
       const videoIds = [...new Set(searchItems.map(item => sanitizeYouTubeVideoId(item?.id?.videoId)).filter(Boolean))].slice(0, 50);
@@ -1018,6 +1145,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       platform: feed.platform,
       posts,
       ...(youtubeMeta ? { youtubeMeta } : {}),
+      ...(xMeta ? { xMeta } : {}),
       updatedAt: new Date().toISOString(),
       refreshIntervalSeconds: cacheTtl / 1000
     };
@@ -1057,6 +1185,24 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
         return result;
       }
     }
+    // Zero-cost X public index fallback when X API v2 requires paid credits (HTTP 402) or rejects token
+    if (feed.type === 'x') {
+      const xFallback = await fetchXPublicIndexFeed({
+        configured: Boolean(getXBearerToken())
+      });
+      if (xFallback) {
+        const result = {
+          name: feed.name,
+          platform: feed.platform,
+          posts: xFallback.posts,
+          xMeta: xFallback.xMeta,
+          updatedAt: new Date().toISOString(),
+          refreshIntervalSeconds: failureTtl / 1000
+        };
+        socialSourceCache.set(feed.name, { expiresAt: Date.now() + failureTtl, result });
+        return result;
+      }
+    }
     const result = {
       name: feed.name,
       platform: feed.platform,
@@ -1077,6 +1223,18 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
           totalLikes: 0,
           totalComments: 0,
           topVideos: [],
+          updatedAt: new Date().toISOString(),
+          refreshIntervalSeconds: failureTtl / 1000,
+          message: safeErrorMessage
+        }
+      } : {}),
+      ...(feed.type === 'x' ? {
+        xMeta: {
+          configured: Boolean(getXBearerToken()),
+          status: 'unavailable',
+          transport: 'unavailable',
+          postsSampled: 0,
+          topPosts: [],
           updatedAt: new Date().toISOString(),
           refreshIntervalSeconds: failureTtl / 1000,
           message: safeErrorMessage
@@ -1115,10 +1273,11 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
   const now = Date.now();
   const youtubeApiKey = getYouTubeApiKey();
   const xBearerToken = getXBearerToken();
-  const feeds = [...SOCIAL_FEEDS, { name: "YouTube", platform: "YouTube", type: "youtube" }];
-  if (xBearerToken) {
-    feeds.push({ name: "X", platform: "X", type: "x" });
-  }
+  const feeds = [
+    ...SOCIAL_FEEDS,
+    { name: "X", platform: "X", type: "x" },
+    { name: "YouTube", platform: "YouTube", type: "youtube" }
+  ];
 
   const results = await Promise.all(feeds.map(feed => fetchSocialSource(feed, { forceRefresh })));
   const seen = new Set();
@@ -1160,17 +1319,21 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
     updatedAt: result.updatedAt,
     refreshIntervalSeconds: result.refreshIntervalSeconds,
     ...(result.youtubeMeta?.transport ? { transport: result.youtubeMeta.transport } : {}),
+    ...(result.xMeta?.transport ? { transport: result.xMeta.transport } : {}),
     ...(result.failed ? { message: result.error } : {})
   }));
-  if (!xBearerToken) {
-    sourceStatuses.push({
-      name: "X",
-      platform: "X",
-      status: "not_configured",
-      posts: 0,
-      message: "Optional X API recent-search connector is inactive."
-    });
-  }
+
+  const xResult = results.find(result => result.platform === 'X');
+  const xSummary = xResult?.xMeta || {
+    configured: Boolean(xBearerToken),
+    status: 'unavailable',
+    transport: 'unavailable',
+    postsSampled: 0,
+    topPosts: [],
+    updatedAt: new Date().toISOString(),
+    refreshIntervalSeconds: SOCIAL_SOURCE_CACHE_MS.x / 1000,
+    message: xResult?.error || 'X stream is temporarily unavailable.'
+  };
 
   const youtubeResult = results.find(result => result.platform === 'YouTube');
   const youtubeSummary = youtubeResult?.youtubeMeta || {
@@ -1201,6 +1364,7 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
     sampledPlatforms,
     sources: sourceStatuses,
     hashtags,
+    x: xSummary,
     youtube: youtubeSummary,
     message: sampledPlatforms.length
       ? hashtags.length ? null : "Connected sources returned no hashtags in the sampled posts."
@@ -4111,6 +4275,7 @@ function getDualEngineTimelineResponse() {
         sampledPlatforms: latestSocialTelemetry.sampledPlatforms || [],
         sources: latestSocialTelemetry.sources || [],
         hashtags: (latestSocialTelemetry.hashtags || []).slice(0, 12),
+        x: latestSocialTelemetry.x || null,
         youtube: latestSocialTelemetry.youtube || null
       }
     : null;

@@ -53,6 +53,9 @@ YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS = (
     ("UCGXpCeZNe7kzeHqMlg96Ebg", "BUSTOP TV"),
     ("UC8z43AxZwpXkEfNqJopiCew", "SlyMediaTv"),
 )
+X_PUBLIC_INDEX_RSS_URL = "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en"
+X_CACHE = {"expires_at": 0, "result": None}
+X_CACHE_TTL_SECONDS = 900
 
 
 def _is_placeholder_key(value):
@@ -497,6 +500,91 @@ def _fetch_youtube_public_atom_feeds(now_ts, configured=False):
     return result
 
 
+def _sanitize_safe_x_url(raw_url):
+    try:
+        parsed = urlparse(str(raw_url or "").strip())
+        host = (parsed.hostname or "").lower()
+        if parsed.scheme == "https" and host in ("x.com", "www.x.com", "twitter.com", "news.google.com"):
+            return parsed.geturl()
+    except Exception:
+        pass
+    return ""
+
+
+def _parse_x_public_rss_feed(xml_text):
+    import email.utils as email_utils
+
+    items = []
+    for match in re.finditer(r"<item\b[^>]*>([\s\S]*?)</item>", xml_text or "", flags=re.IGNORECASE):
+        entry = match.group(1)
+        title_match = re.search(r"<title[^>]*>([\s\S]*?)</title>", entry, flags=re.IGNORECASE)
+        raw_title = html_lib.unescape(title_match.group(1) if title_match else "")
+        raw_title = re.sub(r"<[^>]+>", " ", raw_title)
+        raw_title = re.sub(r"\s+-\s+X\s*$", "", raw_title, flags=re.IGNORECASE)
+        text = re.sub(r"\s+", " ", raw_title).strip()
+        if not text:
+            continue
+        pub_match = re.search(r"<pubDate[^>]*>([\s\S]*?)</pubDate>", entry, flags=re.IGNORECASE)
+        created_at = ""
+        if pub_match:
+            try:
+                parsed_dt = email_utils.parsedate_to_datetime(pub_match.group(1).strip())
+                if parsed_dt.tzinfo is None:
+                    parsed_dt = parsed_dt.replace(tzinfo=timezone.utc)
+                created_at = parsed_dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+            except Exception:
+                created_at = ""
+        link_match = re.search(r"<link[^>]*>([\s\S]*?)</link>", entry, flags=re.IGNORECASE)
+        url = _sanitize_safe_x_url(html_lib.unescape(link_match.group(1) if link_match else ""))
+        items.append({
+            "text": text,
+            "created_at": created_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "url": url,
+            "hashtags": list(dict.fromkeys(HASHTAG_PATTERN.findall(text)))[:6],
+        })
+    return items
+
+
+def _fetch_x_public_index_feed(now_ts):
+    if X_CACHE["result"] is not None and X_CACHE["expires_at"] > now_ts:
+        return X_CACHE["result"]
+    req = Request(
+        X_PUBLIC_INDEX_RSS_URL,
+        headers={
+            "Accept": "application/rss+xml, application/xml, text/xml",
+            "User-Agent": "KUVHURA-Observatory/1.0",
+        },
+    )
+    with urlopen(req, timeout=8) as resp:
+        xml_text = resp.read().decode("utf-8", errors="replace")
+    parsed = _parse_x_public_rss_feed(xml_text)
+    if not parsed:
+        raise RuntimeError("X public index feed returned no posts.")
+    parsed.sort(key=lambda item: item["created_at"] or "", reverse=True)
+    meta = {
+        "configured": bool((os.environ.get("X_BEARER_TOKEN") or "").strip()),
+        "status": "connected",
+        "transport": "x_public_index",
+        "postsSampled": len(parsed),
+        "topPosts": [
+            {
+                "text": item["text"][:220],
+                "createdAt": item["created_at"],
+                "url": item["url"],
+                "hashtags": item["hashtags"],
+            }
+            for item in parsed[:6]
+        ],
+        "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "refreshIntervalSeconds": X_CACHE_TTL_SECONDS,
+        "message": None,
+    }
+    result = ("X", parsed, meta)
+    X_CACHE["result"] = result
+    X_CACHE["expires_at"] = now_ts + X_CACHE_TTL_SECONDS
+    return result
+
+
 def _fetch_social_source(feed):
     source, url = feed
     request = Request(
@@ -693,9 +781,20 @@ def fetch_social_hashtag_trends():
         "refreshIntervalSeconds": YOUTUBE_CACHE_TTL_SECONDS,
         "message": "YouTube stream is temporarily unavailable.",
     }
-    max_workers = len(SOCIAL_FEEDS) + 1
+    x_meta = {
+        "configured": bool((os.environ.get("X_BEARER_TOKEN") or "").strip()),
+        "status": "unavailable",
+        "transport": "unavailable",
+        "postsSampled": 0,
+        "topPosts": [],
+        "updatedAt": now.isoformat(timespec="seconds"),
+        "refreshIntervalSeconds": X_CACHE_TTL_SECONDS,
+        "message": "X stream is temporarily unavailable.",
+    }
+    max_workers = len(SOCIAL_FEEDS) + 2
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(_fetch_social_source, feed) for feed in SOCIAL_FEEDS]
+        x_future = executor.submit(_fetch_x_public_index_feed, now.timestamp())
         yt_future = (
             executor.submit(_fetch_youtube_source, youtube_api_key, now.timestamp())
             if youtube_api_key
@@ -708,6 +807,13 @@ def fetch_social_hashtag_trends():
             except Exception as exc:
                 LOGGER.warning("Social feed %s failed: %s", source, exc)
                 failed_sources.append(source)
+        try:
+            x_source, x_posts, x_meta = x_future.result()
+            fetched_posts.append((x_source, x_posts))
+        except Exception as exc:
+            LOGGER.warning("Social feed X failed: %s", exc)
+            failed_sources.append("X")
+            x_meta = {**x_meta, "message": str(exc)}
         try:
             yt_source, yt_posts, youtube_meta = yt_future.result()
             fetched_posts.append((yt_source, yt_posts))
@@ -811,6 +917,7 @@ def fetch_social_hashtag_trends():
         "coverageStart": min(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
         "coverageEnd": max(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
         "hashtags": trends[:8],
+        "x": x_meta,
         "youtube": youtube_meta,
     }
     if not parsed_posts:

@@ -1194,6 +1194,49 @@ class YouTubeDataApiTests(unittest.TestCase):
         with patch.dict(os.environ, {"YOUTUBE_API_KEY": "", "YT_API_KEY": "ALIAS_TEST_KEY_999"}, clear=False):
             self.assertEqual(py_server.get_youtube_api_key(), "ALIAS_TEST_KEY_999")
 
+    def test_x_public_index_rss_parser_and_safe_urls(self):
+        import server as py_server
+
+        rss_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0"><channel>
+          <item>
+            <title>Parliament reviews 2027 fiscal budget #Zimbabwe #ZimBudget - X</title>
+            <link>https://news.google.com/rss/articles/CBMiTestArticle123</link>
+            <pubDate>Sun, 22 Nov 2026 13:45:04 GMT</pubDate>
+          </item>
+          <item>
+            <title>Untrusted link test #Harare - X</title>
+            <link>javascript:alert(1)</link>
+            <pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate>
+          </item>
+        </channel></rss>"""
+
+        class FakeRssResp:
+            def read(self):
+                return rss_xml.encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with (
+            patch.object(py_server, "X_CACHE", {"expires_at": 0, "result": None}),
+            patch.object(py_server, "urlopen", return_value=FakeRssResp()),
+        ):
+            source, posts, meta = py_server._fetch_x_public_index_feed(3000.0)
+
+        self.assertEqual(source, "X")
+        self.assertEqual(len(posts), 2)
+        self.assertEqual(meta["status"], "connected")
+        self.assertEqual(meta["transport"], "x_public_index")
+        self.assertEqual(meta["postsSampled"], 2)
+        self.assertNotIn(" - X", posts[0]["text"])
+        self.assertEqual(posts[0]["url"], "https://news.google.com/rss/articles/CBMiTestArticle123")
+        self.assertEqual(posts[1]["url"], "")
+        self.assertIn("#Zimbabwe", posts[0]["hashtags"])
+
 
 if __name__ == "__main__":
     unittest.main()
