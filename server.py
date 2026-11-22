@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import html as html_lib
 import json
 import logging
 import os
@@ -10,7 +11,7 @@ from html.parser import HTMLParser
 from io import BytesIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 from threading import Lock
 from datetime import datetime, timezone
@@ -31,7 +32,10 @@ ENV_PATH = os.path.join(BASE_DIR, ".env")
 GEMINI_MODELS = ("gemini-3.8-flash", "gemini-3.1-flash-lite")
 SOCIAL_CACHE = {"expires_at": 0, "payload": None}
 SOCIAL_CACHE_LOCK = Lock()
-HASHTAG_PATTERN = re.compile(r"(?<![\w])#[\w][\w-]*", re.UNICODE)
+YOUTUBE_CACHE = {"expires_at": 0, "result": None}
+YOUTUBE_CACHE_TTL_SECONDS = 900
+HASHTAG_PATTERN = re.compile(r"(?<![\w&])#(?:[A-Za-z][\w-]*|[0-9]+[A-Za-z][\w-]*)", re.UNICODE)
+YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
 
 
 def _is_placeholder_key(value):
@@ -65,6 +69,28 @@ def get_gemini_api_key():
         val = os.environ.get(env_name, "").strip()
         if not _is_placeholder_key(val):
             return val
+    return None
+
+
+def get_youtube_api_key():
+    for env_name in ("YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"):
+        val = os.environ.get(env_name, "").strip()
+        if not _is_placeholder_key(val):
+            return val
+    if os.path.isfile(ENV_PATH):
+        try:
+            with open(ENV_PATH, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#") or "=" not in stripped:
+                        continue
+                    k, v = stripped.split("=", 1)
+                    if k.strip() in ("YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"):
+                        val = v.strip().strip('"').strip("'")
+                        if not _is_placeholder_key(val):
+                            return val
+        except OSError:
+            pass
     return None
 
 
@@ -165,7 +191,161 @@ class _HTMLTextParser(HTMLParser):
 def _plain_text(html):
     parser = _HTMLTextParser()
     parser.feed(html or "")
-    return " ".join(parser.parts)
+    return re.sub(r"\s+", " ", html_lib.unescape(" ".join(parser.parts))).strip()
+
+
+def _sanitize_youtube_video_id(raw_id):
+    value = str(raw_id or "").strip()
+    return value if YOUTUBE_VIDEO_ID_PATTERN.match(value) else ""
+
+
+def _parse_non_negative_int(value):
+    try:
+        num = int(value)
+        return num if num >= 0 else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _redact_api_key(message):
+    return re.sub(r"key=[^&\s]+", "key=[REDACTED]", str(message or ""), flags=re.IGNORECASE)
+
+
+def _fetch_youtube_source(api_key, now_ts):
+    if YOUTUBE_CACHE["result"] is not None and YOUTUBE_CACHE["expires_at"] > now_ts:
+        return YOUTUBE_CACHE["result"]
+
+    search_qs = urlencode({
+        "part": "snippet",
+        "type": "video",
+        "order": "date",
+        "maxResults": "50",
+        "q": "Zimbabwe",
+        "key": api_key,
+    })
+    search_url = f"https://www.googleapis.com/youtube/v3/search?{search_qs}"
+    request = Request(
+        search_url,
+        headers={"Accept": "application/json", "User-Agent": "KUVHURA-Observatory/1.0"},
+    )
+    try:
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as err:
+        reason = ""
+        try:
+            err_body = json.loads(err.read().decode("utf-8"))
+            reason = str(
+                (err_body.get("error", {}).get("errors") or [{}])[0].get("reason")
+                or err_body.get("error", {}).get("status")
+                or ""
+            ).strip()
+        except Exception:
+            reason = ""
+        detail = f"{reason} (HTTP {err.code})" if reason else f"HTTP {err.code}"
+        raise RuntimeError(f"YouTube Data API v3 error: {detail}") from None
+    except Exception as exc:
+        raise RuntimeError(_redact_api_key(exc)) from None
+
+    search_items = payload.get("items") or []
+    video_ids = []
+    seen_ids = set()
+    for item in search_items:
+        vid = _sanitize_youtube_video_id((item.get("id") or {}).get("videoId"))
+        if vid and vid not in seen_ids:
+            seen_ids.add(vid)
+            video_ids.append(vid)
+    video_ids = video_ids[:50]
+
+    details_by_id = {}
+    if video_ids:
+        try:
+            details_qs = urlencode({
+                "part": "snippet,statistics",
+                "id": ",".join(video_ids),
+                "key": api_key,
+            })
+            details_req = Request(
+                f"https://www.googleapis.com/youtube/v3/videos?{details_qs}",
+                headers={"Accept": "application/json", "User-Agent": "KUVHURA-Observatory/1.0"},
+            )
+            with urlopen(details_req, timeout=10) as d_resp:
+                details_payload = json.loads(d_resp.read().decode("utf-8"))
+                for d_item in details_payload.get("items") or []:
+                    vid = _sanitize_youtube_video_id(d_item.get("id"))
+                    if vid:
+                        details_by_id[vid] = d_item
+        except Exception:
+            pass
+
+    posts = []
+    videos = []
+    channels = set()
+    total_views = 0
+    total_likes = 0
+    total_comments = 0
+    for item in search_items:
+        vid = _sanitize_youtube_video_id((item.get("id") or {}).get("videoId"))
+        detail = details_by_id.get(vid) if vid else None
+        snippet = (detail or {}).get("snippet") or item.get("snippet") or {}
+        stats = (detail or {}).get("statistics") or {}
+        title = re.sub(r"\s+", " ", html_lib.unescape(snippet.get("title") or "")).strip()
+        description = re.sub(r"\s+", " ", html_lib.unescape(snippet.get("description") or "")).strip()
+        channel = re.sub(r"\s+", " ", html_lib.unescape(snippet.get("channelTitle") or "")).strip()
+        published_at = snippet.get("publishedAt") or (item.get("snippet") or {}).get("publishedAt")
+        url = f"https://www.youtube.com/watch?v={vid}" if vid else ""
+        combined = f"{title} {description}".strip()
+        views = _parse_non_negative_int(stats.get("viewCount"))
+        likes = _parse_non_negative_int(stats.get("likeCount"))
+        comments = _parse_non_negative_int(stats.get("commentCount"))
+        total_views += views
+        total_likes += likes
+        total_comments += comments
+        if channel:
+            channels.add(channel)
+        posts.append({
+            "text": combined,
+            "created_at": published_at,
+            "url": url,
+        })
+        if vid and title:
+            videos.append({
+                "videoId": vid,
+                "title": title,
+                "channelTitle": channel or "YouTube Channel",
+                "publishedAt": published_at,
+                "url": url,
+                "viewCount": views,
+                "likeCount": likes,
+                "commentCount": comments,
+                "hashtags": list(dict.fromkeys(HASHTAG_PATTERN.findall(combined)))[:6],
+            })
+
+    videos.sort(
+        key=lambda v: (
+            v["viewCount"] + v["likeCount"] * 5 + v["commentCount"] * 10,
+            v["publishedAt"] or "",
+        ),
+        reverse=True,
+    )
+    meta = {
+        "configured": True,
+        "status": "connected",
+        "videosSampled": len(videos),
+        "enrichedWithStats": bool(details_by_id),
+        "uniqueChannels": len(channels),
+        "totalViews": total_views,
+        "totalLikes": total_likes,
+        "totalComments": total_comments,
+        "topVideos": videos[:8],
+        "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "refreshIntervalSeconds": YOUTUBE_CACHE_TTL_SECONDS,
+        "message": None,
+    }
+    result = ("YouTube", posts, meta)
+    YOUTUBE_CACHE["result"] = result
+    YOUTUBE_CACHE["expires_at"] = now_ts + YOUTUBE_CACHE_TTL_SECONDS
+    return result
 
 
 def _fetch_social_source(feed):
@@ -346,8 +526,29 @@ def fetch_social_hashtag_trends():
 
     fetched_posts = []
     failed_sources = []
-    with ThreadPoolExecutor(max_workers=len(SOCIAL_FEEDS)) as executor:
+    youtube_api_key = get_youtube_api_key()
+    youtube_meta = {
+        "configured": bool(youtube_api_key),
+        "status": "not_configured",
+        "videosSampled": 0,
+        "enrichedWithStats": False,
+        "uniqueChannels": 0,
+        "totalViews": 0,
+        "totalLikes": 0,
+        "totalComments": 0,
+        "topVideos": [],
+        "updatedAt": now.isoformat(timespec="seconds"),
+        "refreshIntervalSeconds": YOUTUBE_CACHE_TTL_SECONDS,
+        "message": "Set YOUTUBE_API_KEY with YouTube Data API v3 access to include recent videos.",
+    }
+    max_workers = len(SOCIAL_FEEDS) + (1 if youtube_api_key else 0)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(_fetch_social_source, feed) for feed in SOCIAL_FEEDS]
+        yt_future = (
+            executor.submit(_fetch_youtube_source, youtube_api_key, now.timestamp())
+            if youtube_api_key
+            else None
+        )
         for feed, future in zip(SOCIAL_FEEDS, futures):
             source = feed[0]
             try:
@@ -355,6 +556,20 @@ def fetch_social_hashtag_trends():
             except Exception as exc:
                 LOGGER.warning("Social feed %s failed: %s", source, exc)
                 failed_sources.append(source)
+        if yt_future is not None:
+            try:
+                yt_source, yt_posts, youtube_meta = yt_future.result()
+                fetched_posts.append((yt_source, yt_posts))
+            except Exception as exc:
+                safe_err = _redact_api_key(exc)
+                LOGGER.warning("Social feed YouTube failed: %s", safe_err)
+                failed_sources.append("YouTube")
+                youtube_meta = {
+                    **youtube_meta,
+                    "configured": True,
+                    "status": "unavailable",
+                    "message": safe_err,
+                }
 
     parsed_posts = []
     seen_posts = set()
@@ -431,9 +646,10 @@ def fetch_social_hashtag_trends():
         "coverageStart": min(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
         "coverageEnd": max(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
         "hashtags": trends[:8],
+        "youtube": youtube_meta,
     }
     if not parsed_posts:
-        result["message"] = "No matching public posts could be retrieved from Bluesky or Mastodon feeds."
+        result["message"] = "No matching public posts could be retrieved from Bluesky, Mastodon, or YouTube feeds."
 
     with SOCIAL_CACHE_LOCK:
         SOCIAL_CACHE["payload"] = result

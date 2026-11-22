@@ -1056,5 +1056,90 @@ class TimelineApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["timeline"][-1]["fsi"], 62.97)
 
 
+class YouTubeDataApiTests(unittest.TestCase):
+    def test_youtube_collector_decodes_entities_enriches_stats_and_redacts_errors(self):
+        import server as py_server
+
+        search_payload = {
+            "items": [
+                {
+                    "id": {"videoId": "dQw4w9WgXcQ"},
+                    "snippet": {
+                        "title": "Zimbabwe&#39;s Budget Debate #Zimbabwe #Harare",
+                        "description": "Parliament&#39;s fiscal review &amp; #ZimEconomy update",
+                        "channelTitle": "Harare News &amp; Policy",
+                        "publishedAt": "2026-11-22T10:00:00Z",
+                    },
+                }
+            ]
+        }
+        videos_payload = {
+            "items": [
+                {
+                    "id": "dQw4w9WgXcQ",
+                    "snippet": {
+                        "title": "Zimbabwe&#39;s Budget Debate #Zimbabwe #Harare",
+                        "description": "Full description about Zimbabwe&#39;s 2027 budget #Zimbabwe #ZimEconomy",
+                        "channelTitle": "Harare News &amp; Policy",
+                        "publishedAt": "2026-11-22T10:00:00Z",
+                    },
+                    "statistics": {
+                        "viewCount": "4250",
+                        "likeCount": "310",
+                        "commentCount": "48",
+                    },
+                }
+            ]
+        }
+
+        class FakeResp:
+            def __init__(self, body):
+                self._body = json.dumps(body).encode("utf-8")
+
+            def read(self):
+                return self._body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_urlopen(req, timeout=10):
+            url = req.full_url
+            if "/youtube/v3/search" in url:
+                return FakeResp(search_payload)
+            if "/youtube/v3/videos" in url:
+                return FakeResp(videos_payload)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with (
+            patch.object(py_server, "YOUTUBE_CACHE", {"expires_at": 0, "result": None}),
+            patch.object(py_server, "urlopen", side_effect=fake_urlopen),
+        ):
+            source, posts, meta = py_server._fetch_youtube_source("TEST_YT_SECRET_12345", 1000.0)
+
+        self.assertEqual(source, "YouTube")
+        self.assertEqual(len(posts), 1)
+        self.assertIn("Zimbabwe's Budget Debate", posts[0]["text"])
+        self.assertNotIn("&#39;", posts[0]["text"])
+        found_tags = py_server.HASHTAG_PATTERN.findall(posts[0]["text"])
+        self.assertIn("#Zimbabwe", found_tags)
+        self.assertIn("#ZimEconomy", found_tags)
+        self.assertNotIn("#39", found_tags)
+        self.assertEqual(meta["status"], "connected")
+        self.assertTrue(meta["enrichedWithStats"])
+        self.assertEqual(meta["videosSampled"], 1)
+        self.assertEqual(meta["totalViews"], 4250)
+        self.assertEqual(meta["totalLikes"], 310)
+        self.assertEqual(meta["totalComments"], 48)
+        self.assertEqual(meta["topVideos"][0]["channelTitle"], "Harare News & Policy")
+        self.assertEqual(meta["topVideos"][0]["url"], "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+        redacted = py_server._redact_api_key("GET https://www.googleapis.com/youtube/v3/search?q=Zimbabwe&key=SECRET_ABC_999 failed")
+        self.assertNotIn("SECRET_ABC_999", redacted)
+        self.assertIn("key=[REDACTED]", redacted)
+
+
 if __name__ == "__main__":
     unittest.main()

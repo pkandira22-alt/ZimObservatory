@@ -116,6 +116,32 @@ function getGeminiApiKey() {
   return null;
 }
 
+function getYouTubeApiKey() {
+  const procKey = (process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_DATA_API_KEY || '').trim();
+  if (procKey && !isPlaceholderKey(procKey)) {
+    return procKey;
+  }
+  const envFile = loadEnvFile();
+  const fileKey = (envFile.YOUTUBE_API_KEY || envFile.YOUTUBE_DATA_API_KEY || '').trim();
+  if (fileKey && !isPlaceholderKey(fileKey)) {
+    return fileKey;
+  }
+  return null;
+}
+
+function getXBearerToken() {
+  const procKey = (process.env.X_BEARER_TOKEN || '').trim();
+  if (procKey && !isPlaceholderKey(procKey)) {
+    return procKey;
+  }
+  const envFile = loadEnvFile();
+  const fileKey = (envFile.X_BEARER_TOKEN || '').trim();
+  if (fileKey && !isPlaceholderKey(fileKey)) {
+    return fileKey;
+  }
+  return null;
+}
+
 const GEMINI_MODEL = 'gemini-3.8-flash';
 const MAX_GEMINI_CHAT_REQUESTS = 10;
 const GEMINI_CHAT_WINDOW_MS = 10 * 60 * 1000;
@@ -451,15 +477,13 @@ const SOCIAL_FEEDS = [
     fallbackUrls: [
       "https://www.reddit.com/search.json?q=Zimbabwe&sort=new&limit=100&type=link"
     ]
-  },
-  ...(process.env.YOUTUBE_API_KEY ? [{
-    name: "YouTube",
-    platform: "YouTube",
-    type: "youtube"
-  }] : [])
+  }
 ];
-const HASHTAG_REGEX = /(?<![\w])#[\w][\w-]*/gi;
+const HASHTAG_REGEX = /(?<![\w&])#(?:[A-Za-z][\w-]*|[0-9]+[A-Za-z][\w-]*)/gi;
+const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{6,20}$/;
 const SOCIAL_CACHE_MS = 60 * 1000;
+const YOUTUBE_MIN_FORCE_REFRESH_MS = 30 * 1000;
+let lastYouTubeForceRefreshAt = 0;
 const SOCIAL_SOURCE_CACHE_MS = {
   default: 60 * 1000,
   reddit: 15 * 60 * 1000,
@@ -502,7 +526,7 @@ function parseRedditAtomFeed(xmlText) {
   return posts;
 }
 
-function formatSocialFeedHttpError(feed, statusCode) {
+function formatSocialFeedHttpError(feed, statusCode, rawBody = '') {
   if (feed.type === 'x' && statusCode === 402) {
     return 'X API recent search requires paid tier or credits (HTTP 402).';
   }
@@ -512,17 +536,68 @@ function formatSocialFeedHttpError(feed, statusCode) {
   if (feed.type === 'reddit' && (statusCode === 403 || statusCode === 429)) {
     return `Reddit blocked or rate-limited automated fetch from this host (HTTP ${statusCode}).`;
   }
+  if (feed.type === 'youtube') {
+    let reason = '';
+    try {
+      const parsed = rawBody ? JSON.parse(rawBody) : null;
+      reason = String(parsed?.error?.errors?.[0]?.reason || parsed?.error?.status || '').trim();
+    } catch {
+      reason = '';
+    }
+    if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded' || statusCode === 429) {
+      return `YouTube Data API v3 daily quota exceeded (HTTP ${statusCode}).`;
+    }
+    if (reason === 'keyInvalid' || statusCode === 400) {
+      return `YouTube Data API v3 rejected YOUTUBE_API_KEY (${reason || `HTTP ${statusCode}`}).`;
+    }
+    if (reason === 'accessNotConfigured' || reason === 'forbidden' || reason === 'ipRefererBlocked' || statusCode === 403) {
+      return `YouTube Data API v3 access denied (${reason || `HTTP ${statusCode}`}); verify API enablement and key restrictions.`;
+    }
+    return `YouTube Data API v3 error (HTTP ${statusCode}).`;
+  }
   return `HTTP ${statusCode}`;
 }
 
-async function fetchSocialSource(feed) {
+function sanitizeYouTubeVideoId(rawId) {
+  const value = String(rawId || '').trim();
+  return YOUTUBE_VIDEO_ID_REGEX.test(value) ? value : '';
+}
+
+function parseNonNegativeInt(value) {
+  const num = Number(value);
+  return Number.isFinite(num) && num >= 0 ? Math.trunc(num) : 0;
+}
+
+const socialSourceInFlight = new Map();
+let socialTrendsInFlightPromise = null;
+
+async function fetchSocialSource(feed, { forceRefresh = false } = {}) {
   const cacheTtl = SOCIAL_SOURCE_CACHE_MS[feed.type] || SOCIAL_SOURCE_CACHE_MS.default;
   const cached = socialSourceCache.get(feed.name);
-  if (cached && cached.expiresAt > Date.now()) return cached.result;
+  const allowBypass = forceRefresh && (
+    feed.type !== 'youtube' || (Date.now() - lastYouTubeForceRefreshAt >= YOUTUBE_MIN_FORCE_REFRESH_MS)
+  );
+  if (!allowBypass && cached && cached.expiresAt > Date.now()) return cached.result;
+  if (socialSourceInFlight.has(feed.name)) {
+    return socialSourceInFlight.get(feed.name);
+  }
+  if (allowBypass && feed.type === 'youtube') {
+    lastYouTubeForceRefreshAt = Date.now();
+  }
 
+  const runPromise = fetchSocialSourceInternal(feed, { cacheTtl, cached }).finally(() => {
+    socialSourceInFlight.delete(feed.name);
+  });
+  socialSourceInFlight.set(feed.name, runPromise);
+  return runPromise;
+}
+
+async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
   try {
+    const youtubeKey = feed.type === "youtube" ? getYouTubeApiKey() : null;
+    const xToken = feed.type === "x" ? getXBearerToken() : null;
     const primaryUrl = feed.type === "x"
       ? `https://api.x.com/2/tweets/search/recent?${new URLSearchParams({
           query: "Zimbabwe has:hashtags -is:retweet",
@@ -536,7 +611,7 @@ async function fetchSocialSource(feed) {
             order: "date",
             maxResults: "50",
             q: "Zimbabwe",
-            key: process.env.YOUTUBE_API_KEY
+            key: youtubeKey || ''
           })}`
       : feed.url;
     const candidateUrls = [primaryUrl, ...(Array.isArray(feed.fallbackUrls) ? feed.fallbackUrls : [])];
@@ -548,7 +623,7 @@ async function fetchSocialSource(feed) {
         ? 'web:kuvhura.observatory:v1.0 (by /u/kuvhura_observatory)'
         : 'KUVHURA-Observatory/1.0'
     };
-    if (feed.type === "x") headers.Authorization = `Bearer ${process.env.X_BEARER_TOKEN}`;
+    if (feed.type === "x" && xToken) headers.Authorization = `Bearer ${xToken}`;
 
     let lastStatus = null;
     let lastErrorMessage = null;
@@ -560,12 +635,12 @@ async function fetchSocialSource(feed) {
         signal: controller.signal,
         headers
       });
+      const rawText = await res.text();
       if (!res.ok) {
         lastStatus = res.status;
-        lastErrorMessage = formatSocialFeedHttpError(feed, res.status);
+        lastErrorMessage = formatSocialFeedHttpError(feed, res.status, rawText);
         continue;
       }
-      const rawText = await res.text();
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('json') || rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
         payloadData = JSON.parse(rawText);
@@ -582,6 +657,8 @@ async function fetchSocialSource(feed) {
     }
 
     const posts = [];
+    let youtubeMeta = null;
+
     if (feed.type === 'bluesky') {
       const items = Array.isArray(payloadData?.posts) ? payloadData.posts : [];
       for (const item of items) {
@@ -595,7 +672,7 @@ async function fetchSocialSource(feed) {
     } else if (feed.type === 'mastodon') {
       if (Array.isArray(payloadData)) {
         for (const item of payloadData) {
-          const plainText = (item.content || '').replace(/<[^>]+>/g, ' ');
+          const plainText = decodeXmlEntities((item.content || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
           posts.push({
             text: plainText,
             createdAt: item.created_at || '',
@@ -612,7 +689,7 @@ async function fetchSocialSource(feed) {
           const item = child.data;
           if (!item) continue;
           posts.push({
-            text: `${item.title || ''} ${item.selftext || ''}`,
+            text: decodeXmlEntities(`${item.title || ''} ${item.selftext || ''}`).replace(/\s+/g, ' ').trim(),
             createdAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : '',
             url: item.permalink ? `https://www.reddit.com${item.permalink}` : '',
             platform: feed.platform
@@ -629,29 +706,128 @@ async function fetchSocialSource(feed) {
         });
       }
     } else if (feed.type === 'youtube') {
-      for (const item of payloadData?.items || []) {
-        const snippet = item.snippet || {};
-        posts.push({
-          text: `${snippet.title || ''} ${snippet.description || ''}`,
-          createdAt: snippet.publishedAt || '',
-          url: item.id?.videoId ? `https://www.youtube.com/watch?v=${encodeURIComponent(item.id.videoId)}` : '',
-          platform: feed.platform
-        });
+      const searchItems = Array.isArray(payloadData?.items) ? payloadData.items : [];
+      const videoIds = [...new Set(searchItems.map(item => sanitizeYouTubeVideoId(item?.id?.videoId)).filter(Boolean))].slice(0, 50);
+      const detailsById = new Map();
+
+      // Single 1-quota-unit batch request for full descriptions, tags, and real engagement counts
+      if (videoIds.length > 0 && youtubeKey) {
+        try {
+          const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?${new URLSearchParams({
+            part: "snippet,statistics",
+            id: videoIds.join(','),
+            key: youtubeKey
+          })}`;
+          const detailsRes = await fetch(detailsUrl, {
+            signal: controller.signal,
+            headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' }
+          });
+          if (detailsRes.ok) {
+            const detailsPayload = await detailsRes.json();
+            for (const detailItem of detailsPayload?.items || []) {
+              const id = sanitizeYouTubeVideoId(detailItem?.id);
+              if (id) detailsById.set(id, detailItem);
+            }
+          }
+        } catch {
+          // Graceful fallback to search.list snippets without leaking key or failing feed
+        }
       }
+
+      const videos = [];
+      const uniqueChannels = new Set();
+      let totalViews = 0;
+      let totalLikes = 0;
+      let totalComments = 0;
+
+      for (const item of searchItems) {
+        const videoId = sanitizeYouTubeVideoId(item?.id?.videoId);
+        const detail = videoId ? detailsById.get(videoId) : null;
+        const snippet = detail?.snippet || item?.snippet || {};
+        const stats = detail?.statistics || {};
+        const title = decodeXmlEntities(snippet.title || '').replace(/\s+/g, ' ').trim();
+        const description = decodeXmlEntities(snippet.description || '').replace(/\s+/g, ' ').trim();
+        const channelTitle = decodeXmlEntities(snippet.channelTitle || '').replace(/\s+/g, ' ').trim();
+        const publishedAt = snippet.publishedAt || item?.snippet?.publishedAt || '';
+        const url = videoId ? `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}` : '';
+        const tags = Array.isArray(snippet.tags)
+          ? snippet.tags.map(t => decodeXmlEntities(t).trim()).filter(Boolean)
+          : [];
+        const combinedText = `${title} ${description}`.trim();
+        const extractedTags = [...new Set(combinedText.match(HASHTAG_REGEX) || [])];
+
+        const viewCount = parseNonNegativeInt(stats.viewCount);
+        const likeCount = parseNonNegativeInt(stats.likeCount);
+        const commentCount = parseNonNegativeInt(stats.commentCount);
+        totalViews += viewCount;
+        totalLikes += likeCount;
+        totalComments += commentCount;
+        if (channelTitle) uniqueChannels.add(channelTitle);
+
+        posts.push({
+          text: combinedText,
+          createdAt: publishedAt,
+          url,
+          platform: feed.platform,
+          title,
+          channelTitle,
+          viewCount,
+          likeCount,
+          commentCount
+        });
+
+        if (videoId && title) {
+          videos.push({
+            videoId,
+            title,
+            channelTitle: channelTitle || 'YouTube Channel',
+            publishedAt,
+            url,
+            viewCount,
+            likeCount,
+            commentCount,
+            hashtags: extractedTags.slice(0, 6),
+            tagsCount: tags.length
+          });
+        }
+      }
+
+      const topVideos = [...videos]
+        .sort((a, b) => (b.viewCount + b.likeCount * 5 + b.commentCount * 10) - (a.viewCount + a.likeCount * 5 + a.commentCount * 10)
+          || String(b.publishedAt).localeCompare(String(a.publishedAt)))
+        .slice(0, 8);
+
+      youtubeMeta = {
+        configured: true,
+        status: 'connected',
+        videosSampled: videos.length,
+        enrichedWithStats: detailsById.size > 0,
+        uniqueChannels: uniqueChannels.size,
+        totalViews,
+        totalLikes,
+        totalComments,
+        topVideos,
+        updatedAt: new Date().toISOString(),
+        refreshIntervalSeconds: cacheTtl / 1000,
+        message: null
+      };
     }
+
     const result = {
       name: feed.name,
       platform: feed.platform,
       posts,
+      ...(youtubeMeta ? { youtubeMeta } : {}),
       updatedAt: new Date().toISOString(),
       refreshIntervalSeconds: cacheTtl / 1000
     };
     socialSourceCache.set(feed.name, { expiresAt: Date.now() + cacheTtl, result });
     return result;
   } catch (err) {
-    const isExpectedAuthOrRateLimit = [401, 402, 403, 429].includes(err.httpStatus);
+    const safeErrorMessage = String(err.message || 'Upstream feed unavailable').replace(/key=[^&\s]+/gi, 'key=[REDACTED]');
+    const isExpectedAuthOrRateLimit = [400, 401, 402, 403, 429].includes(err.httpStatus);
     if (!isExpectedAuthOrRateLimit) {
-      console.warn(`Feed ${feed.name} failed:`, err.message);
+      console.warn(`Feed ${feed.name} failed:`, safeErrorMessage);
     }
     const failureTtl = isExpectedAuthOrRateLimit ? Math.max(cacheTtl, 30 * 60 * 1000) : cacheTtl;
     if (cached?.result && !cached.result.failed && Array.isArray(cached.result.posts) && cached.result.posts.length > 0) {
@@ -667,7 +843,23 @@ async function fetchSocialSource(feed) {
       platform: feed.platform,
       posts: [],
       failed: true,
-      error: err.message,
+      error: safeErrorMessage,
+      ...(feed.type === 'youtube' ? {
+        youtubeMeta: {
+          configured: true,
+          status: 'unavailable',
+          videosSampled: 0,
+          enrichedWithStats: false,
+          uniqueChannels: 0,
+          totalViews: 0,
+          totalLikes: 0,
+          totalComments: 0,
+          topVideos: [],
+          updatedAt: new Date().toISOString(),
+          refreshIntervalSeconds: failureTtl / 1000,
+          message: safeErrorMessage
+        }
+      } : {}),
       updatedAt: new Date().toISOString(),
       refreshIntervalSeconds: failureTtl / 1000
     };
@@ -678,18 +870,38 @@ async function fetchSocialSource(feed) {
   }
 }
 
-async function getSocialHashtagTrends() {
+async function getSocialHashtagTrends({ forceRefresh = false } = {}) {
   const now = Date.now();
-  if (socialCache.payload && socialCache.expiresAt > now) {
+  if (!forceRefresh && socialCache.payload && socialCache.expiresAt > now) {
     return socialCache.payload;
   }
+  if (!forceRefresh && socialTrendsInFlightPromise) {
+    return socialTrendsInFlightPromise;
+  }
+  const runPromise = getSocialHashtagTrendsInternal({ forceRefresh }).finally(() => {
+    if (socialTrendsInFlightPromise === runPromise) {
+      socialTrendsInFlightPromise = null;
+    }
+  });
+  if (!forceRefresh) {
+    socialTrendsInFlightPromise = runPromise;
+  }
+  return runPromise;
+}
 
+async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
+  const now = Date.now();
+  const youtubeApiKey = getYouTubeApiKey();
+  const xBearerToken = getXBearerToken();
   const feeds = [...SOCIAL_FEEDS];
-  if (process.env.X_BEARER_TOKEN) {
+  if (youtubeApiKey) {
+    feeds.push({ name: "YouTube", platform: "YouTube", type: "youtube" });
+  }
+  if (xBearerToken) {
     feeds.push({ name: "X", platform: "X", type: "x" });
   }
 
-  const results = await Promise.all(feeds.map(fetchSocialSource));
+  const results = await Promise.all(feeds.map(feed => fetchSocialSource(feed, { forceRefresh })));
   const seen = new Set();
   const posts = [];
   for (const feed of results) {
@@ -730,7 +942,7 @@ async function getSocialHashtagTrends() {
     refreshIntervalSeconds: result.refreshIntervalSeconds,
     ...(result.failed ? { message: result.error } : {})
   }));
-  if (!process.env.X_BEARER_TOKEN) {
+  if (!xBearerToken) {
     sourceStatuses.push({
       name: "X",
       platform: "X",
@@ -739,7 +951,7 @@ async function getSocialHashtagTrends() {
       message: "Set X_BEARER_TOKEN with X API recent-search access to include X posts."
     });
   }
-  if (!process.env.YOUTUBE_API_KEY) {
+  if (!youtubeApiKey) {
     sourceStatuses.push({
       name: "YouTube",
       platform: "YouTube",
@@ -748,6 +960,24 @@ async function getSocialHashtagTrends() {
       message: "Set YOUTUBE_API_KEY with YouTube Data API v3 access to include recent videos."
     });
   }
+
+  const youtubeResult = results.find(result => result.platform === 'YouTube');
+  const youtubeSummary = youtubeResult?.youtubeMeta || {
+    configured: Boolean(youtubeApiKey),
+    status: youtubeApiKey ? 'unavailable' : 'not_configured',
+    videosSampled: 0,
+    enrichedWithStats: false,
+    uniqueChannels: 0,
+    totalViews: 0,
+    totalLikes: 0,
+    totalComments: 0,
+    topVideos: [],
+    updatedAt: new Date().toISOString(),
+    refreshIntervalSeconds: SOCIAL_SOURCE_CACHE_MS.youtube / 1000,
+    message: youtubeApiKey
+      ? (youtubeResult?.error || 'YouTube Data API v3 feed is temporarily unavailable.')
+      : 'Set YOUTUBE_API_KEY with YouTube Data API v3 access to include recent videos.'
+  };
 
   const payload = {
     available: sampledPlatforms.length > 0,
@@ -759,11 +989,13 @@ async function getSocialHashtagTrends() {
     sampledPlatforms,
     sources: sourceStatuses,
     hashtags,
+    youtube: youtubeSummary,
     message: sampledPlatforms.length
       ? hashtags.length ? null : "Connected sources returned no hashtags in the sampled posts."
       : "No public social feeds are currently reachable."
   };
   socialCache = { expiresAt: now + SOCIAL_CACHE_MS, payload };
+  latestSocialTelemetry = payload;
   return payload;
 }
 
@@ -819,6 +1051,7 @@ let timelineBaselineDate = null;
 let timelineBaseline = null;
 let latestDualEngineInputs = null;
 let latestFsiInputs = null;
+let latestSocialTelemetry = null;
 
 const MARKOV_TRANSITION_MATRIX = [
   [0.75, 0.20, 0.05],
@@ -3658,6 +3891,18 @@ function getDualEngineTimelineResponse() {
   const treasuryStatus = (latestTreasuryStatus && latestTreasuryStatus.status === 'available' && Number.isFinite(latestTreasuryStatus.score))
     ? { ...latestTreasuryStatus }
     : (readVerifiedTreasuryCache() || (latestTreasuryStatus ? { ...latestTreasuryStatus } : { score: null, status: 'awaiting_check', source: 'unavailable', accessibleSources: 0, totalSources: TREASURY_PORTAL_CATALOG.length, sources: [], tracked_topics: [] }));
+  const socialStatus = latestSocialTelemetry
+    ? {
+        available: Boolean(latestSocialTelemetry.available),
+        updatedAt: latestSocialTelemetry.updatedAt,
+        scannedPosts: latestSocialTelemetry.scannedPosts,
+        sampledPlatforms: latestSocialTelemetry.sampledPlatforms || [],
+        sources: latestSocialTelemetry.sources || [],
+        hashtags: (latestSocialTelemetry.hashtags || []).slice(0, 12),
+        youtube: latestSocialTelemetry.youtube || null
+      }
+    : null;
+  const ytMeta = socialStatus?.youtube;
   return {
     timeline: TELEMETRY_TIMELINE.map(entry => ({ ...entry })),
     engines: {
@@ -3671,10 +3916,14 @@ function getDualEngineTimelineResponse() {
         : hansardStatus.message || 'Awaiting Parliament portal access',
       treasury_status: treasuryStatus.status === 'available'
         ? `Active (${treasuryStatus.accessibleSources || 0}/${treasuryStatus.totalSources || TREASURY_PORTAL_CATALOG.length} zimtreasury.co.zw portals · score ${treasuryStatus.score})`
-        : 'Awaiting Ministry of Finance portal sync'
+        : 'Awaiting Ministry of Finance portal sync',
+      youtube_status: ytMeta?.status === 'connected'
+        ? `Active (${ytMeta.videosSampled} live Zimbabwe videos · ${ytMeta.totalViews.toLocaleString()} views)`
+        : (ytMeta?.message || 'Awaiting YouTube Data API v3 sync')
     },
     inputStatus: latestDualEngineInputs ? 'updated' : 'awaiting_social_sample',
     latestInputs: latestDualEngineInputs ? { ...latestDualEngineInputs } : null,
+    socialStatus,
     fsiStatus: latestFsiInputs
       ? { ...latestFsiInputs }
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
@@ -3769,7 +4018,8 @@ app.get('/api/risk', (req, res) => {
 
 app.get('/api/social/hashtags', async (req, res) => {
   try {
-    const data = await getSocialHashtagTrends();
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    const data = await getSocialHashtagTrends({ forceRefresh });
     res.json(data);
   } catch (err) {
     res.status(500).json({ available: false, error: err.message });
@@ -3829,6 +4079,8 @@ async function refreshDualEngineTimelineDataInternal() {
       : null;
     const updatedAt = socialPayload.updatedAt || new Date().toISOString();
 
+    const sampledPlatforms = Array.isArray(socialPayload.sampledPlatforms) ? socialPayload.sampledPlatforms : [];
+    const platformSuffix = sampledPlatforms.length ? ` (${sampledPlatforms.join(', ')})` : '';
     const entry = {
       date: today,
       phi: currentPhi,
@@ -3836,7 +4088,7 @@ async function refreshDualEngineTimelineDataInternal() {
       state: stateForPhi(currentPhi),
       social_volume: socialVolume,
       engagement_score_proxy: engagementProxy,
-      telemetry_source: 'Node social telemetry',
+      telemetry_source: `Node social telemetry${platformSuffix}`,
       updated_at: updatedAt
     };
     if (hansardScore !== null) {
@@ -3881,6 +4133,8 @@ async function refreshDualEngineTimelineDataInternal() {
     latestDualEngineInputs = {
       social_volume: socialVolume,
       engagement_score_proxy: engagementProxy,
+      sampled_platforms: sampledPlatforms,
+      youtube_videos: socialPayload.youtube?.videosSampled || 0,
       telemetry_source: entry.telemetry_source,
       updated_at: updatedAt
     };
