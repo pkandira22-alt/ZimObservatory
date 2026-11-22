@@ -669,7 +669,7 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
 
   videos.sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt))
     || (b.viewCount - a.viewCount));
-  const recentWindow = videos.slice(0, 24);
+  const recentWindow = videos.slice(0, 40);
   const topVideos = [...recentWindow]
     .sort((a, b) => {
       const dateA = String(a.publishedAt).slice(0, 10);
@@ -677,7 +677,7 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
       if (dateA !== dateB) return dateB.localeCompare(dateA);
       return (b.viewCount + b.likeCount * 5) - (a.viewCount + a.likeCount * 5);
     })
-    .slice(0, 8);
+    .slice(0, 30);
 
   return {
     posts,
@@ -761,7 +761,7 @@ async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
     const parsed = parseXPublicRssFeed(xml);
     if (parsed.length === 0) return null;
     parsed.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    const topPosts = parsed.slice(0, 6).map(item => ({
+    const topPosts = parsed.slice(0, 30).map(item => ({
       text: item.text.slice(0, 220),
       createdAt: item.createdAt,
       url: item.url,
@@ -1015,7 +1015,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
           platform: feed.platform,
           hashtags
         });
-        if (text && xTopPosts.length < 6) {
+        if (text && xTopPosts.length < 30) {
           xTopPosts.push({ text: text.slice(0, 220), createdAt, url, hashtags });
         }
       }
@@ -1119,7 +1119,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       const topVideos = [...videos]
         .sort((a, b) => (b.viewCount + b.likeCount * 5 + b.commentCount * 10) - (a.viewCount + a.likeCount * 5 + a.commentCount * 10)
           || String(b.publishedAt).localeCompare(String(a.publishedAt)))
-        .slice(0, 8);
+        .slice(0, 30);
 
       youtubeMeta = {
         configured: true,
@@ -1308,7 +1308,7 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
 
   const hashtags = [...tagCounts.values()]
     .sort((a, b) => b.mentions - a.mentions || a.tag.localeCompare(b.tag))
-    .slice(0, 20);
+    .slice(0, 30);
   const successfulSources = results.filter(result => !result.failed);
   const sampledPlatforms = [...new Set(successfulSources.map(result => result.platform))];
   const sourceStatuses = results.map(result => ({
@@ -4274,7 +4274,7 @@ function getDualEngineTimelineResponse() {
         scannedPosts: latestSocialTelemetry.scannedPosts,
         sampledPlatforms: latestSocialTelemetry.sampledPlatforms || [],
         sources: latestSocialTelemetry.sources || [],
-        hashtags: (latestSocialTelemetry.hashtags || []).slice(0, 12),
+        hashtags: (latestSocialTelemetry.hashtags || []).slice(0, 30),
         x: latestSocialTelemetry.x || null,
         youtube: latestSocialTelemetry.youtube || null
       }

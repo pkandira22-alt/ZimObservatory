@@ -360,7 +360,7 @@ def _fetch_youtube_source(api_key, now_ts):
         "totalViews": total_views,
         "totalLikes": total_likes,
         "totalComments": total_comments,
-        "topVideos": videos[:8],
+        "topVideos": videos[:30],
         "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "refreshIntervalSeconds": YOUTUBE_CACHE_TTL_SECONDS,
         "message": None,
@@ -473,10 +473,10 @@ def _fetch_youtube_public_atom_feeds(now_ts, configured=False):
 
     videos.sort(key=lambda v: (v["publishedAt"] or "", v["viewCount"]), reverse=True)
     top_videos = sorted(
-        videos[:24],
+        videos[:40],
         key=lambda v: (str(v["publishedAt"] or "")[:10], v["viewCount"] + v["likeCount"] * 5),
         reverse=True,
-    )[:8]
+    )[:30]
     meta = {
         "configured": configured,
         "status": "connected",
@@ -573,7 +573,7 @@ def _fetch_x_public_index_feed(now_ts):
                 "url": item["url"],
                 "hashtags": item["hashtags"],
             }
-            for item in parsed[:6]
+            for item in parsed[:30]
         ],
         "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "refreshIntervalSeconds": X_CACHE_TTL_SECONDS,
@@ -916,7 +916,7 @@ def fetch_social_hashtag_trends():
         "earlierSamplePosts": len(earlier_sample),
         "coverageStart": min(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
         "coverageEnd": max(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
-        "hashtags": trends[:8],
+        "hashtags": trends[:30],
         "x": x_meta,
         "youtube": youtube_meta,
     }
