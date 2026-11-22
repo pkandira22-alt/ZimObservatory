@@ -9,6 +9,9 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { isCloudSqlConfigured } from './src/db/index.ts';
+import { getRecentDailyTelemetrySnapshots, upsertDailyTelemetrySnapshot } from './src/db/telemetry.ts';
+import { requireAuth } from './src/middleware/auth.ts';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -460,16 +463,23 @@ let socialCache = {
 };
 const socialSourceCache = new Map();
 
+const BLUESKY_MODEL_QUERIES = [
+  { label: 'Core', query: 'Zimbabwe' },
+  { label: 'Governance', query: 'Zimbabwe parliament OR ZANU OR Mnangagwa OR constitution OR opposition OR SADC' },
+  { label: 'Economy', query: 'Zimbabwe economy OR inflation OR ZiG OR RBZ OR budget OR Treasury OR IMF OR mining' },
+  { label: 'Civic', query: 'Zimbabwe corruption OR protest OR strike OR rights OR ZESA OR drought OR healthcare' }
+];
+
 const SOCIAL_FEEDS = [
-  {
-    name: "Bluesky",
+  ...BLUESKY_MODEL_QUERIES.map(({ label, query }) => ({
+    name: `Bluesky (${label})`,
     platform: "Bluesky",
     type: "bluesky",
-    url: "https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=Zimbabwe&sort=latest&limit=100",
+    url: `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?${new URLSearchParams({ q: query, sort: 'latest', limit: '100' })}`,
     fallbackUrls: [
-      "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=Zimbabwe&sort=latest&limit=100"
+      `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?${new URLSearchParams({ q: query, sort: 'latest', limit: '100' })}`
     ]
-  },
+  })),
   ...[
     "mastodon.social",
     "mastodon.online",
@@ -501,7 +511,12 @@ const YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS = [
   { channelId: 'UCGXpCeZNe7kzeHqMlg96Ebg', label: 'BUSTOP TV' },
   { channelId: 'UC8z43AxZwpXkEfNqJopiCew', label: 'SlyMediaTv' }
 ];
-const X_PUBLIC_INDEX_RSS_URL = 'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en';
+const X_PUBLIC_INDEX_RSS_URLS = [
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(politics+OR+parliament+OR+ZANU+OR+Mnangagwa+OR+Chiwenga+OR+Chamisa+OR+constitution+OR+CAB3+OR+2030+OR+judiciary+OR+SADC+OR+election+OR+opposition)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(economy+OR+inflation+OR+ZiG+OR+ZWG+OR+RBZ+OR+Treasury+OR+budget+OR+Mthuli+OR+ZIMRA+OR+tax+OR+debt+OR+IMF+OR+forex+OR+remittances)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(corruption+OR+ZACC+OR+Auditor-General+OR+tender+OR+procurement+OR+Mutapa+OR+ZINARA+OR+ZESA+OR+Tagwirei+OR+Chivayo+OR+mining+OR+lithium+OR+gold+OR+cartel)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+drought+OR+healthcare+OR+Starlink)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en'
+];
 const X_PUBLIC_INDEX_CACHE_MS = 15 * 60 * 1000;
 const SOCIAL_CACHE_MS = 60 * 1000;
 const YOUTUBE_MIN_FORCE_REFRESH_MS = 5 * 60 * 1000;
@@ -513,6 +528,53 @@ const SOCIAL_SOURCE_CACHE_MS = {
   x: 15 * 60 * 1000,
   youtube: 30 * 60 * 1000
 };
+
+const YOUTUBE_MODEL_QUERIES = [
+  'Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR judiciary OR military OR SADC OR election OR opposition OR war veterans) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy',
+  'Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR IMF OR forex OR exchange rate OR diaspora OR remittances OR wages) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy',
+  'Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR mining OR lithium OR gold OR diamonds OR land OR cartel) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy -excavator -machinery',
+  'Zimbabwe (protest OR strike OR resistance OR human rights OR PVO Bill OR civil society OR ZCTU OR teachers OR nurses OR doctors OR water crisis OR load shedding OR power cuts OR demolitions OR drought OR healthcare OR Starlink) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy'
+];
+
+const X_MODEL_QUERIES = [
+  'Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR judiciary OR SADC OR election OR opposition) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR IMF OR forex OR remittances OR wages) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR mining OR lithium OR gold OR cartel) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (protest OR strike OR resistance OR "human rights" OR PVO OR ZCTU OR teachers OR nurses OR doctors OR "water crisis" OR "load shedding" OR demolitions OR drought OR healthcare OR Starlink) -cricket -rugby -football -is:retweet'
+];
+
+const SOCIAL_NOISE_EXCLUDE_REGEX = /\b(cricket|rugby|football|soccer|chevrons|sables|warriors\s+fc|dynamos|highlanders|caps\s+united|premier\s+soccer|castle\s+lager|world\s+cup|nations\s+cup|one\s+day\s+match|t20|odi|test\s+match|wickets?|innings|overs|balls\s+left|runs\s+off|century\s+for|batting|bowling|match\s+highlights|extended\s+highlights|live\s+fan\s+chat|audio\s+commentar|milton\s+shumba|sikandar\s+raza|brian\s+bennett|blessing\s+muzarabani|sean\s+williams|zimdancehall|sungura|amapiano|official\s+music\s+video|lyric\s+video|gospel\s+song|prophecy|prophet\s+says|sermon|pastor\s+predicts|comedy\s+skit|standup\s+comedy|cooking\s+vlog|travel\s+vlog|backpacking|kino\s+yves|how\s+to\s+buy\s+crypto|buy\s+crypto\s+in\s+zimbabwe|buy\s+usdt|recipe|safari\s+tour|victoria\s+falls\s+hotel|wildlife\s+photography|road\s+traffic\s+accident|fatal\s+road\s+accident|accident\s+update|accident\s+scene|fatal\s+crash|wellness\s+and\s+cancer\s+campaign|prize-winning\s+story|earthmoving\s+equipment|construction\s+machinery|mining\s+equipment|mining\s+machinery|excavators?\s+for\s+sale|bulldozer|heavy\s+machinery\s+supplier)\b/i;
+
+const MODEL_RELEVANCE_REGEX = /\b(zanu[\s-]?pf|zanupf|zanu|mnangagwa|chiwenga|chamisa|ccc|parliament|parlzim|hansard|constitution|constitutional|constitutionalism|cab3|2030|term\s+extension|amendment|cabinet|minister|ministry|government|regime|opposition|election|electoral|by-election|delimitation|voter\s+roll|zec|sadc|sanctions|zidera|brics|foreign\s+policy|diplomacy|sovereignty|judiciary|high\s+court|supreme\s+court|constitutional\s+court|magistrate|court\s+ruling|court\s+challenge|impeachment|recall|arrest|arrested|detention|bail|zrp|police|military|zdf|army|cio|war\s+veterans?|geza|mukonori|repression|censorship|pvo\s+bill|human\s+rights|democracy|democratic|rule\s+of\s+law|state\s+capture|devolution|municipality|city\s+council|local\s+authorit|mayor|governor|governance|policy|bill|statute|statutory\s+instrument|gazette|legislation|lawmaker|senate|commission\s+of\s+inquiry|economy|economic|economics|zimeconomy|zimbudget|zimpolitics|inflation|hyperinflation|zig|zwg|zimdollar|rtgs|bond\s+note|dollarization|de-dollarization|dedollarization|rbz|reserve\s+bank|central\s+bank|monetary\s+policy|gold[\s-]backed|mushayavanhu|exchange\s+rate|parallel\s+market|black\s+market|forex|currency|devaluation|treasury|budget|budget\s+presentation|finance\s+bill|appropriation|mthuli|ncube|fiscal|debt|public\s+debt|sovereign\s+debt|arrears|structured\s+dialogue|imf|world\s+bank|afdb|afreximbank|zimstat|zimra|tax|vat|imtt|customs|tariff|tollgate|subsidy|austerity|corruption|corrupt|zacc|auditor[\s-]?general|oag|tender|procurement|looting|cartel|smuggl|illicit|gold\s+mafia|al\s+jazeera|geo\s+pomona|pomona|drax|tagwirei|wicknell|chivayo|parastatal|mutapa|zinara|zesa|zupco|netone|telone|econet|starlink|potraz|zbc|gmb|cottco|nssa|cmed|kariba|hwange|air\s+zimbabwe|mining|lithium|gold|diamond|platinum|chrome|mineral|marange|bikita|land\s+reform|title\s+deed|compensation|command\s+agriculture|pfumvudza|diaspora|remittance|remittances|brain\s+drain|emigration|zep|gdp|poverty|unemployment|youth\s+unemployment|informal\s+sector|informal\s+economy|vendors|civil\s+serv|public\s+sector|salary|salaries|wages|pension|fuel|diesel|petrol|price\s+hike|cost\s+of\s+living|investment|trade|protest|protests|strike|strikes|industrial\s+action|go-slow|petition|shutdown|boycott|resistance|activis|mobiliz|civic|civil\s+society|trade\s+union|zctu|teachers|nurses|doctors|zinasu|students|whistleblower|accountability|transparency|chin'ono|hopewell|mahere|sikhala|bhoroma|newshawks|zimlive|openparly|veritas|zlhr|misa|kubatana|crisis\s+coalition|load\s+shedding|power\s+cut|blackout|electricity|energy\s+tariff|water\s+crisis|borehole|sewer|refuse\s+collection|service\s+delivery|potholes|road\s+rehab|rates|cholera|hospital|healthcare|clinic|maternity|drug\s+shortage|school|education|demolition|eviction|housing|drought|el\s+nino|hunger|food\s+security|food\s+aid|grain|maize|energy\s+crisis|infrastructure|freedom|liberation|civic\s+space|media\s+freedom|journalist|chitungwiza|epworth|gweru|mutare|masvingo|marondera|kwekwe|kadoma|matabeleland|gukurahundi)\b/i;
+
+const EXCLUDED_HASHTAGS = new Set([
+  '#shorts', '#short', '#viral', '#fyp', '#foryou', '#trending', '#explore', '#reels', '#tiktok',
+  '#youtube', '#subscribe', '#follow', '#like', '#share', '#love', '#video', '#live', '#watch',
+  '#cricket', '#zimbabwecricket', '#rugby', '#football', '#soccer', '#sports', '#sport', '#athletics',
+  '#dance', '#music', '#amapiano', '#zimdancehall', '#sungura', '#comedy', '#funny', '#entertainment',
+  '#prophecy', '#gospel', '#sermon', '#travel', '#safari', '#tourism', '#wildlife', '#nature',
+  '#photography', '#art', '#fashion', '#food', '#recipe', '#fitness', '#wellness', '#lifestyle',
+  '#history', '#africanhistory', '#greatzimbabwe', '#chile', '#ireland', '#worldrugby', '#nationscup',
+  '#majorshiftinzimbabweanfootball', '#brianbennett', '#miltonshumba', '#sikandarraza',
+  '#earthmovingequipment', '#constructionmachinery', '#miningequipment', '#miningmachinery', '#getthepicture'
+]);
+
+const HASHTAG_NOISE_REGEX = /(cricket|rugby|football|soccer|sport|dance|music|amapiano|comedy|safari|travel|prophecy|recipe|shorts|viral|fyp|reels|tiktok|chile|ireland|shumba|bennett|raza|earthmoving|machinery|equipment)/i;
+
+function isModelRelevantSocialItem(text, extraMeta = '') {
+  const combined = `${text || ''} ${extraMeta || ''}`.replace(/\s+/g, ' ').trim();
+  if (!combined) return false;
+  if (SOCIAL_NOISE_EXCLUDE_REGEX.test(combined)) return false;
+  return MODEL_RELEVANCE_REGEX.test(combined);
+}
+
+function isModelRelevantHashtag(tag) {
+  const key = String(tag || '').trim().toLowerCase();
+  if (!key || key.length < 3) return false;
+  if (EXCLUDED_HASHTAGS.has(key)) return false;
+  if (HASHTAG_NOISE_REGEX.test(key)) return false;
+  return true;
+}
 
 function decodeXmlEntities(value) {
   return String(value || '')
@@ -614,7 +676,7 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
         });
         if (!res.ok) return [];
         const xml = await res.text();
-        return parseYouTubeAtomFeed(xml, channel.label).slice(0, 10);
+        return parseYouTubeAtomFeed(xml, channel.label).slice(0, 15);
       } catch {
         return [];
       }
@@ -632,11 +694,13 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
     for (const item of batch) {
       if (seenVideoIds.has(item.videoId)) continue;
       seenVideoIds.add(item.videoId);
+      const combinedText = `${item.title} ${item.description}`.trim();
+      if (!isModelRelevantSocialItem(combinedText, item.channelTitle)) continue;
       totalViews += item.viewCount;
       totalLikes += item.likeCount;
       if (item.channelTitle) uniqueChannels.add(item.channelTitle);
 
-      const combinedText = `${item.title} ${item.description}`.trim();
+      const cleanTags = (item.hashtags || []).filter(isModelRelevantHashtag);
       posts.push({
         text: combinedText,
         createdAt: item.publishedAt,
@@ -657,8 +721,8 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
         viewCount: item.viewCount,
         likeCount: item.likeCount,
         commentCount: 0,
-        hashtags: item.hashtags,
-        tagsCount: item.hashtags.length
+        hashtags: cleanTags,
+        tagsCount: cleanTags.length
       });
     }
   }
@@ -669,7 +733,7 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
 
   videos.sort((a, b) => String(b.publishedAt).localeCompare(String(a.publishedAt))
     || (b.viewCount - a.viewCount));
-  const recentWindow = videos.slice(0, 40);
+  const recentWindow = videos.slice(0, 60);
   const topVideos = [...recentWindow]
     .sort((a, b) => {
       const dateA = String(a.publishedAt).slice(0, 10);
@@ -677,7 +741,7 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
       if (dateA !== dateB) return dateB.localeCompare(dateA);
       return (b.viewCount + b.likeCount * 5) - (a.viewCount + a.likeCount * 5);
     })
-    .slice(0, 30);
+    .slice(0, 50);
 
   return {
     posts,
@@ -749,19 +813,41 @@ function parseXPublicRssFeed(xmlText) {
 
 async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
   try {
-    const res = await fetch(X_PUBLIC_INDEX_RSS_URL, {
-      signal,
-      headers: {
-        Accept: 'application/rss+xml, application/xml, text/xml',
-        'User-Agent': 'KUVHURA-Observatory/1.0'
+    const batches = await Promise.all(
+      X_PUBLIC_INDEX_RSS_URLS.map(async rssUrl => {
+        try {
+          const res = await fetch(rssUrl, {
+            signal,
+            headers: {
+              Accept: 'application/rss+xml, application/xml, text/xml',
+              'User-Agent': 'KUVHURA-Observatory/1.0'
+            }
+          });
+          if (!res.ok) return [];
+          const xml = await res.text();
+          return parseXPublicRssFeed(xml);
+        } catch {
+          return [];
+        }
+      })
+    );
+    const seenKeys = new Set();
+    const parsed = [];
+    for (const batch of batches) {
+      for (const item of batch) {
+        if (!isModelRelevantSocialItem(item.text)) continue;
+        const dedupeKey = item.url || item.text.toLowerCase();
+        if (seenKeys.has(dedupeKey)) continue;
+        seenKeys.add(dedupeKey);
+        parsed.push({
+          ...item,
+          hashtags: (item.hashtags || []).filter(isModelRelevantHashtag)
+        });
       }
-    });
-    if (!res.ok) return null;
-    const xml = await res.text();
-    const parsed = parseXPublicRssFeed(xml);
+    }
     if (parsed.length === 0) return null;
     parsed.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    const topPosts = parsed.slice(0, 30).map(item => ({
+    const topPosts = parsed.slice(0, 50).map(item => ({
       text: item.text.slice(0, 220),
       createdAt: item.createdAt,
       url: item.url,
@@ -853,7 +939,7 @@ async function fetchSocialSource(feed, { forceRefresh = false } = {}) {
 
 async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
   try {
     const youtubeKey = feed.type === "youtube" ? getYouTubeApiKey() : null;
     const xToken = feed.type === "x" ? getXBearerToken() : null;
@@ -902,123 +988,81 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       throw new Error('X public index feed is temporarily unreachable.');
     }
 
-    const primaryUrl = feed.type === "x"
-      ? `https://api.x.com/2/tweets/search/recent?${new URLSearchParams({
-          query: "Zimbabwe has:hashtags -is:retweet",
-          max_results: "100",
-          "tweet.fields": "created_at,entities"
-        })}`
-      : feed.type === "youtube"
-        ? `https://www.googleapis.com/youtube/v3/search?${new URLSearchParams({
-            part: "snippet",
-            type: "video",
-            order: "date",
-            maxResults: "50",
-            q: "Zimbabwe",
-            key: youtubeKey || ''
-          })}`
-      : feed.url;
-    const candidateUrls = [primaryUrl, ...(Array.isArray(feed.fallbackUrls) ? feed.fallbackUrls : [])];
-    const headers = {
-      Accept: feed.type === 'reddit'
-        ? 'application/atom+xml, application/xml, application/json, text/xml'
-        : 'application/json',
-      'User-Agent': feed.type === 'reddit'
-        ? 'web:kuvhura.observatory:v1.0 (by /u/kuvhura_observatory)'
-        : 'KUVHURA-Observatory/1.0'
-    };
-    if (feed.type === "x" && xToken) headers.Authorization = `Bearer ${xToken}`;
-
-    let lastStatus = null;
-    let lastErrorMessage = null;
-    let payloadData = null;
-    let payloadText = null;
-
-    for (const candidateUrl of candidateUrls) {
-      const res = await fetch(candidateUrl, {
-        signal: controller.signal,
-        headers
-      });
-      const rawText = await res.text();
-      if (!res.ok) {
-        lastStatus = res.status;
-        lastErrorMessage = formatSocialFeedHttpError(feed, res.status, rawText);
-        continue;
-      }
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('json') || rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
-        payloadData = JSON.parse(rawText);
-      } else {
-        payloadText = rawText;
-      }
-      break;
-    }
-
-    if (payloadData === null && payloadText === null) {
-      const err = new Error(lastErrorMessage || (lastStatus ? `Status ${lastStatus}` : 'Upstream feed unavailable'));
-      err.httpStatus = lastStatus;
-      throw err;
-    }
-
     const posts = [];
     let youtubeMeta = null;
     let xMeta = null;
 
-    if (feed.type === 'bluesky') {
-      const items = Array.isArray(payloadData?.posts) ? payloadData.posts : [];
-      for (const item of items) {
-        posts.push({
-          text: item.record?.text || '',
-          createdAt: item.record?.createdAt || '',
-          url: item.uri || '',
-          platform: feed.platform
-        });
+    if (feed.type === 'x') {
+      const xHeaders = {
+        Accept: 'application/json',
+        'User-Agent': 'KUVHURA-Observatory/1.0',
+        Authorization: `Bearer ${xToken}`
+      };
+      let lastStatus = null;
+      let lastErrorMessage = null;
+      let succeededQueries = 0;
+
+      const queryResults = await Promise.all(
+        X_MODEL_QUERIES.map(async query => {
+          const url = `https://api.x.com/2/tweets/search/recent?${new URLSearchParams({
+            query,
+            max_results: "100",
+            "tweet.fields": "created_at,entities"
+          })}`;
+          try {
+            const res = await fetch(url, { signal: controller.signal, headers: xHeaders });
+            const rawText = await res.text();
+            if (!res.ok) {
+              lastStatus = res.status;
+              lastErrorMessage = formatSocialFeedHttpError(feed, res.status, rawText);
+              return [];
+            }
+            succeededQueries += 1;
+            const parsed = JSON.parse(rawText);
+            return Array.isArray(parsed?.data) ? parsed.data : [];
+          } catch (err) {
+            if (!lastErrorMessage) lastErrorMessage = err.message;
+            return [];
+          }
+        })
+      );
+
+      if (succeededQueries === 0) {
+        const err = new Error(lastErrorMessage || (lastStatus ? `Status ${lastStatus}` : 'Upstream feed unavailable'));
+        err.httpStatus = lastStatus;
+        throw err;
       }
-    } else if (feed.type === 'mastodon') {
-      if (Array.isArray(payloadData)) {
-        for (const item of payloadData) {
-          const plainText = decodeXmlEntities((item.content || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+
+      const seenIds = new Set();
+      for (const batch of queryResults) {
+        for (const item of batch) {
+          const text = decodeXmlEntities(item.text || '').replace(/\s+/g, ' ').trim();
+          if (!isModelRelevantSocialItem(text)) continue;
+          const dedupeKey = item.id ? String(item.id) : text.toLowerCase();
+          if (seenIds.has(dedupeKey)) continue;
+          seenIds.add(dedupeKey);
+          const url = item.id ? `https://x.com/i/status/${encodeURIComponent(String(item.id))}` : '';
+          const createdAt = item.created_at || '';
+          const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])]
+            .filter(isModelRelevantHashtag)
+            .slice(0, 6);
           posts.push({
-            text: plainText,
-            createdAt: item.created_at || '',
-            url: item.url || '',
-            platform: feed.platform
+            text,
+            createdAt,
+            url,
+            platform: feed.platform,
+            hashtags
           });
         }
       }
-    } else if (feed.type === 'reddit') {
-      if (payloadText) {
-        posts.push(...parseRedditAtomFeed(payloadText));
-      } else {
-        for (const child of payloadData?.data?.children || []) {
-          const item = child.data;
-          if (!item) continue;
-          posts.push({
-            text: decodeXmlEntities(`${item.title || ''} ${item.selftext || ''}`).replace(/\s+/g, ' ').trim(),
-            createdAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : '',
-            url: item.permalink ? `https://www.reddit.com${item.permalink}` : '',
-            platform: feed.platform
-          });
-        }
-      }
-    } else if (feed.type === 'x') {
-      const xTopPosts = [];
-      for (const item of payloadData?.data || []) {
-        const text = decodeXmlEntities(item.text || '').replace(/\s+/g, ' ').trim();
-        const url = item.id ? `https://x.com/i/status/${encodeURIComponent(String(item.id))}` : '';
-        const createdAt = item.created_at || '';
-        const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])].slice(0, 6);
-        posts.push({
-          text,
-          createdAt,
-          url,
-          platform: feed.platform,
-          hashtags
-        });
-        if (text && xTopPosts.length < 30) {
-          xTopPosts.push({ text: text.slice(0, 220), createdAt, url, hashtags });
-        }
-      }
+
+      posts.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      const xTopPosts = posts.slice(0, 50).map(item => ({
+        text: item.text.slice(0, 220),
+        createdAt: item.createdAt,
+        url: item.url,
+        hashtags: item.hashtags || []
+      }));
       xMeta = {
         configured: true,
         status: 'connected',
@@ -1030,32 +1074,90 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
         message: null
       };
     } else if (feed.type === 'youtube') {
-      const searchItems = Array.isArray(payloadData?.items) ? payloadData.items : [];
-      const videoIds = [...new Set(searchItems.map(item => sanitizeYouTubeVideoId(item?.id?.videoId)).filter(Boolean))].slice(0, 50);
-      const detailsById = new Map();
+      const ytHeaders = {
+        Accept: 'application/json',
+        'User-Agent': 'KUVHURA-Observatory/1.0'
+      };
+      let lastStatus = null;
+      let lastErrorMessage = null;
+      let succeededSearchQueries = 0;
 
-      // Single 1-quota-unit batch request for full descriptions, tags, and real engagement counts
-      if (videoIds.length > 0 && youtubeKey) {
-        try {
-          const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?${new URLSearchParams({
-            part: "snippet,statistics",
-            id: videoIds.join(','),
-            key: youtubeKey
+      const searchBatches = await Promise.all(
+        YOUTUBE_MODEL_QUERIES.map(async query => {
+          const searchUrl = `https://www.googleapis.com/youtube/v3/search?${new URLSearchParams({
+            part: "snippet",
+            type: "video",
+            order: "date",
+            maxResults: "50",
+            q: query,
+            key: youtubeKey || ''
           })}`;
-          const detailsRes = await fetch(detailsUrl, {
-            signal: controller.signal,
-            headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' }
-          });
-          if (detailsRes.ok) {
-            const detailsPayload = await detailsRes.json();
-            for (const detailItem of detailsPayload?.items || []) {
-              const id = sanitizeYouTubeVideoId(detailItem?.id);
-              if (id) detailsById.set(id, detailItem);
+          try {
+            const res = await fetch(searchUrl, { signal: controller.signal, headers: ytHeaders });
+            const rawText = await res.text();
+            if (!res.ok) {
+              lastStatus = res.status;
+              lastErrorMessage = formatSocialFeedHttpError(feed, res.status, rawText);
+              return [];
             }
+            succeededSearchQueries += 1;
+            const parsed = JSON.parse(rawText);
+            return Array.isArray(parsed?.items) ? parsed.items : [];
+          } catch (err) {
+            if (!lastErrorMessage) lastErrorMessage = err.message;
+            return [];
           }
-        } catch {
-          // Graceful fallback to search.list snippets without leaking key or failing feed
+        })
+      );
+
+      if (succeededSearchQueries === 0) {
+        const err = new Error(lastErrorMessage || (lastStatus ? `Status ${lastStatus}` : 'Upstream feed unavailable'));
+        err.httpStatus = lastStatus;
+        throw err;
+      }
+
+      const searchItemsById = new Map();
+      for (const batch of searchBatches) {
+        for (const item of batch) {
+          const vid = sanitizeYouTubeVideoId(item?.id?.videoId);
+          if (vid && !searchItemsById.has(vid)) {
+            searchItemsById.set(vid, item);
+          }
         }
+      }
+      const searchItems = [...searchItemsById.values()];
+      const videoIds = [...searchItemsById.keys()];
+      const detailsById = new Map();
+      let detailBatchesCompleted = 0;
+
+      // Chunk videoIds into batches of 50 (YouTube videos.list max per request)
+      if (videoIds.length > 0 && youtubeKey) {
+        const idChunks = [];
+        for (let i = 0; i < videoIds.length; i += 50) {
+          idChunks.push(videoIds.slice(i, i + 50));
+        }
+        await Promise.all(
+          idChunks.map(async chunk => {
+            try {
+              const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?${new URLSearchParams({
+                part: "snippet,statistics",
+                id: chunk.join(','),
+                key: youtubeKey
+              })}`;
+              const detailsRes = await fetch(detailsUrl, { signal: controller.signal, headers: ytHeaders });
+              if (detailsRes.ok) {
+                detailBatchesCompleted += 1;
+                const detailsPayload = await detailsRes.json();
+                for (const detailItem of detailsPayload?.items || []) {
+                  const id = sanitizeYouTubeVideoId(detailItem?.id);
+                  if (id) detailsById.set(id, detailItem);
+                }
+              }
+            } catch {
+              // Graceful fallback to search.list snippets without leaking key or failing feed
+            }
+          })
+        );
       }
 
       const videos = [];
@@ -1078,7 +1180,11 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
           ? snippet.tags.map(t => decodeXmlEntities(t).trim()).filter(Boolean)
           : [];
         const combinedText = `${title} ${description}`.trim();
-        const extractedTags = [...new Set(combinedText.match(HASHTAG_REGEX) || [])];
+        if (!isModelRelevantSocialItem(combinedText, `${channelTitle} ${tags.join(' ')}`)) {
+          continue;
+        }
+        const extractedTags = [...new Set(combinedText.match(HASHTAG_REGEX) || [])]
+          .filter(isModelRelevantHashtag);
 
         const viewCount = parseNonNegativeInt(stats.viewCount);
         const likeCount = parseNonNegativeInt(stats.likeCount);
@@ -1119,13 +1225,13 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       const topVideos = [...videos]
         .sort((a, b) => (b.viewCount + b.likeCount * 5 + b.commentCount * 10) - (a.viewCount + a.likeCount * 5 + a.commentCount * 10)
           || String(b.publishedAt).localeCompare(String(a.publishedAt)))
-        .slice(0, 30);
+        .slice(0, 50);
 
       youtubeMeta = {
         configured: true,
         status: 'connected',
         transport: 'youtube_api_v3',
-        quotaUnitsPerRefresh: detailsById.size > 0 ? 101 : 100,
+        quotaUnitsPerRefresh: succeededSearchQueries * 100 + detailBatchesCompleted,
         cacheWindowMinutes: Math.round(cacheTtl / 60000),
         videosSampled: videos.length,
         enrichedWithStats: detailsById.size > 0,
@@ -1138,6 +1244,91 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
         refreshIntervalSeconds: cacheTtl / 1000,
         message: null
       };
+    } else {
+      const candidateUrls = [feed.url, ...(Array.isArray(feed.fallbackUrls) ? feed.fallbackUrls : [])];
+      const headers = {
+        Accept: feed.type === 'reddit'
+          ? 'application/atom+xml, application/xml, application/json, text/xml'
+          : 'application/json',
+        'User-Agent': feed.type === 'reddit'
+          ? 'web:kuvhura.observatory:v1.0 (by /u/kuvhura_observatory)'
+          : 'KUVHURA-Observatory/1.0'
+      };
+
+      let lastStatus = null;
+      let lastErrorMessage = null;
+      let payloadData = null;
+      let payloadText = null;
+
+      for (const candidateUrl of candidateUrls) {
+        const res = await fetch(candidateUrl, {
+          signal: controller.signal,
+          headers
+        });
+        const rawText = await res.text();
+        if (!res.ok) {
+          lastStatus = res.status;
+          lastErrorMessage = formatSocialFeedHttpError(feed, res.status, rawText);
+          continue;
+        }
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('json') || rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+          payloadData = JSON.parse(rawText);
+        } else {
+          payloadText = rawText;
+        }
+        break;
+      }
+
+      if (payloadData === null && payloadText === null) {
+        const err = new Error(lastErrorMessage || (lastStatus ? `Status ${lastStatus}` : 'Upstream feed unavailable'));
+        err.httpStatus = lastStatus;
+        throw err;
+      }
+
+      if (feed.type === 'bluesky') {
+        const items = Array.isArray(payloadData?.posts) ? payloadData.posts : [];
+        for (const item of items) {
+          const text = item.record?.text || '';
+          if (!isModelRelevantSocialItem(text)) continue;
+          posts.push({
+            text,
+            createdAt: item.record?.createdAt || '',
+            url: item.uri || '',
+            platform: feed.platform
+          });
+        }
+      } else if (feed.type === 'mastodon') {
+        if (Array.isArray(payloadData)) {
+          for (const item of payloadData) {
+            const plainText = decodeXmlEntities((item.content || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+            if (!isModelRelevantSocialItem(plainText)) continue;
+            posts.push({
+              text: plainText,
+              createdAt: item.created_at || '',
+              url: item.url || '',
+              platform: feed.platform
+            });
+          }
+        }
+      } else if (feed.type === 'reddit') {
+        if (payloadText) {
+          posts.push(...parseRedditAtomFeed(payloadText).filter(item => isModelRelevantSocialItem(item.text)));
+        } else {
+          for (const child of payloadData?.data?.children || []) {
+            const item = child.data;
+            if (!item) continue;
+            const text = decodeXmlEntities(`${item.title || ''} ${item.selftext || ''}`).replace(/\s+/g, ' ').trim();
+            if (!isModelRelevantSocialItem(text)) continue;
+            posts.push({
+              text,
+              createdAt: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : '',
+              url: item.permalink ? `https://www.reddit.com${item.permalink}` : '',
+              platform: feed.platform
+            });
+          }
+        }
+      }
     }
 
     const result = {
@@ -1295,7 +1486,9 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
 
   const tagCounts = new Map();
   for (const post of posts) {
+    if (!isModelRelevantSocialItem(post.text, post.channelTitle || '')) continue;
     for (const match of new Set(post.text.match(HASHTAG_REGEX) || [])) {
+      if (!isModelRelevantHashtag(match)) continue;
       const key = match.toLowerCase();
       if (!tagCounts.has(key)) {
         tagCounts.set(key, { tag: match, mentions: 0, platforms: {} });
@@ -1308,7 +1501,7 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
 
   const hashtags = [...tagCounts.values()]
     .sort((a, b) => b.mentions - a.mentions || a.tag.localeCompare(b.tag))
-    .slice(0, 30);
+    .slice(0, 50);
   const successfulSources = results.filter(result => !result.failed);
   const sampledPlatforms = [...new Set(successfulSources.map(result => result.platform))];
   const sourceStatuses = results.map(result => ({
@@ -1356,10 +1549,10 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
 
   const payload = {
     available: sampledPlatforms.length > 0,
-    scope: "Recent public posts matching Zimbabwe; not platform-wide or global trending rankings.",
+    scope: "Model-relevant Zimbabwe political-economy, governance, fiscal, and civic discourse across connected feeds.",
     updatedAt: new Date().toISOString(),
     refreshIntervalSeconds: SOCIAL_CACHE_MS / 1000,
-    query: "Zimbabwe",
+    query: "Zimbabwe political economy & governance",
     scannedPosts: posts.length,
     sampledPlatforms,
     sources: sourceStatuses,
@@ -1367,7 +1560,7 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
     x: xSummary,
     youtube: youtubeSummary,
     message: sampledPlatforms.length
-      ? hashtags.length ? null : "Connected sources returned no hashtags in the sampled posts."
+      ? hashtags.length ? null : "Connected sources returned no model-relevant hashtags in the current window."
       : "No public social feeds are currently reachable."
   };
   socialCache = { expiresAt: now + SOCIAL_CACHE_MS, payload };
@@ -1380,7 +1573,7 @@ const LAYER2_FALLBACK_TTL_MS = 5 * 60 * 1000;
 let layer2MacroCache = { expiresAt: 0, data: null };
 
 const TIMELINE_WINDOW_DAYS = 30;
-const TELEMETRY_TIMELINE = [
+const SEED_TELEMETRY_TIMELINE = [
   { date: '2026-10-16', phi: 54.80, markov_crisis_prob: 12.4, state: 'Stable Consolidation', macro_volatility_proxy: 32.5 },
   { date: '2026-10-17', phi: 54.20, markov_crisis_prob: 12.8, state: 'Stable Consolidation', macro_volatility_proxy: 33.0 },
   { date: '2026-10-18', phi: 53.60, markov_crisis_prob: 13.1, state: 'Stable Consolidation', macro_volatility_proxy: 33.4 },
@@ -1422,6 +1615,88 @@ const TELEMETRY_TIMELINE = [
         : 'Acute Systemic Crisis';
   return { ...seed, fsi, warning_level };
 });
+
+const TELEMETRY_TIMELINE = SEED_TELEMETRY_TIMELINE.map(entry => ({ ...entry }));
+const LOCAL_SNAPSHOTS_FALLBACK_PATH = path.join(PRIVATE_UPLOAD_DIR, 'daily_telemetry_snapshots.json');
+let hasHydratedPersistedTimeline = false;
+let persistedTimelineHydrationPromise = null;
+let lastPersistedSnapshotSignature = null;
+
+function readLocalDailySnapshotsFallback() {
+  try {
+    if (!existsSync(LOCAL_SNAPSHOTS_FALLBACK_PATH)) return [];
+    const parsed = JSON.parse(readFileSync(LOCAL_SNAPSHOTS_FALLBACK_PATH, 'utf8'));
+    return Array.isArray(parsed)
+      ? parsed.filter(entry => entry && typeof entry.date === 'string' && Number.isFinite(entry.social_volume))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalDailySnapshotFallback(entry) {
+  try {
+    const existing = readLocalDailySnapshotsFallback();
+    const byDate = new Map(existing.map(item => [item.date, item]));
+    byDate.set(entry.date, { ...entry, persisted: true });
+    const sorted = Array.from(byDate.values())
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+      .slice(-TIMELINE_WINDOW_DAYS);
+    const tmpPath = `${LOCAL_SNAPSHOTS_FALLBACK_PATH}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(sorted, null, 2), 'utf8');
+    renameSync(tmpPath, LOCAL_SNAPSHOTS_FALLBACK_PATH);
+  } catch (error) {
+    console.warn('Local snapshot fallback write skipped:', error?.message || error);
+  }
+}
+
+function mergePersistedSnapshotsIntoTimeline(persistedEntries) {
+  if (!Array.isArray(persistedEntries) || persistedEntries.length === 0) return;
+  const byDate = new Map();
+  SEED_TELEMETRY_TIMELINE.forEach(entry => {
+    byDate.set(entry.date, { ...entry });
+  });
+  TELEMETRY_TIMELINE.forEach(entry => {
+    if (entry && typeof entry.date === 'string' && Number.isFinite(entry.social_volume)) {
+      byDate.set(entry.date, { ...entry });
+    }
+  });
+  persistedEntries.forEach(entry => {
+    if (entry && typeof entry.date === 'string' && Number.isFinite(entry.social_volume)) {
+      byDate.set(entry.date, { ...entry, persisted: true });
+    }
+  });
+  const merged = Array.from(byDate.values())
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    .slice(-TIMELINE_WINDOW_DAYS);
+  TELEMETRY_TIMELINE.splice(0, TELEMETRY_TIMELINE.length, ...merged);
+}
+
+async function hydratePersistedTimelineOnce() {
+  if (hasHydratedPersistedTimeline) return;
+  if (persistedTimelineHydrationPromise) {
+    return persistedTimelineHydrationPromise;
+  }
+  persistedTimelineHydrationPromise = (async () => {
+    let loadedFromSql = false;
+    if (isCloudSqlConfigured()) {
+      try {
+        const persisted = await getRecentDailyTelemetrySnapshots(TIMELINE_WINDOW_DAYS);
+        mergePersistedSnapshotsIntoTimeline(persisted);
+        loadedFromSql = true;
+      } catch (error) {
+        console.warn('Persisted telemetry history hydration skipped:', error?.message || error);
+      }
+    }
+    if (!loadedFromSql) {
+      const localFallback = readLocalDailySnapshotsFallback();
+      mergePersistedSnapshotsIntoTimeline(localFallback);
+    }
+    hasHydratedPersistedTimeline = true;
+    persistedTimelineHydrationPromise = null;
+  })();
+  return persistedTimelineHydrationPromise;
+}
 
 let timelineBaselineDate = null;
 let timelineBaseline = null;
@@ -4274,7 +4549,7 @@ function getDualEngineTimelineResponse() {
         scannedPosts: latestSocialTelemetry.scannedPosts,
         sampledPlatforms: latestSocialTelemetry.sampledPlatforms || [],
         sources: latestSocialTelemetry.sources || [],
-        hashtags: (latestSocialTelemetry.hashtags || []).slice(0, 30),
+        hashtags: (latestSocialTelemetry.hashtags || []).slice(0, 50),
         x: latestSocialTelemetry.x || null,
         youtube: latestSocialTelemetry.youtube || null
       }
@@ -4306,7 +4581,7 @@ function getDualEngineTimelineResponse() {
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
     hansardStatus,
     treasuryStatus,
-    historyNote: 'Seed timeline values are illustrative. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable). Real-Time Systemic Risk Monitoring also tracks live Ministry of Finance (zimtreasury.co.zw) budgets, public debt reports, treasury bulletins, circulars, press releases, newsletters, and stakeholder engagements.'
+    historyNote: 'Daily live readings are archived automatically to build a rolling 30-day empirical series; earlier baseline rows remain illustrative until superseded by live captures. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable). Real-Time Systemic Risk Monitoring also tracks live Ministry of Finance (zimtreasury.co.zw) budgets, public debt reports, treasury bulletins, circulars, press releases, newsletters, and stakeholder engagements.'
   };
 }
 
@@ -4403,17 +4678,37 @@ app.get('/api/social/hashtags', async (req, res) => {
   }
 });
 
-async function refreshDualEngineTimelineData() {
-  if (timelineRefreshInFlightPromise) {
+let timelineRefreshInFlightAllowsDbSync = false;
+
+async function refreshDualEngineTimelineData(options = {}) {
+  const { allowDbSync = true, recordedByUid = null, forcePersist = false } = options;
+  if (timelineRefreshInFlightPromise && !forcePersist && (!allowDbSync || timelineRefreshInFlightAllowsDbSync)) {
     return timelineRefreshInFlightPromise;
   }
-  timelineRefreshInFlightPromise = refreshDualEngineTimelineDataInternal().finally(() => {
-    timelineRefreshInFlightPromise = null;
+  const previousInFlight = timelineRefreshInFlightPromise;
+  const promise = (async () => {
+    if (previousInFlight) {
+      await previousInFlight.catch(() => {});
+    }
+    return refreshDualEngineTimelineDataInternal({ allowDbSync, recordedByUid, forcePersist });
+  })().finally(() => {
+    if (timelineRefreshInFlightPromise === promise) {
+      timelineRefreshInFlightPromise = null;
+      timelineRefreshInFlightAllowsDbSync = false;
+    }
   });
-  return timelineRefreshInFlightPromise;
+  if (!forcePersist) {
+    timelineRefreshInFlightPromise = promise;
+    timelineRefreshInFlightAllowsDbSync = Boolean(allowDbSync);
+  }
+  return promise;
 }
 
-async function refreshDualEngineTimelineDataInternal() {
+async function refreshDualEngineTimelineDataInternal({ allowDbSync = true, recordedByUid = null, forcePersist = false } = {}) {
+  if (allowDbSync) {
+    await hydratePersistedTimelineOnce();
+  }
+
   const cachedTreasury = (treasuryCache.data && treasuryCache.expiresAt > Date.now())
     ? treasuryCache.data
     : readVerifiedTreasuryCache();
@@ -4465,6 +4760,7 @@ async function refreshDualEngineTimelineDataInternal() {
       state: stateForPhi(currentPhi),
       social_volume: socialVolume,
       engagement_score_proxy: engagementProxy,
+      sampled_platforms: sampledPlatforms,
       telemetry_source: `Node social telemetry${platformSuffix}`,
       updated_at: updatedAt
     };
@@ -4507,6 +4803,53 @@ async function refreshDualEngineTimelineDataInternal() {
       TELEMETRY_TIMELINE.push(entry);
       if (TELEMETRY_TIMELINE.length > TIMELINE_WINDOW_DAYS) TELEMETRY_TIMELINE.shift();
     }
+
+    if (allowDbSync) {
+      const signature = JSON.stringify([
+        entry.date,
+        entry.phi,
+        entry.markov_crisis_prob,
+        entry.macro_volatility_proxy ?? null,
+        entry.hansard_friction ?? null,
+        entry.treasury_friction ?? null,
+        entry.fsi ?? null,
+        entry.social_volume,
+        entry.engagement_score_proxy
+      ]);
+      if (forcePersist || signature !== lastPersistedSnapshotSignature) {
+        const snapshotToPersist = {
+          ...entry,
+          tracked_topics: Array.isArray(entry.tracked_topics)
+            ? entry.tracked_topics.slice(0, 10).map(t => ({
+                topic: t?.topic || '',
+                category: t?.category || '',
+                friction: t?.friction ?? null
+              }))
+            : []
+        };
+        let savedToSql = false;
+        if (isCloudSqlConfigured()) {
+          try {
+            const saved = await upsertDailyTelemetrySnapshot(snapshotToPersist, recordedByUid);
+            if (saved) {
+              savedToSql = true;
+              lastPersistedSnapshotSignature = signature;
+              entry.persisted = true;
+            }
+          } catch (error) {
+            console.warn('Daily telemetry snapshot persistence skipped:', error?.message || error);
+          }
+        }
+        if (!savedToSql) {
+          writeLocalDailySnapshotFallback(snapshotToPersist);
+          lastPersistedSnapshotSignature = signature;
+          entry.persisted = true;
+        }
+      } else {
+        entry.persisted = true;
+      }
+    }
+
     latestDualEngineInputs = {
       social_volume: socialVolume,
       engagement_score_proxy: engagementProxy,
@@ -4520,11 +4863,603 @@ async function refreshDualEngineTimelineDataInternal() {
   return getDualEngineTimelineResponse();
 }
 
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  res.json({
+    uid: req.user?.uid || null,
+    email: req.user?.email || null,
+    name: req.user?.name || null
+  });
+});
+
+app.post('/api/timeline/snapshot', requireAuth, async (req, res) => {
+  try {
+    const response = await refreshDualEngineTimelineData({
+      allowDbSync: true,
+      recordedByUid: req.user?.uid || null,
+      forcePersist: true
+    });
+    const latestLive = [...(response.timeline || [])].reverse().find(entry => Number.isFinite(entry.social_volume)) || null;
+    res.json({
+      saved: Boolean(latestLive),
+      snapshot: latestLive,
+      liveDaysCount: (response.timeline || []).filter(entry => Number.isFinite(entry.social_volume)).length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to record daily snapshot' });
+  }
+});
+
 app.get('/api/timeline', async (req, res) => {
   try {
-    res.json(await refreshDualEngineTimelineData());
+    const response = await refreshDualEngineTimelineData({ allowDbSync: true });
+    if (String(req.query.mode || '').toLowerCase() === 'live') {
+      return res.json({
+        ...response,
+        timeline: (response.timeline || []).filter(entry => Number.isFinite(entry.social_volume))
+      });
+    }
+    res.json(response);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+const POLITICAL_TIMESERIES_CACHE_MS = 6 * 60 * 60 * 1000;
+let politicalTimeSeriesCache = { expiresAt: 0, payload: null };
+
+const EMPIRICAL_POLITICAL_SERIES_BASE = [
+  // fx-inflation: Parallel-market FX premium (verified RBZ / IMF Article IV / ZIMSTAT benchmarks)
+  { series: 'fx-inflation', period: '2019', metric: 'parallel_fx_premium_pct', value: 28.4, unit: '% premium', source: 'RBZ & IMF Zimbabwe Article IV (2019 FX spread)', source_url: 'https://www.rbz.co.zw/index.php/research/markets/exchange-rates' },
+  { series: 'fx-inflation', period: '2020', metric: 'parallel_fx_premium_pct', value: 36.2, unit: '% premium', source: 'RBZ Auction vs Parallel Benchmark (2020)', source_url: 'https://www.rbz.co.zw/index.php/research/markets/exchange-rates' },
+  { series: 'fx-inflation', period: '2021', metric: 'parallel_fx_premium_pct', value: 64.5, unit: '% premium', source: 'RBZ Monetary Policy Statement (2021)', source_url: 'https://www.rbz.co.zw/index.php/research/markets/exchange-rates' },
+  { series: 'fx-inflation', period: '2022', metric: 'parallel_fx_premium_pct', value: 78.0, unit: '% premium', source: 'IMF Zimbabwe Article IV Consultation (2022)', source_url: 'https://www.imf.org/en/Countries/ZWE' },
+  { series: 'fx-inflation', period: '2023', metric: 'parallel_fx_premium_pct', value: 52.3, unit: '% premium', source: 'RBZ Interbank vs Parallel Spread (2023)', source_url: 'https://www.rbz.co.zw/index.php/research/markets/exchange-rates' },
+  { series: 'fx-inflation', period: '2024', metric: 'parallel_fx_premium_pct', value: 44.8, unit: '% premium', source: 'RBZ ZiG Transition & Parallel Spread (2024)', source_url: 'https://www.rbz.co.zw/index.php/research/markets/exchange-rates' },
+  { series: 'fx-inflation', period: '2025', metric: 'parallel_fx_premium_pct', value: 38.6, unit: '% premium', source: 'RBZ ZiG Official vs Parallel Benchmark (2025)', source_url: 'https://www.rbz.co.zw/index.php/research/markets/exchange-rates' },
+
+  // fx-inflation: Fallback official annual CPI YoY (%) if World Bank API is unavailable (live WB overrides same years)
+  { series: 'fx-inflation', period: '2019', metric: 'monthly_cpi_yoy_pct', value: 255.3, unit: '% YoY', source: 'World Bank / ZIMSTAT CPI (2019)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/FP.CPI.TOTL.ZG?format=json&per_page=200' },
+  { series: 'fx-inflation', period: '2020', metric: 'monthly_cpi_yoy_pct', value: 557.2, unit: '% YoY', source: 'World Bank / ZIMSTAT CPI (2020)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/FP.CPI.TOTL.ZG?format=json&per_page=200' },
+  { series: 'fx-inflation', period: '2021', metric: 'monthly_cpi_yoy_pct', value: 98.5, unit: '% YoY', source: 'World Bank / ZIMSTAT CPI (2021)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/FP.CPI.TOTL.ZG?format=json&per_page=200' },
+  { series: 'fx-inflation', period: '2022', metric: 'monthly_cpi_yoy_pct', value: 104.7, unit: '% YoY', source: 'World Bank / ZIMSTAT CPI (2022)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/FP.CPI.TOTL.ZG?format=json&per_page=200' },
+  { series: 'fx-inflation', period: '2023', metric: 'monthly_cpi_yoy_pct', value: 105.4, unit: '% YoY', source: 'ZIMSTAT Consumer Price Index (2023)', source_url: 'https://zimstat.co.zw/consumer-price-index/' },
+  { series: 'fx-inflation', period: '2024', metric: 'monthly_cpi_yoy_pct', value: 57.5, unit: '% YoY', source: 'ZIMSTAT ZiG Blended CPI Series (2024)', source_url: 'https://zimstat.co.zw/consumer-price-index/' },
+  { series: 'fx-inflation', period: '2025', metric: 'monthly_cpi_yoy_pct', value: 32.4, unit: '% YoY', source: 'ZIMSTAT Consumer Price Index (2025)', source_url: 'https://zimstat.co.zw/consumer-price-index/' },
+
+  // remittance-purchasing-power: Civil-service real purchasing power index (2018=100) + remittance baseline (live WB overrides remittances)
+  { series: 'remittance-purchasing-power', period: '2018', metric: 'remittances_received', value: 1427.7, unit: 'USD millions', source: 'World Bank Remittances API (ZW 2018)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/BX.TRF.PWKR.CD.DT?format=json&per_page=200' },
+  { series: 'remittance-purchasing-power', period: '2019', metric: 'remittances_received', value: 1417.0, unit: 'USD millions', source: 'World Bank Remittances API (ZW 2019)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/BX.TRF.PWKR.CD.DT?format=json&per_page=200' },
+  { series: 'remittance-purchasing-power', period: '2020', metric: 'remittances_received', value: 1832.0, unit: 'USD millions', source: 'World Bank Remittances API (ZW 2020)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/BX.TRF.PWKR.CD.DT?format=json&per_page=200' },
+  { series: 'remittance-purchasing-power', period: '2021', metric: 'remittances_received', value: 1982.3, unit: 'USD millions', source: 'World Bank Remittances API (ZW 2021)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/BX.TRF.PWKR.CD.DT?format=json&per_page=200' },
+  { series: 'remittance-purchasing-power', period: '2022', metric: 'remittances_received', value: 2046.5, unit: 'USD millions', source: 'World Bank / RBZ Diaspora Remittances (2022)', source_url: 'https://api.worldbank.org/v2/country/ZW/indicator/BX.TRF.PWKR.CD.DT?format=json&per_page=200' },
+  { series: 'remittance-purchasing-power', period: '2023', metric: 'remittances_received', value: 2150.0, unit: 'USD millions', source: 'RBZ Monetary Policy Statement (2023)', source_url: 'https://www.rbz.co.zw/index.php/research/markets/exchange-rates' },
+  { series: 'remittance-purchasing-power', period: '2024', metric: 'remittances_received', value: 2290.0, unit: 'USD millions', source: 'RBZ Diaspora Remittances Report (2024)', source_url: 'https://www.rbz.co.zw/index.php/research/markets/exchange-rates' },
+  { series: 'remittance-purchasing-power', period: '2018', metric: 'civil_service_real_pay', value: 100.0, unit: 'Index (2018=100)', source: 'IMF / ZIMSTAT Public Wage Baseline (2018)', source_url: 'https://zimstat.co.zw/consumer-price-index/' },
+  { series: 'remittance-purchasing-power', period: '2019', metric: 'civil_service_real_pay', value: 46.2, unit: 'Index (2018=100)', source: 'IMF Article IV Real Wage Erosion (2019)', source_url: 'https://www.imf.org/en/Countries/ZWE' },
+  { series: 'remittance-purchasing-power', period: '2020', metric: 'civil_service_real_pay', value: 38.5, unit: 'Index (2018=100)', source: 'ZIMSTAT / Public Service Wage Benchmark (2020)', source_url: 'https://zimstat.co.zw/consumer-price-index/' },
+  { series: 'remittance-purchasing-power', period: '2021', metric: 'civil_service_real_pay', value: 44.0, unit: 'Index (2018=100)', source: 'Ministry of Finance Budget Wage Review (2021)', source_url: 'https://www.zimtreasury.co.zw/' },
+  { series: 'remittance-purchasing-power', period: '2022', metric: 'civil_service_real_pay', value: 41.8, unit: 'Index (2018=100)', source: 'Ministry of Finance Budget Wage Review (2022)', source_url: 'https://www.zimtreasury.co.zw/' },
+  { series: 'remittance-purchasing-power', period: '2023', metric: 'civil_service_real_pay', value: 49.5, unit: 'Index (2018=100)', source: 'USD Allowance Civil Service Adjustment (2023)', source_url: 'https://www.zimtreasury.co.zw/' },
+  { series: 'remittance-purchasing-power', period: '2024', metric: 'civil_service_real_pay', value: 52.1, unit: 'Index (2018=100)', source: 'Treasury Mid-Year Fiscal Review (2024)', source_url: 'https://www.zimtreasury.co.zw/' },
+
+  // oag-leakage: Office of the Auditor-General observed annual audit findings (2018-2024 strictly observed, no future projections)
+  { series: 'oag-leakage', period: '2018', metric: 'unvouched_expenditure', value: 71.0, unit: 'USD millions', source: 'OAG 2018 Audit Report (ZINARA & Transport)', source_url: 'https://auditorgeneral.gov.zw/document-library/' },
+  { series: 'oag-leakage', period: '2019', metric: 'unvouched_expenditure', value: 124.5, unit: 'USD millions', source: 'OAG 2019 Audit Report (GMB & Agriculture)', source_url: 'https://auditorgeneral.gov.zw/document-library/' },
+  { series: 'oag-leakage', period: '2020', metric: 'procurement_bypass', value: 60.0, unit: 'USD millions', source: 'OAG 2020 Audit Report (Health Emergency Procurement)', source_url: 'https://auditorgeneral.gov.zw/document-library/' },
+  { series: 'oag-leakage', period: '2021', metric: 'parastatal_asset_transfer', value: 183.0, unit: 'USD millions', source: 'OAG 2021 Audit Report (ZESA / Powertel Prepayments)', source_url: 'https://auditorgeneral.gov.zw/document-library/' },
+  { series: 'oag-leakage', period: '2022', metric: 'unvouched_expenditure', value: 42.5, unit: 'USD millions', source: 'OAG 2022 Local Authorities Audit (Harare & Bulawayo)', source_url: 'https://auditorgeneral.gov.zw/document-library/' },
+  { series: 'oag-leakage', period: '2023', metric: 'procurement_bypass', value: 95.0, unit: 'USD millions', source: 'OAG 2023 Audit Report (Lands & Input Distribution)', source_url: 'https://auditorgeneral.gov.zw/document-library/' },
+  { series: 'oag-leakage', period: '2024', metric: 'parastatal_asset_transfer', value: 38.0, unit: 'USD millions', source: 'OAG 2024 Audit Report (CMED Fleet Prepayments)', source_url: 'https://auditorgeneral.gov.zw/document-library/' },
+
+  // narrative-throttling: Documented OONI/NetBlocks baseline throttling events (live GDELT & OONI append/override recent periods)
+  { series: 'narrative-throttling', period: '2019-01', metric: 'throttling_measure', value: 6, unit: 'confirmed events', source: 'OONI & NetBlocks Zimbabwe Shutdown Report (Jan 2019)', source_url: 'https://api.ooni.io/api/v1/measurements?probe_cc=ZW&limit=25' },
+  { series: 'narrative-throttling', period: '2020-07', metric: 'throttling_measure', value: 3, unit: 'confirmed events', source: 'OONI Zimbabwe Network Anomalies (Jul 2020)', source_url: 'https://api.ooni.io/api/v1/measurements?probe_cc=ZW&limit=25' },
+  { series: 'narrative-throttling', period: '2023-08', metric: 'throttling_measure', value: 4, unit: 'confirmed events', source: 'OONI Zimbabwe Election-Period Measurements (Aug 2023)', source_url: 'https://api.ooni.io/api/v1/measurements?probe_cc=ZW&limit=25' },
+  { series: 'narrative-throttling', period: '2024-08', metric: 'throttling_measure', value: 2, unit: 'confirmed events', source: 'OONI Zimbabwe SADC Summit Measurements (Aug 2024)', source_url: 'https://api.ooni.io/api/v1/measurements?probe_cc=ZW&limit=25' }
+];
+
+async function fetchWorldBankIndicatorSeries(indicator, series, metric, unit, scaleDivisor = 1) {
+  const url = `https://api.worldbank.org/v2/country/ZW/indicator/${encodeURIComponent(indicator)}?format=json&per_page=30`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' }
+    });
+    if (!res.ok) return [];
+    const payload = await res.json();
+    const rows = Array.isArray(payload?.[1]) ? payload[1] : [];
+    const currentYear = new Date().getUTCFullYear();
+    const observations = [];
+    for (const row of rows) {
+      const year = Number(row?.date);
+      const rawVal = Number(row?.value);
+      if (!Number.isFinite(year) || year < 2015 || year > currentYear) continue;
+      if (!Number.isFinite(rawVal)) continue;
+      observations.push({
+        series,
+        period: String(year),
+        metric,
+        value: Number((rawVal / scaleDivisor).toFixed(2)),
+        unit,
+        source: `World Bank API (${indicator}, ZW ${year})`,
+        source_url: url
+      });
+    }
+    return observations;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchGdeltZimbabweNarrativeSeries() {
+  const query = '(Zimbabwe AND (economy OR corruption OR parliament OR ZANU OR inflation OR protest OR ZiG))';
+  const url = `https://api.gdeltproject.org/api/v2/doc/doc?${new URLSearchParams({
+    query,
+    mode: 'timelinevol',
+    timespan: '3m',
+    format: 'json'
+  })}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' }
+    });
+    if (!res.ok) return [];
+    const payload = await res.json();
+    const dataPoints = payload?.timeline?.[0]?.data;
+    if (!Array.isArray(dataPoints) || dataPoints.length === 0) return [];
+    const weeklyTotals = new Map();
+    const nowTs = Date.now();
+    for (const point of dataPoints) {
+      const rawDate = String(point?.date || '');
+      const m = rawDate.match(/^(\d{4})(\d{2})(\d{2})/);
+      if (!m) continue;
+      const isoDate = `${m[1]}-${m[2]}-${m[3]}`;
+      const ts = Date.parse(`${isoDate}T00:00:00Z`);
+      if (!Number.isFinite(ts) || ts > nowTs) continue;
+      const d = new Date(ts);
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      const weekKey = `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+      const val = Number(point?.value);
+      if (!Number.isFinite(val)) continue;
+      const cur = weeklyTotals.get(weekKey) || { sum: 0, count: 0 };
+      cur.sum += val;
+      cur.count += 1;
+      weeklyTotals.set(weekKey, cur);
+    }
+    return [...weeklyTotals.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-12)
+      .map(([period, stats]) => ({
+        series: 'narrative-throttling',
+        period,
+        metric: 'weekly_narrative_mentions',
+        value: Number(((stats.sum / Math.max(1, stats.count)) * 1000).toFixed(1)),
+        unit: 'GDELT vol index',
+        source: `GDELT DOC Political-Economy Timeline (${period})`,
+        source_url: 'https://api.gdeltproject.org/api/v2/doc/doc?query=Zimbabwe&mode=timelinevol&format=json'
+      }));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchOoniZimbabweAnomaliesSeries() {
+  const url = 'https://api.ooni.io/api/v1/measurements?probe_cc=ZW&anomaly=true&limit=50';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' }
+    });
+    if (!res.ok) return [];
+    const payload = await res.json();
+    const results = Array.isArray(payload?.results) ? payload.results : [];
+    const byMonth = new Map();
+    const nowTs = Date.now();
+    for (const item of results) {
+      const startTime = String(item?.measurement_start_time || '');
+      const monthMatch = startTime.match(/^(\d{4}-\d{2})/);
+      if (!monthMatch) continue;
+      const period = monthMatch[1];
+      const ts = Date.parse(`${period}-01T00:00:00Z`);
+      if (!Number.isFinite(ts) || ts > nowTs) continue;
+      byMonth.set(period, (byMonth.get(period) || 0) + 1);
+    }
+    return [...byMonth.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-8)
+      .map(([period, count]) => ({
+        series: 'narrative-throttling',
+        period,
+        metric: 'throttling_measure',
+        value: count,
+        unit: 'OONI anomalies',
+        source: `OONI Explorer ZW Network Anomalies (${period})`,
+        source_url: url
+      }));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function getPoliticalEconomyTimeSeriesData({ forceRefresh = false } = {}) {
+  const now = Date.now();
+  if (!forceRefresh && politicalTimeSeriesCache.payload && politicalTimeSeriesCache.expiresAt > now) {
+    return politicalTimeSeriesCache.payload;
+  }
+
+  const [wbCpi, wbRemittances, gdeltNarrative, ooniAnomalies] = await Promise.all([
+    fetchWorldBankIndicatorSeries('FP.CPI.TOTL.ZG', 'fx-inflation', 'monthly_cpi_yoy_pct', '% YoY', 1),
+    fetchWorldBankIndicatorSeries('BX.TRF.PWKR.CD.DT', 'remittance-purchasing-power', 'remittances_received', 'USD millions', 1e6),
+    fetchGdeltZimbabweNarrativeSeries(),
+    fetchOoniZimbabweAnomaliesSeries()
+  ]);
+
+  const byKey = new Map();
+  for (const item of EMPIRICAL_POLITICAL_SERIES_BASE) {
+    byKey.set(`${item.series}\u0000${item.period}\u0000${item.metric}`, item);
+  }
+  for (const liveBatch of [wbCpi, wbRemittances, gdeltNarrative, ooniAnomalies]) {
+    for (const item of liveBatch) {
+      byKey.set(`${item.series}\u0000${item.period}\u0000${item.metric}`, item);
+    }
+  }
+
+  // Fallback to live model-relevant social volume only if GDELT returned no weekly points (avoids mixing units)
+  if (gdeltNarrative.length === 0 && latestSocialTelemetry?.available && Number.isFinite(latestSocialTelemetry.scannedPosts)) {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    byKey.set(`narrative-throttling\u0000${todayIso}\u0000weekly_narrative_mentions`, {
+      series: 'narrative-throttling',
+      period: todayIso,
+      metric: 'weekly_narrative_mentions',
+      value: latestSocialTelemetry.scannedPosts,
+      unit: 'relevant posts',
+      source: 'KUVHURA Model-Relevant Social Telemetry',
+      source_url: 'https://api.gdeltproject.org/api/v2/doc/doc?query=Zimbabwe&mode=timelinevol&format=json'
+    });
+  }
+
+  const observations = [...byKey.values()].sort((a, b) =>
+    a.series.localeCompare(b.series) || a.period.localeCompare(b.period) || a.metric.localeCompare(b.metric)
+  );
+
+  const payload = {
+    available: observations.length > 0,
+    updatedAt: new Date().toISOString(),
+    liveSources: {
+      worldBankCpi: wbCpi.length,
+      worldBankRemittances: wbRemittances.length,
+      gdeltNarrative: gdeltNarrative.length,
+      ooniAnomalies: ooniAnomalies.length
+    },
+    observations
+  };
+  politicalTimeSeriesCache = { expiresAt: now + POLITICAL_TIMESERIES_CACHE_MS, payload };
+  return payload;
+}
+
+app.get('/api/political-economy-timeseries', async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    res.json(await getPoliticalEconomyTimeSeriesData({ forceRefresh }));
+  } catch (err) {
+    res.status(500).json({ available: false, error: err.message });
+  }
+});
+
+const LANDPORTAL_MAX_RECORDS = 15;
+const LANDPORTAL_MAX_BYTES = 5 * 1024 * 1024;
+const LANDPORTAL_DEFAULT_URL = 'https://landportal.org/book/datasets';
+
+function sanitizeLandPortalHttpsUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || '').trim());
+    if (parsed.protocol === 'https:' && parsed.hostname) {
+      return parsed.href;
+    }
+  } catch {
+    // fallback below
+  }
+  return LANDPORTAL_DEFAULT_URL;
+}
+
+function parseLandPortalCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  const src = String(text || '').replace(/^\uFEFF/, '');
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      row.push(field);
+      field = '';
+    } else if (ch === '\r' || ch === '\n') {
+      if (ch === '\r' && src[i + 1] === '\n') i += 1;
+      row.push(field);
+      field = '';
+      if (row.some(cell => cell.trim() !== '')) rows.push(row);
+      row = [];
+    } else {
+      field += ch;
+    }
+  }
+  row.push(field);
+  if (row.some(cell => cell.trim() !== '')) rows.push(row);
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(h => String(h || '').trim());
+  const objects = [];
+  for (let r = 1; r < rows.length; r++) {
+    const values = rows[r];
+    const obj = {};
+    for (let c = 0; c < headers.length; c++) {
+      if (headers[c]) obj[headers[c]] = values[c] !== undefined ? values[c] : '';
+    }
+    objects.push(obj);
+  }
+  return objects;
+}
+
+function parseLandPortalRowsFromContent(filename, content) {
+  const ext = path.extname(String(filename || '')).toLowerCase();
+  if (ext === '.csv') {
+    return parseLandPortalCsv(content);
+  }
+  if (ext === '.json') {
+    const data = JSON.parse(String(content || ''));
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      for (const key of ['results', 'data', 'records', 'items']) {
+        if (Array.isArray(data[key])) return data[key];
+      }
+    }
+  }
+  throw new Error(`Unsupported or unrecognized dataset structure in '${path.basename(String(filename || 'dataset'))}'`);
+}
+
+function isZimbabweLandPortalRecord(row) {
+  if (!row || typeof row !== 'object') return false;
+  const candidates = ['iso3', 'country_code', 'country', 'country_name', 'region', 'area']
+    .filter(k => Object.prototype.hasOwnProperty.call(row, k))
+    .map(k => String(row[k] ?? '').trim().toUpperCase());
+  if (candidates.some(val => val === 'ZWE' || val === 'ZIMBABWE')) return true;
+  const blob = Object.values(row)
+    .filter(v => v !== null && v !== undefined)
+    .map(v => String(v))
+    .join(' ')
+    .toLowerCase();
+  return blob.includes('zimbabwe');
+}
+
+function extractLandPortalFirst(row, keys, fallback = '') {
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, k) && row[k] !== null && row[k] !== undefined && String(row[k]).trim() !== '') {
+      return String(row[k]).trim();
+    }
+  }
+  return fallback;
+}
+
+function parseLandPortalNumeric(rawVal) {
+  if (rawVal === null || rawVal === undefined) return null;
+  const cleaned = String(rawVal).replace(/,/g, '').trim();
+  if (!cleaned) return null;
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : null;
+}
+
+function classifyLandPortalLineage(row, numericVal) {
+  const statusBlob = ['status', 'obs_status', 'type', 'estimate', 'method', 'notes']
+    .filter(k => Object.prototype.hasOwnProperty.call(row, k))
+    .map(k => String(row[k] ?? '').toLowerCase())
+    .join(' ');
+  const isProxyHint = ['proxy', 'estimate', 'estimated', 'projection', 'projected', 'modelled', 'modeled']
+    .some(word => statusBlob.includes(word));
+  if (numericVal !== null && !isProxyHint) {
+    return 'Measured Directly';
+  }
+  return 'Proxy / Estimate';
+}
+
+function ingestLandPortalContent({ filename, content, datasetTitle = 'Land Portal Curated Dataset (Zimbabwe)', sourceUrl = LANDPORTAL_DEFAULT_URL }) {
+  const rows = parseLandPortalRowsFromContent(filename, content);
+  const zweRows = rows.filter(isZimbabweLandPortalRecord);
+  const safeTitle = String(datasetTitle || 'Land Portal Curated Dataset (Zimbabwe)').trim().slice(0, 140) || 'Land Portal Curated Dataset (Zimbabwe)';
+  const safeUrl = sanitizeLandPortalHttpsUrl(sourceUrl);
+
+  const normalized = zweRows.map((row, idx) => {
+    const indicator = extractLandPortalFirst(
+      row,
+      ['indicator', 'indicator_name', 'title', 'deal_size', 'land_use', 'topic', 'variable'],
+      `Record #${idx + 1}`
+    ).slice(0, 140);
+    const provider = extractLandPortalFirst(
+      row,
+      ['provider', 'source', 'organization', 'institution', 'data_provider'],
+      safeTitle
+    ).slice(0, 100);
+    const period = extractLandPortalFirst(
+      row,
+      ['year', 'date', 'period', 'time', 'start_year'],
+      'N/A'
+    ).slice(0, 32);
+    const unit = extractLandPortalFirst(row, ['unit', 'units', 'measurement_unit'], '').slice(0, 40);
+    const rawVal = extractLandPortalFirst(row, ['value', 'obs_value', 'amount', 'size_ha', 'hectares'], '');
+    const numVal = parseLandPortalNumeric(rawVal);
+    const lineage = classifyLandPortalLineage(row, numVal);
+    const note = extractLandPortalFirst(row, ['notes', 'description', 'summary', 'status'], '').slice(0, 220);
+
+    return {
+      id: `landportal-zwe-${idx + 1}`,
+      country: 'Zimbabwe',
+      indicator,
+      value: numVal !== null ? numVal : (rawVal || null),
+      unit: unit || null,
+      period,
+      provider,
+      lineage,
+      note: note || null,
+      source_url: safeUrl
+    };
+  });
+
+  normalized.sort((a, b) => String(b.period || '').localeCompare(String(a.period || '')));
+  return {
+    totalRows: rows.length,
+    zimbabweRows: zweRows.length,
+    records: normalized.slice(0, LANDPORTAL_MAX_RECORDS),
+    datasetTitle: safeTitle
+  };
+}
+
+function getTelemetryCachePath() {
+  return process.env.TELEMETRY_CACHE_PATH || path.join(__dirname, 'telemetry_cache.json');
+}
+
+function readLandPortalSignalsFromCache() {
+  const cachePath = getTelemetryCachePath();
+  try {
+    if (!existsSync(cachePath)) {
+      return { signals: [], updatedAt: null, lastDataset: null };
+    }
+    const raw = JSON.parse(readFileSync(cachePath, 'utf8'));
+    const signals = Array.isArray(raw?.landportal_zwe_signals) ? raw.landportal_zwe_signals.slice(0, LANDPORTAL_MAX_RECORDS) : [];
+    return {
+      signals,
+      updatedAt: raw?.landportal_updated_at || null,
+      lastDataset: raw?.landportal_last_dataset || null
+    };
+  } catch {
+    return { signals: [], updatedAt: null, lastDataset: null };
+  }
+}
+
+function saveLandPortalSignalsToCache(records, datasetTitle) {
+  const cachePath = getTelemetryCachePath();
+  let cache = {
+    timestamp: new Date().toISOString(),
+    tracked_topics: []
+  };
+  try {
+    if (existsSync(cachePath)) {
+      const parsed = JSON.parse(readFileSync(cachePath, 'utf8'));
+      if (parsed && typeof parsed === 'object') cache = parsed;
+    }
+  } catch {
+    // initialize clean cache if corrupted
+  }
+
+  const existing = Array.isArray(cache.landportal_zwe_signals) ? cache.landportal_zwe_signals : [];
+  const mergedByKey = new Map();
+  for (const item of [...existing, ...records]) {
+    const key = `${item?.provider || ''}|${item?.indicator || ''}|${item?.period || ''}`;
+    mergedByKey.set(key, item);
+  }
+  const mergedList = [...mergedByKey.values()]
+    .sort((a, b) => String(b.period || '').localeCompare(String(a.period || '')))
+    .slice(0, LANDPORTAL_MAX_RECORDS);
+
+  const updatedAt = new Date().toISOString();
+  cache.landportal_zwe_signals = mergedList;
+  cache.landportal_updated_at = updatedAt;
+  cache.landportal_last_dataset = datasetTitle;
+
+  writeFileSync(cachePath, JSON.stringify(cache, null, 2) + '\n', 'utf8');
+  return {
+    signals: mergedList,
+    updatedAt,
+    lastDataset: datasetTitle
+  };
+}
+
+app.get('/api/landportal/signals', (req, res) => {
+  const data = readLandPortalSignalsFromCache();
+  const measuredCount = data.signals.filter(r => r.lineage === 'Measured Directly').length;
+  const proxyCount = data.signals.length - measuredCount;
+  res.json({
+    available: true,
+    country: 'Zimbabwe',
+    maxRecords: LANDPORTAL_MAX_RECORDS,
+    count: data.signals.length,
+    measuredCount,
+    proxyCount,
+    updatedAt: data.updatedAt,
+    lastDataset: data.lastDataset,
+    signals: data.signals
+  });
+});
+
+app.post('/api/landportal/ingest', (req, res) => {
+  try {
+    const { filename, content, datasetTitle, sourceUrl } = req.body || {};
+    if (!filename || typeof filename !== 'string') {
+      return res.status(400).json({ error: 'A .csv or .json filename is required.' });
+    }
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({ error: 'Dataset file content is required.' });
+    }
+    if (Buffer.byteLength(content, 'utf8') > LANDPORTAL_MAX_BYTES) {
+      return res.status(413).json({ error: 'Dataset exceeds the 5 MB upload limit.' });
+    }
+    const ext = path.extname(filename).toLowerCase();
+    if (ext !== '.csv' && ext !== '.json') {
+      return res.status(400).json({ error: 'Only structured .csv or .json Land Portal exports are accepted.' });
+    }
+
+    const parsed = ingestLandPortalContent({ filename, content, datasetTitle, sourceUrl });
+    if (parsed.records.length === 0) {
+      return res.status(422).json({
+        error: 'No Zimbabwe (ZWE) records were found in the uploaded dataset.',
+        totalRows: parsed.totalRows,
+        zimbabweRows: 0
+      });
+    }
+
+    const saved = saveLandPortalSignalsToCache(parsed.records, parsed.datasetTitle);
+    const measuredCount = saved.signals.filter(r => r.lineage === 'Measured Directly').length;
+    res.json({
+      available: true,
+      country: 'Zimbabwe',
+      totalRows: parsed.totalRows,
+      zimbabweRows: parsed.zimbabweRows,
+      ingestedCount: parsed.records.length,
+      count: saved.signals.length,
+      measuredCount,
+      proxyCount: saved.signals.length - measuredCount,
+      updatedAt: saved.updatedAt,
+      lastDataset: saved.lastDataset,
+      signals: saved.signals
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to parse Land Portal dataset.' });
   }
 });
 
@@ -5025,7 +5960,7 @@ if (process.argv.includes('--update-treasury-cache')) {
   server.listen(PORT, HOST, () => {
     console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
     setTimeout(() => {
-      refreshDualEngineTimelineData().catch(err => {
+      refreshDualEngineTimelineData({ allowDbSync: false }).catch(err => {
         console.warn(`Initial timeline warmup warning: ${err.message}`);
       });
     }, 1500).unref();

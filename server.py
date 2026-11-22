@@ -53,9 +53,107 @@ YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS = (
     ("UCGXpCeZNe7kzeHqMlg96Ebg", "BUSTOP TV"),
     ("UC8z43AxZwpXkEfNqJopiCew", "SlyMediaTv"),
 )
-X_PUBLIC_INDEX_RSS_URL = "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en"
+X_PUBLIC_INDEX_RSS_URLS = (
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(politics+OR+parliament+OR+ZANU+OR+Mnangagwa+OR+Chiwenga+OR+Chamisa+OR+constitution+OR+CAB3+OR+2030+OR+judiciary+OR+SADC+OR+election+OR+opposition)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(economy+OR+inflation+OR+ZiG+OR+ZWG+OR+RBZ+OR+Treasury+OR+budget+OR+Mthuli+OR+ZIMRA+OR+tax+OR+debt+OR+IMF+OR+forex+OR+remittances)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(corruption+OR+ZACC+OR+Auditor-General+OR+tender+OR+procurement+OR+Mutapa+OR+ZINARA+OR+ZESA+OR+Tagwirei+OR+Chivayo+OR+mining+OR+lithium+OR+gold+OR+cartel)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+drought+OR+healthcare+OR+Starlink)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+)
+X_PUBLIC_INDEX_RSS_URL = X_PUBLIC_INDEX_RSS_URLS[0]
+YOUTUBE_MODEL_QUERIES = (
+    "Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR judiciary OR military OR SADC OR election OR opposition OR war veterans) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
+    "Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR IMF OR forex OR exchange rate OR diaspora OR remittances OR wages) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
+    "Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR mining OR lithium OR gold OR diamonds OR land OR cartel) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy -excavator -machinery",
+    "Zimbabwe (protest OR strike OR resistance OR human rights OR PVO Bill OR civil society OR ZCTU OR teachers OR nurses OR doctors OR water crisis OR load shedding OR power cuts OR demolitions OR drought OR healthcare OR Starlink) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
+)
+YOUTUBE_MODEL_QUERY = YOUTUBE_MODEL_QUERIES[0]
 X_CACHE = {"expires_at": 0, "result": None}
 X_CACHE_TTL_SECONDS = 900
+
+SOCIAL_NOISE_EXCLUDE_RE = re.compile(
+    r"\b(cricket|rugby|football|soccer|chevrons|sables|warriors\s+fc|dynamos|highlanders|caps\s+united|"
+    r"premier\s+soccer|castle\s+lager|world\s+cup|nations\s+cup|one\s+day\s+match|t20|odi|test\s+match|"
+    r"wickets?|innings|overs|balls\s+left|runs\s+off|century\s+for|batting|bowling|match\s+highlights|"
+    r"extended\s+highlights|live\s+fan\s+chat|audio\s+commentar|milton\s+shumba|sikandar\s+raza|"
+    r"brian\s+bennett|blessing\s+muzarabani|sean\s+williams|zimdancehall|sungura|amapiano|"
+    r"official\s+music\s+video|lyric\s+video|gospel\s+song|prophecy|prophet\s+says|sermon|"
+    r"pastor\s+predicts|comedy\s+skit|standup\s+comedy|cooking\s+vlog|travel\s+vlog|backpacking|"
+    r"kino\s+yves|how\s+to\s+buy\s+crypto|buy\s+crypto\s+in\s+zimbabwe|buy\s+usdt|recipe|safari\s+tour|"
+    r"victoria\s+falls\s+hotel|wildlife\s+photography|road\s+traffic\s+accident|fatal\s+road\s+accident|"
+    r"accident\s+update|accident\s+scene|fatal\s+crash|wellness\s+and\s+cancer\s+campaign|"
+    r"prize-winning\s+story|earthmoving\s+equipment|construction\s+machinery|mining\s+equipment|"
+    r"mining\s+machinery|excavators?\s+for\s+sale|bulldozer|heavy\s+machinery\s+supplier)\b",
+    re.IGNORECASE,
+)
+
+MODEL_RELEVANCE_RE = re.compile(
+    r"\b(zanu[\s-]?pf|zanupf|zanu|mnangagwa|chiwenga|chamisa|ccc|parliament|parlzim|hansard|constitution|"
+    r"constitutional|constitutionalism|cab3|2030|term\s+extension|amendment|cabinet|minister|ministry|"
+    r"government|regime|opposition|election|electoral|by-election|delimitation|voter\s+roll|zec|sadc|"
+    r"sanctions|zidera|brics|foreign\s+policy|diplomacy|sovereignty|judiciary|high\s+court|supreme\s+court|"
+    r"constitutional\s+court|magistrate|court\s+ruling|court\s+challenge|impeachment|recall|arrest|arrested|"
+    r"detention|bail|zrp|police|military|zdf|army|cio|war\s+veterans?|geza|mukonori|repression|censorship|"
+    r"pvo\s+bill|human\s+rights|democracy|democratic|rule\s+of\s+law|state\s+capture|devolution|municipality|"
+    r"city\s+council|local\s+authorit|mayor|governor|governance|policy|bill|statute|statutory\s+instrument|"
+    r"gazette|legislation|lawmaker|senate|commission\s+of\s+inquiry|economy|economic|economics|zimeconomy|"
+    r"zimbudget|zimpolitics|inflation|hyperinflation|zig|zwg|zimdollar|rtgs|bond\s+note|dollarization|"
+    r"de-dollarization|dedollarization|rbz|reserve\s+bank|central\s+bank|monetary\s+policy|gold[\s-]backed|"
+    r"mushayavanhu|exchange\s+rate|parallel\s+market|black\s+market|forex|currency|devaluation|treasury|"
+    r"budget|budget\s+presentation|finance\s+bill|appropriation|mthuli|ncube|fiscal|debt|public\s+debt|"
+    r"sovereign\s+debt|arrears|structured\s+dialogue|imf|world\s+bank|afdb|afreximbank|zimstat|zimra|tax|"
+    r"vat|imtt|customs|tariff|tollgate|subsidy|austerity|corruption|corrupt|zacc|auditor[\s-]?general|oag|"
+    r"tender|procurement|looting|cartel|smuggl|illicit|gold\s+mafia|al\s+jazeera|geo\s+pomona|pomona|drax|"
+    r"tagwirei|wicknell|chivayo|parastatal|mutapa|zinara|zesa|zupco|netone|telone|econet|starlink|potraz|"
+    r"zbc|gmb|cottco|nssa|cmed|kariba|hwange|air\s+zimbabwe|mining|lithium|gold|diamond|platinum|chrome|"
+    r"mineral|marange|bikita|land\s+reform|title\s+deed|compensation|command\s+agriculture|pfumvudza|diaspora|"
+    r"remittance|remittances|brain\s+drain|emigration|zep|gdp|poverty|unemployment|youth\s+unemployment|"
+    r"informal\s+sector|informal\s+economy|vendors|civil\s+serv|public\s+sector|salary|salaries|wages|"
+    r"pension|fuel|diesel|petrol|price\s+hike|cost\s+of\s+living|investment|trade|protest|protests|strike|"
+    r"strikes|industrial\s+action|go-slow|petition|shutdown|boycott|resistance|activis|mobiliz|civic|"
+    r"civil\s+society|trade\s+union|zctu|teachers|nurses|doctors|zinasu|students|whistleblower|accountability|"
+    r"transparency|chin'ono|hopewell|mahere|sikhala|bhoroma|newshawks|zimlive|openparly|veritas|zlhr|misa|"
+    r"kubatana|crisis\s+coalition|load\s+shedding|power\s+cut|blackout|electricity|energy\s+tariff|"
+    r"water\s+crisis|borehole|sewer|refuse\s+collection|service\s+delivery|potholes|road\s+rehab|rates|"
+    r"cholera|hospital|healthcare|clinic|maternity|drug\s+shortage|school|education|demolition|eviction|"
+    r"housing|drought|el\s+nino|hunger|food\s+security|food\s+aid|grain|maize|energy\s+crisis|infrastructure|"
+    r"freedom|liberation|civic\s+space|media\s+freedom|journalist|chitungwiza|epworth|gweru|mutare|masvingo|"
+    r"marondera|kwekwe|kadoma|matabeleland|gukurahundi)\b",
+    re.IGNORECASE,
+)
+
+EXCLUDED_HASHTAGS = {
+    "#shorts", "#short", "#viral", "#fyp", "#foryou", "#trending", "#explore", "#reels", "#tiktok",
+    "#youtube", "#subscribe", "#follow", "#like", "#share", "#love", "#video", "#live", "#watch",
+    "#cricket", "#zimbabwecricket", "#rugby", "#football", "#soccer", "#sports", "#sport", "#athletics",
+    "#dance", "#music", "#amapiano", "#zimdancehall", "#sungura", "#comedy", "#funny", "#entertainment",
+    "#prophecy", "#gospel", "#sermon", "#travel", "#safari", "#tourism", "#wildlife", "#nature",
+    "#photography", "#art", "#fashion", "#food", "#recipe", "#fitness", "#wellness", "#lifestyle",
+    "#history", "#africanhistory", "#greatzimbabwe", "#chile", "#ireland", "#worldrugby", "#nationscup",
+    "#majorshiftinzimbabweanfootball", "#brianbennett", "#miltonshumba", "#sikandarraza",
+    "#earthmovingequipment", "#constructionmachinery", "#miningequipment", "#miningmachinery", "#getthepicture",
+}
+
+HASHTAG_NOISE_RE = re.compile(
+    r"(cricket|rugby|football|soccer|sport|dance|music|amapiano|comedy|safari|travel|prophecy|recipe|"
+    r"shorts|viral|fyp|reels|tiktok|chile|ireland|shumba|bennett|raza|earthmoving|machinery|equipment)",
+    re.IGNORECASE,
+)
+
+
+def _is_model_relevant_social_item(text, extra_meta=""):
+    combined = re.sub(r"\s+", " ", f"{text or ''} {extra_meta or ''}").strip()
+    if not combined:
+        return False
+    if SOCIAL_NOISE_EXCLUDE_RE.search(combined):
+        return False
+    return bool(MODEL_RELEVANCE_RE.search(combined))
+
+
+def _is_model_relevant_hashtag(tag):
+    key = (tag or "").strip().lower()
+    if len(key) < 3 or key in EXCLUDED_HASHTAGS:
+        return False
+    return not bool(HASHTAG_NOISE_RE.search(key))
 
 
 def _is_placeholder_key(value):
@@ -180,8 +278,20 @@ def query_gemini_model(prompt):
     return 502, {"error": last_error}
 SOCIAL_FEEDS = (
     (
-        "Bluesky",
-        "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=Zimbabwe&sort=latest&limit=100",
+        "Bluesky (Core)",
+        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe', 'sort': 'latest', 'limit': '100'})}",
+    ),
+    (
+        "Bluesky (Governance)",
+        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe parliament OR ZANU OR Mnangagwa OR constitution OR opposition OR SADC', 'sort': 'latest', 'limit': '100'})}",
+    ),
+    (
+        "Bluesky (Economy)",
+        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe economy OR inflation OR ZiG OR RBZ OR budget OR Treasury OR IMF OR mining', 'sort': 'latest', 'limit': '100'})}",
+    ),
+    (
+        "Bluesky (Civic)",
+        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe corruption OR protest OR strike OR rights OR ZESA OR drought OR healthcare', 'sort': 'latest', 'limit': '100'})}",
     ),
     (
         "Mastodon (mastodon.social)",
@@ -235,54 +345,64 @@ def _fetch_youtube_source(api_key, now_ts):
     if YOUTUBE_CACHE["result"] is not None and YOUTUBE_CACHE["expires_at"] > now_ts:
         return YOUTUBE_CACHE["result"]
 
-    search_qs = urlencode({
-        "part": "snippet",
-        "type": "video",
-        "order": "date",
-        "maxResults": "50",
-        "q": "Zimbabwe",
-        "key": api_key,
-    })
-    search_url = f"https://www.googleapis.com/youtube/v3/search?{search_qs}"
-    request = Request(
-        search_url,
-        headers={"Accept": "application/json", "User-Agent": "KUVHURA-Observatory/1.0"},
-    )
-    try:
-        with urlopen(request, timeout=10) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as err:
-        reason = ""
-        try:
-            err_body = json.loads(err.read().decode("utf-8"))
-            reason = str(
-                (err_body.get("error", {}).get("errors") or [{}])[0].get("reason")
-                or err_body.get("error", {}).get("status")
-                or ""
-            ).strip()
-        except Exception:
-            reason = ""
-        detail = f"{reason} (HTTP {err.code})" if reason else f"HTTP {err.code}"
-        raise RuntimeError(f"YouTube Data API v3 error: {detail}") from None
-    except Exception as exc:
-        raise RuntimeError(_redact_api_key(exc)) from None
+    search_items_by_id = {}
+    succeeded_search_queries = 0
+    last_error = None
 
-    search_items = payload.get("items") or []
-    video_ids = []
-    seen_ids = set()
-    for item in search_items:
-        vid = _sanitize_youtube_video_id((item.get("id") or {}).get("videoId"))
-        if vid and vid not in seen_ids:
-            seen_ids.add(vid)
-            video_ids.append(vid)
-    video_ids = video_ids[:50]
+    for query in YOUTUBE_MODEL_QUERIES:
+        search_qs = urlencode({
+            "part": "snippet",
+            "type": "video",
+            "order": "date",
+            "maxResults": "50",
+            "q": query,
+            "key": api_key,
+        })
+        search_url = f"https://www.googleapis.com/youtube/v3/search?{search_qs}"
+        request = Request(
+            search_url,
+            headers={"Accept": "application/json", "User-Agent": "KUVHURA-Observatory/1.0"},
+        )
+        try:
+            with urlopen(request, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            succeeded_search_queries += 1
+            for item in payload.get("items") or []:
+                vid = _sanitize_youtube_video_id((item.get("id") or {}).get("videoId"))
+                if vid and vid not in search_items_by_id:
+                    search_items_by_id[vid] = item
+        except HTTPError as err:
+            reason = ""
+            try:
+                err_body = json.loads(err.read().decode("utf-8"))
+                reason = str(
+                    (err_body.get("error", {}).get("errors") or [{}])[0].get("reason")
+                    or err_body.get("error", {}).get("status")
+                    or ""
+                ).strip()
+            except Exception:
+                reason = ""
+            detail = f"{reason} (HTTP {err.code})" if reason else f"HTTP {err.code}"
+            last_error = f"YouTube Data API v3 error: {detail}"
+        except Exception as exc:
+            last_error = _redact_api_key(exc)
+
+    if succeeded_search_queries == 0:
+        raise RuntimeError(last_error or "YouTube Data API v3 search failed") from None
+
+    search_items = list(search_items_by_id.values())
+    video_ids = list(search_items_by_id.keys())
 
     details_by_id = {}
-    if video_ids:
+    detail_batches_completed = 0
+    for start_idx in range(0, len(video_ids), 50):
+        chunk = video_ids[start_idx:start_idx + 50]
+        if not chunk:
+            continue
         try:
             details_qs = urlencode({
                 "part": "snippet,statistics",
-                "id": ",".join(video_ids),
+                "id": ",".join(chunk),
                 "key": api_key,
             })
             details_req = Request(
@@ -291,6 +411,7 @@ def _fetch_youtube_source(api_key, now_ts):
             )
             with urlopen(details_req, timeout=10) as d_resp:
                 details_payload = json.loads(d_resp.read().decode("utf-8"))
+                detail_batches_completed += 1
                 for d_item in details_payload.get("items") or []:
                     vid = _sanitize_youtube_video_id(d_item.get("id"))
                     if vid:
@@ -314,7 +435,11 @@ def _fetch_youtube_source(api_key, now_ts):
         channel = re.sub(r"\s+", " ", html_lib.unescape(snippet.get("channelTitle") or "")).strip()
         published_at = snippet.get("publishedAt") or (item.get("snippet") or {}).get("publishedAt")
         url = f"https://www.youtube.com/watch?v={vid}" if vid else ""
+        tags = snippet.get("tags") or []
+        extra_meta = f"{channel} {' '.join(str(t) for t in tags if t)}".strip()
         combined = f"{title} {description}".strip()
+        if not _is_model_relevant_social_item(combined, extra_meta):
+            continue
         views = _parse_non_negative_int(stats.get("viewCount"))
         likes = _parse_non_negative_int(stats.get("likeCount"))
         comments = _parse_non_negative_int(stats.get("commentCount"))
@@ -329,6 +454,7 @@ def _fetch_youtube_source(api_key, now_ts):
             "url": url,
         })
         if vid and title:
+            clean_tags = [t for t in dict.fromkeys(HASHTAG_PATTERN.findall(combined)) if _is_model_relevant_hashtag(t)][:6]
             videos.append({
                 "videoId": vid,
                 "title": title,
@@ -338,7 +464,7 @@ def _fetch_youtube_source(api_key, now_ts):
                 "viewCount": views,
                 "likeCount": likes,
                 "commentCount": comments,
-                "hashtags": list(dict.fromkeys(HASHTAG_PATTERN.findall(combined)))[:6],
+                "hashtags": clean_tags,
             })
 
     videos.sort(
@@ -352,7 +478,7 @@ def _fetch_youtube_source(api_key, now_ts):
         "configured": True,
         "status": "connected",
         "transport": "youtube_api_v3",
-        "quotaUnitsPerRefresh": 101 if details_by_id else 100,
+        "quotaUnitsPerRefresh": succeeded_search_queries * 100 + detail_batches_completed,
         "cacheWindowMinutes": YOUTUBE_CACHE_TTL_SECONDS // 60,
         "videosSampled": len(videos),
         "enrichedWithStats": bool(details_by_id),
@@ -360,7 +486,7 @@ def _fetch_youtube_source(api_key, now_ts):
         "totalViews": total_views,
         "totalLikes": total_likes,
         "totalComments": total_comments,
-        "topVideos": videos[:30],
+        "topVideos": videos[:50],
         "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "refreshIntervalSeconds": YOUTUBE_CACHE_TTL_SECONDS,
         "message": None,
@@ -443,14 +569,17 @@ def _fetch_youtube_public_atom_feeds(now_ts, configured=False):
                 xml_text = resp.read().decode("utf-8", errors="replace")
         except Exception:
             continue
-        for item in _parse_youtube_atom_feed(xml_text, label)[:10]:
+        for item in _parse_youtube_atom_feed(xml_text, label)[:15]:
             if item["videoId"] in seen_ids:
                 continue
             seen_ids.add(item["videoId"])
+            combined = f"{item['title']} {item['description']}".strip()
+            if not _is_model_relevant_social_item(combined, item["channelTitle"]):
+                continue
             total_views += item["viewCount"]
             total_likes += item["likeCount"]
             channels.add(item["channelTitle"])
-            combined = f"{item['title']} {item['description']}".strip()
+            clean_tags = [t for t in item["hashtags"] if _is_model_relevant_hashtag(t)]
             posts.append({
                 "text": combined,
                 "created_at": item["publishedAt"],
@@ -465,7 +594,7 @@ def _fetch_youtube_public_atom_feeds(now_ts, configured=False):
                 "viewCount": item["viewCount"],
                 "likeCount": item["likeCount"],
                 "commentCount": 0,
-                "hashtags": item["hashtags"],
+                "hashtags": clean_tags,
             })
 
     if not videos:
@@ -473,10 +602,10 @@ def _fetch_youtube_public_atom_feeds(now_ts, configured=False):
 
     videos.sort(key=lambda v: (v["publishedAt"] or "", v["viewCount"]), reverse=True)
     top_videos = sorted(
-        videos[:40],
+        videos[:60],
         key=lambda v: (str(v["publishedAt"] or "")[:10], v["viewCount"] + v["likeCount"] * 5),
         reverse=True,
-    )[:30]
+    )[:50]
     meta = {
         "configured": configured,
         "status": "connected",
@@ -548,18 +677,34 @@ def _parse_x_public_rss_feed(xml_text):
 def _fetch_x_public_index_feed(now_ts):
     if X_CACHE["result"] is not None and X_CACHE["expires_at"] > now_ts:
         return X_CACHE["result"]
-    req = Request(
-        X_PUBLIC_INDEX_RSS_URL,
-        headers={
-            "Accept": "application/rss+xml, application/xml, text/xml",
-            "User-Agent": "KUVHURA-Observatory/1.0",
-        },
-    )
-    with urlopen(req, timeout=8) as resp:
-        xml_text = resp.read().decode("utf-8", errors="replace")
-    parsed = _parse_x_public_rss_feed(xml_text)
+    seen_keys = set()
+    parsed = []
+    for rss_url in X_PUBLIC_INDEX_RSS_URLS:
+        req = Request(
+            rss_url,
+            headers={
+                "Accept": "application/rss+xml, application/xml, text/xml",
+                "User-Agent": "KUVHURA-Observatory/1.0",
+            },
+        )
+        try:
+            with urlopen(req, timeout=8) as resp:
+                xml_text = resp.read().decode("utf-8", errors="replace")
+        except Exception:
+            continue
+        for item in _parse_x_public_rss_feed(xml_text):
+            if not _is_model_relevant_social_item(item.get("text", "")):
+                continue
+            dedupe_key = item.get("url") or item.get("text", "").lower()
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
+            parsed.append({
+                **item,
+                "hashtags": [t for t in item.get("hashtags", []) if _is_model_relevant_hashtag(t)],
+            })
     if not parsed:
-        raise RuntimeError("X public index feed returned no posts.")
+        raise RuntimeError("X public index feed returned no model-relevant posts.")
     parsed.sort(key=lambda item: item["created_at"] or "", reverse=True)
     meta = {
         "configured": bool((os.environ.get("X_BEARER_TOKEN") or "").strip()),
@@ -573,7 +718,7 @@ def _fetch_x_public_index_feed(now_ts):
                 "url": item["url"],
                 "hashtags": item["hashtags"],
             }
-            for item in parsed[:30]
+            for item in parsed[:50]
         ],
         "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "refreshIntervalSeconds": X_CACHE_TTL_SECONDS,
@@ -595,11 +740,14 @@ def _fetch_social_source(feed):
         payload = json.loads(response.read().decode("utf-8"))
 
     posts = []
-    if source == "Bluesky":
+    if source.startswith("Bluesky"):
         for item in payload.get("posts", []):
             record = item.get("record", {})
+            text = record.get("text", "")
+            if not _is_model_relevant_social_item(text):
+                continue
             posts.append({
-                "text": record.get("text", ""),
+                "text": text,
                 "created_at": record.get("createdAt"),
                 "url": item.get("uri"),
             })
@@ -607,8 +755,11 @@ def _fetch_social_source(feed):
         if not isinstance(payload, list):
             raise ValueError("Mastodon returned an invalid status list")
         for item in payload:
+            text = _plain_text(item.get("content", ""))
+            if not _is_model_relevant_social_item(text):
+                continue
             posts.append({
-                "text": _plain_text(item.get("content", "")),
+                "text": text,
                 "created_at": item.get("created_at"),
                 "url": item.get("url"),
             })
@@ -873,7 +1024,11 @@ def fetch_social_hashtag_trends():
     tag_counts = {}
     for sample_name, sample in (("latest", latest_sample), ("earlier", earlier_sample)):
         for post in sample:
+            if not _is_model_relevant_social_item(post["text"]):
+                continue
             for tag in HASHTAG_PATTERN.findall(post["text"]):
+                if not _is_model_relevant_hashtag(tag):
+                    continue
                 key = tag.casefold()
                 if key not in tag_counts:
                     tag_counts[key] = {"tag": tag, "latestMentions": 0, "earlierMentions": 0}
@@ -916,7 +1071,7 @@ def fetch_social_hashtag_trends():
         "earlierSamplePosts": len(earlier_sample),
         "coverageStart": min(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
         "coverageEnd": max(valid_dates).isoformat(timespec="seconds") if valid_dates else None,
-        "hashtags": trends[:30],
+        "hashtags": trends[:50],
         "x": x_meta,
         "youtube": youtube_meta,
     }
@@ -1103,6 +1258,37 @@ class AppHandler(BaseHTTPRequestHandler):
 
         if path == "/api/social/hashtags":
             respond_json(self, 200, fetch_social_hashtag_trends())
+            return
+
+        if path == "/api/landportal/signals":
+            cache_path = os.environ.get("TELEMETRY_CACHE_PATH", os.path.join(BASE_DIR, "telemetry_cache.json"))
+            signals = []
+            updated_at = None
+            last_dataset = None
+            try:
+                if os.path.isfile(cache_path):
+                    with open(cache_path, "r", encoding="utf-8") as handle:
+                        raw_cache = json.load(handle)
+                    if isinstance(raw_cache, dict):
+                        raw_signals = raw_cache.get("landportal_zwe_signals")
+                        if isinstance(raw_signals, list):
+                            signals = raw_signals[:15]
+                        updated_at = raw_cache.get("landportal_updated_at")
+                        last_dataset = raw_cache.get("landportal_last_dataset")
+            except Exception:
+                signals = []
+            measured = sum(1 for item in signals if isinstance(item, dict) and item.get("lineage") == "Measured Directly")
+            respond_json(self, 200, {
+                "available": True,
+                "country": "Zimbabwe",
+                "maxRecords": 15,
+                "count": len(signals),
+                "measuredCount": measured,
+                "proxyCount": len(signals) - measured,
+                "updatedAt": updated_at,
+                "lastDataset": last_dataset,
+                "signals": signals,
+            })
             return
 
         if path == "/api/ai/status":

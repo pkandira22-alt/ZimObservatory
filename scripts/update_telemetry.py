@@ -71,6 +71,13 @@ def generate_telemetry_cache():
         "layer2_macro": macro,
     }
 
+    if isinstance(previous.get("landportal_zwe_signals"), list):
+        cache_data["landportal_zwe_signals"] = previous["landportal_zwe_signals"][:15]
+    if previous.get("landportal_updated_at"):
+        cache_data["landportal_updated_at"] = previous["landportal_updated_at"]
+    if previous.get("landportal_last_dataset"):
+        cache_data["landportal_last_dataset"] = previous["landportal_last_dataset"]
+
     cache_path.write_text(json.dumps(cache_data, indent=2) + "\n", encoding="utf-8")
     print(
         f"Telemetry cache generated with deep PDF metadata ({accessible_sources}/{total_sources} portals accessible, "

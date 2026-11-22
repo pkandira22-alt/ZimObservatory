@@ -150,9 +150,15 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Timeline Chart (2 Cols) -->
             <div class="lg:col-span-2 bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col">
-                <div class="flex items-center justify-between mb-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
                     <h3 class="text-lg font-bold text-white">Longitudinal Risk &amp; Legislative Trajectory</h3>
-                    <span id="window-label" class="text-xs text-slate-400 font-mono">30-Day Rolling Window</span>
+                    <div class="flex items-center gap-2">
+                        <select id="srTimelineDataModeSelect" aria-label="Filter trajectory between live readings only and all 30 days including baseline" class="bg-slate-900 text-slate-200 text-xs font-medium border border-slate-700 rounded-md px-2.5 py-1 focus:outline-none focus:border-accent">
+                            <option value="ALL" selected>All 30 Days (incl. Baseline)</option>
+                            <option value="LIVE">Live Readings Only</option>
+                        </select>
+                        <span id="window-label" class="text-xs text-slate-400 font-mono">30-Day Rolling Window</span>
+                    </div>
                 </div>
                 <div class="relative flex-grow h-80">
                     <canvas id="timelineChart"></canvas>
@@ -250,7 +256,7 @@
                 </span>
             </div>
 
-            <div id="portal-status-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3"></div>
+            <div id="portal-status-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 max-h-48 overflow-y-auto pr-1"></div>
 
             <div id="policy-briefing-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 space-y-3"></div>
 
@@ -269,9 +275,9 @@
                 </span>
             </div>
 
-            <div id="treasury-quick-links" class="bg-slate-900/50 border border-slate-800/80 rounded-lg p-3 space-y-2"></div>
+            <div id="treasury-quick-links" class="bg-slate-900/50 border border-slate-800/80 rounded-lg p-3"></div>
 
-            <div id="treasury-portal-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"></div>
+            <div id="treasury-portal-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 max-h-56 overflow-y-auto pr-1"></div>
 
             <div id="treasury-briefing-panel" class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 space-y-3"></div>
 
@@ -700,7 +706,24 @@
                 ? `<span class="h-2 w-2 rounded-full bg-success mr-2"></span>Live Sync Active (${connectedOrigin})`
                 : `<span class="h-2 w-2 rounded-full bg-warning mr-2"></span>Connected · Seed Mode (${connectedOrigin})`;
 
-            renderChart(timeline);
+            window.__latestSystemicTimeline = timeline;
+            renderFilteredSystemicTimeline();
+        }
+
+        function renderFilteredSystemicTimeline() {
+            const fullTimeline = Array.isArray(window.__latestSystemicTimeline) ? window.__latestSystemicTimeline : [];
+            const mode = document.getElementById('srTimelineDataModeSelect')?.value || 'ALL';
+            const filtered = mode === 'LIVE'
+                ? fullTimeline.filter(entry => Number.isFinite(entry.social_volume))
+                : fullTimeline;
+            const liveCount = fullTimeline.filter(entry => Number.isFinite(entry.social_volume)).length;
+            const labelEl = document.getElementById('window-label');
+            if (labelEl) {
+                labelEl.innerText = mode === 'LIVE'
+                    ? `${filtered.length} Live ${filtered.length === 1 ? 'Day' : 'Days'}`
+                    : `${filtered.length}-Day Rolling Window (${liveCount} live)`;
+            }
+            renderChart(filtered);
         }
 
         function isSafeYouTubeWatchUrl(url) {
@@ -1633,7 +1656,7 @@
                     });
 
                 const list = document.createElement('div');
-                list.className = 'divide-y divide-slate-800/80 max-h-[520px] overflow-y-auto pr-1';
+                list.className = 'divide-y divide-slate-800/80 max-h-80 overflow-y-auto pr-1';
                 sortedTopics.slice(0, 25).forEach((entry, idx) => {
                     const topicFriction = Number.isFinite(entry.friction) ? entry.friction : entry.friction_score;
                     const isElevated = Number.isFinite(topicFriction) && topicFriction >= 50;
@@ -1847,32 +1870,50 @@
 
             if (quickLinksEl) {
                 quickLinksEl.replaceChildren();
+                const bar = document.createElement('div');
+                bar.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2';
+
                 const dirTitle = document.createElement('div');
                 dirTitle.className = 'text-[11px] font-semibold uppercase tracking-wider text-amber-300';
                 dirTitle.textContent = 'Official Ministry of Finance Portal Directory (zimtreasury.co.zw)';
-                quickLinksEl.append(dirTitle);
 
-                const groupsWrap = document.createElement('div');
-                groupsWrap.className = 'space-y-1.5';
-                TREASURY_DIRECTORY_GROUPS.forEach(grp => {
-                    const row = document.createElement('div');
-                    row.className = 'flex flex-wrap items-center gap-1.5 text-[11px]';
-                    const lbl = document.createElement('span');
-                    lbl.className = 'text-slate-400 font-semibold mr-1';
-                    lbl.textContent = `${grp.group}:`;
-                    row.append(lbl);
-                    grp.links.forEach(item => {
-                        const a = document.createElement('a');
-                        a.href = item.url;
-                        a.target = '_blank';
-                        a.rel = 'noopener noreferrer';
-                        a.className = 'px-2 py-0.5 rounded bg-slate-950/80 border border-slate-700/80 text-slate-200 hover:text-amber-300 hover:border-amber-500/50 transition-colors';
-                        a.textContent = item.label;
-                        row.append(a);
+                const controls = document.createElement('div');
+                controls.className = 'flex flex-wrap items-center gap-2';
+
+                const dirSelect = document.createElement('select');
+                dirSelect.setAttribute('aria-label', 'Select an official zimtreasury.co.zw portal');
+                dirSelect.className = 'text-xs font-medium px-2.5 py-1.5 rounded-md border border-slate-700 bg-slate-950 text-slate-200 focus:border-amber-400 focus:outline-none cursor-pointer';
+
+                let firstUrl = 'https://zimtreasury.co.zw/';
+                TREASURY_DIRECTORY_GROUPS.forEach((grp, gIdx) => {
+                    const og = document.createElement('optgroup');
+                    og.label = grp.group;
+                    grp.links.forEach((item, lIdx) => {
+                        const opt = document.createElement('option');
+                        opt.value = item.url;
+                        opt.textContent = item.label;
+                        if (gIdx === 0 && lIdx === 0) firstUrl = item.url;
+                        og.append(opt);
                     });
-                    groupsWrap.append(row);
+                    dirSelect.append(og);
                 });
-                quickLinksEl.append(groupsWrap);
+
+                const openLink = document.createElement('a');
+                openLink.href = firstUrl;
+                openLink.target = '_blank';
+                openLink.rel = 'noopener noreferrer';
+                openLink.className = 'text-xs font-semibold px-3 py-1.5 rounded-md border border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-colors whitespace-nowrap';
+                openLink.textContent = 'Open Portal ↗';
+
+                dirSelect.addEventListener('change', () => {
+                    if (/^https:\/\/zimtreasury\.co\.zw\//i.test(dirSelect.value)) {
+                        openLink.href = dirSelect.value;
+                    }
+                });
+
+                controls.append(dirSelect, openLink);
+                bar.append(dirTitle, controls);
+                quickLinksEl.append(bar);
             }
 
             const sources = Array.isArray(treasury?.sources) && treasury.sources.length
@@ -2205,7 +2246,7 @@
                     });
 
                 const list = document.createElement('div');
-                list.className = 'divide-y divide-slate-800/80 max-h-[560px] overflow-y-auto pr-1';
+                list.className = 'divide-y divide-slate-800/80 max-h-80 overflow-y-auto pr-1';
                 sortedTopics.slice(0, 25).forEach((entry, idx) => {
                     const topicFriction = Number.isFinite(entry.friction) ? entry.friction : null;
                     const isElevated = Number.isFinite(topicFriction) && topicFriction >= 52;
@@ -2403,6 +2444,7 @@
             });
         }
 
+        document.getElementById('srTimelineDataModeSelect')?.addEventListener('change', renderFilteredSystemicTimeline);
         document.getElementById('refreshFeedBtn').addEventListener('click', fetchTimelineData);
         window.addEventListener('load', fetchTimelineData);
     </script>

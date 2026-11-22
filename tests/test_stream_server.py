@@ -1205,9 +1205,14 @@ class YouTubeDataApiTests(unittest.TestCase):
             <pubDate>Sun, 22 Nov 2026 13:45:04 GMT</pubDate>
           </item>
           <item>
-            <title>Untrusted link test #Harare - X</title>
+            <title>Untrusted link test on Harare council budget #Harare - X</title>
             <link>javascript:alert(1)</link>
             <pubDate>Sun, 22 Nov 2026 12:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title>Zimbabwe A vs Ireland A cricket match highlights #ZimbabweCricket - X</title>
+            <link>https://news.google.com/rss/articles/CBMiCricketNoise</link>
+            <pubDate>Sun, 22 Nov 2026 11:00:00 GMT</pubDate>
           </item>
         </channel></rss>"""
 
@@ -1236,6 +1241,51 @@ class YouTubeDataApiTests(unittest.TestCase):
         self.assertEqual(posts[0]["url"], "https://news.google.com/rss/articles/CBMiTestArticle123")
         self.assertEqual(posts[1]["url"], "")
         self.assertIn("#Zimbabwe", posts[0]["hashtags"])
+        self.assertTrue(all("cricket" not in p["text"].lower() for p in posts))
+        self.assertGreaterEqual(len(py_server.YOUTUBE_MODEL_QUERIES), 4)
+        self.assertGreaterEqual(len(py_server.X_PUBLIC_INDEX_RSS_URLS), 4)
+        self.assertTrue(py_server._is_model_relevant_social_item("CAB3 constitutional amendment debate in Zimbabwe"))
+        self.assertTrue(py_server._is_model_relevant_social_item("ZIMRA tax policy and Mthuli Ncube fiscal review"))
+        self.assertTrue(py_server._is_model_relevant_social_item("Starlink POTRAZ licensing and ZESA load shedding"))
+        self.assertFalse(py_server._is_model_relevant_social_item("Zimbabwe cricket match highlights vs Ireland"))
+
+    def test_landportal_ingestion_filters_zimbabwe_and_classifies_lineage(self):
+        import os
+        import tempfile
+        from scripts import ingest_landportal as lp
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = os.path.join(tmpdir, "landportal_sample.csv")
+            with open(csv_path, "w", encoding="utf-8", newline="") as f:
+                f.write(
+                    "iso3,country,indicator,value,unit,year,provider,status,notes\n"
+                    "ZWE,Zimbabwe,Large-scale agricultural land deals,142500,hectares,2024,Land Matrix,observed,Verified contract\n"
+                    "ZAF,South Africa,Large-scale agricultural land deals,99900,hectares,2024,Land Matrix,observed,Should be excluded\n"
+                    "ZWE,Zimbabwe,Tenure insecurity perception,44.2,%,2023,Prindex,estimated,Survey estimate\n"
+                    "ZWE,Zimbabwe,Communal land dispute index,,index,2022,Land Portal,,Missing numeric value\n"
+                )
+
+            records = lp.ingest_landportal_dataset(csv_path, dataset_title="Land Matrix ZWE")
+            self.assertEqual(len(records), 3)
+            self.assertTrue(all(r["country"] == "Zimbabwe" for r in records))
+            self.assertEqual(records[0]["period"], "2024")
+            self.assertEqual(records[0]["value"], 142500.0)
+            self.assertEqual(records[0]["lineage"], "Measured Directly")
+            self.assertEqual(records[1]["lineage"], "Proxy / Estimate")
+            self.assertEqual(records[2]["lineage"], "Proxy / Estimate")
+
+            cache_path = os.path.join(tmpdir, "telemetry_cache.json")
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump({"schema_version": 2, "tracked_topics": [{"topic": "Existing"}]}, f)
+
+            lp.save_to_telemetry_cache(records, "Land Matrix ZWE", cache_path=cache_path)
+            with open(cache_path, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+
+            self.assertEqual(saved["tracked_topics"][0]["topic"], "Existing")
+            self.assertEqual(len(saved["landportal_zwe_signals"]), 3)
+            self.assertEqual(saved["landportal_last_dataset"], "Land Matrix ZWE")
+            self.assertTrue(saved["landportal_updated_at"])
 
 
 if __name__ == "__main__":
