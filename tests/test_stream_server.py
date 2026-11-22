@@ -1140,6 +1140,60 @@ class YouTubeDataApiTests(unittest.TestCase):
         self.assertNotIn("SECRET_ABC_999", redacted)
         self.assertIn("key=[REDACTED]", redacted)
 
+    def test_youtube_zero_quota_atom_fallback_and_key_aliases(self):
+        import os
+        import server as py_server
+
+        atom_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/">
+          <author><name>Open Parly ZW</name></author>
+          <entry>
+            <yt:videoId>AbCdEf12345</yt:videoId>
+            <title>Mthuli Presents ZiG358.3bn 2027 Budget &amp; Tax Review #Zimbabwe</title>
+            <author><name>Open Parly ZW</name></author>
+            <published>2026-11-22T13:53:53+00:00</published>
+            <media:group>
+              <media:description>Parliamentary debate on 2027 fiscal policy #ZimBudget #Harare</media:description>
+              <media:community>
+                <media:starRating count="24" average="5.00" min="1" max="5"/>
+                <media:statistics views="1420"/>
+              </media:community>
+            </media:group>
+          </entry>
+        </feed>"""
+
+        class FakeXmlResp:
+            def read(self):
+                return atom_xml.encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with (
+            patch.object(py_server, "YOUTUBE_CACHE", {"expires_at": 0, "result": None}),
+            patch.object(py_server, "YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS", (("UCbRLXDWleeg-7sHuJ_b8wog", "Open Parly ZW"),)),
+            patch.object(py_server, "urlopen", return_value=FakeXmlResp()),
+        ):
+            source, posts, meta = py_server._fetch_youtube_public_atom_feeds(2000.0, configured=False)
+
+        self.assertEqual(source, "YouTube")
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(meta["status"], "connected")
+        self.assertEqual(meta["transport"], "youtube_public_feeds")
+        self.assertEqual(meta["quotaUnitsPerRefresh"], 0)
+        self.assertEqual(meta["videosSampled"], 1)
+        self.assertEqual(meta["totalViews"], 1420)
+        self.assertEqual(meta["totalLikes"], 24)
+        self.assertEqual(meta["topVideos"][0]["url"], "https://www.youtube.com/watch?v=AbCdEf12345")
+        self.assertIn("#Zimbabwe", meta["topVideos"][0]["hashtags"])
+        self.assertIn("#ZimBudget", meta["topVideos"][0]["hashtags"])
+
+        with patch.dict(os.environ, {"YOUTUBE_API_KEY": "", "YT_API_KEY": "ALIAS_TEST_KEY_999"}, clear=False):
+            self.assertEqual(py_server.get_youtube_api_key(), "ALIAS_TEST_KEY_999")
+
 
 if __name__ == "__main__":
     unittest.main()

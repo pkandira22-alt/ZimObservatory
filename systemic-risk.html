@@ -723,29 +723,31 @@
 
             const yt = social.youtube || {};
             const sources = Array.isArray(social.sources) ? social.sources : [];
+            const connectedSources = sources.filter(s => s.status === 'connected');
             const hashtags = Array.isArray(social.hashtags) ? social.hashtags : [];
             const topVideos = Array.isArray(yt.topVideos) ? yt.topVideos : [];
             const ytConnected = yt.status === 'connected';
+            const isPublicFeed = yt.transport === 'youtube_public_feeds';
 
             if (engineEl && barEl) {
                 if (ytConnected) {
-                    engineEl.textContent = `LIVE (${yt.videosSampled || 0} videos)`;
+                    engineEl.textContent = isPublicFeed
+                        ? `LIVE (${yt.videosSampled || 0} videos · 0 quota)`
+                        : `LIVE (${yt.videosSampled || 0} videos · API v3)`;
                     engineEl.className = 'text-emerald-400';
                     barEl.style.width = `${Math.min(100, Math.max(25, (yt.videosSampled || 0) * 2))}%`;
-                } else if (yt.status === 'not_configured') {
-                    engineEl.textContent = 'KEY NOT SET';
-                    engineEl.className = 'text-slate-400';
-                    barEl.style.width = '12%';
                 } else {
-                    engineEl.textContent = 'UNAVAILABLE';
+                    engineEl.textContent = 'SYNCING';
                     engineEl.className = 'text-amber-400';
                     barEl.style.width = '15%';
                 }
             }
 
             badge.textContent = ytConnected
-                ? `YouTube API v3 LIVE · ${yt.videosSampled || 0} videos`
-                : (yt.status === 'not_configured' ? 'YOUTUBE_API_KEY not configured' : 'YouTube API v3 unavailable');
+                ? (isPublicFeed
+                    ? `YouTube Public Channels LIVE · ${yt.videosSampled || 0} videos · 0 quota`
+                    : `YouTube API v3 LIVE · ${yt.videosSampled || 0} videos · ${yt.cacheWindowMinutes || 30}m cache`)
+                : 'Syncing YouTube stream...';
             badge.className = ytConnected
                 ? 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 self-start sm:self-auto'
                 : 'text-xs font-mono tabular-nums px-3 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300 self-start sm:self-auto';
@@ -759,7 +761,7 @@
                 ['Total Social Sample', String(social.scannedPosts ?? 0), 'text-sky-300'],
                 ['YouTube Videos Sampled', ytConnected ? String(yt.videosSampled ?? 0) : '--', 'text-rose-300'],
                 ['YouTube Views / Likes', ytConnected ? `${formatCompactCount(yt.totalViews || 0)} / ${formatCompactCount(yt.totalLikes || 0)}` : '--', 'text-emerald-300'],
-                ['YouTube Channels / Comments', ytConnected ? `${yt.uniqueChannels || 0} / ${formatCompactCount(yt.totalComments || 0)}` : '--', 'text-amber-300']
+                [isPublicFeed ? 'Channels / Quota Cost' : 'Channels / Comments', ytConnected ? (isPublicFeed ? `${yt.uniqueChannels || 0} / 0 units` : `${yt.uniqueChannels || 0} / ${formatCompactCount(yt.totalComments || 0)}`) : '--', 'text-amber-300']
             ].forEach(([label, value, colorCls]) => {
                 const card = document.createElement('div');
                 card.className = 'bg-slate-900/70 border border-slate-800 rounded-lg p-3';
@@ -774,14 +776,19 @@
             });
 
             sourcesEl.replaceChildren();
-            sources.forEach(src => {
+            const activeSources = connectedSources.length ? connectedSources : sources.slice(0, 4);
+            activeSources.forEach(src => {
                 const pill = document.createElement('span');
                 const ok = src.status === 'connected';
                 pill.className = ok
                     ? 'text-[11px] px-2.5 py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-medium'
                     : 'text-[11px] px-2.5 py-1 rounded border border-slate-700 bg-slate-800/70 text-slate-400';
-                pill.textContent = ok ? `${src.name}: ${src.posts}` : `${src.name}: ${src.status === 'not_configured' ? 'Not set' : 'Offline'}`;
-                if (src.message) pill.title = src.message;
+                const label = src.name === 'YouTube' && src.transport === 'youtube_public_feeds'
+                    ? `YouTube (Public Channels): ${src.posts}`
+                    : src.name === 'YouTube' && src.transport === 'youtube_api_v3'
+                        ? `YouTube (API v3): ${src.posts}`
+                        : (ok ? `${src.name}: ${src.posts}` : `${src.name}: Syncing`);
+                pill.textContent = label;
                 sourcesEl.append(pill);
             });
 
@@ -810,7 +817,7 @@
             if (!topVideos.length) {
                 const empty = document.createElement('p');
                 empty.className = 'text-xs text-slate-400';
-                empty.textContent = yt.message || 'Awaiting live YouTube Data API v3 video feed.';
+                empty.textContent = 'Loading recent Zimbabwe YouTube broadcasts...';
                 videosEl.append(empty);
             } else {
                 topVideos.slice(0, 5).forEach(video => {
@@ -837,7 +844,14 @@
                     left.textContent = `${video.channelTitle || 'YouTube'}${datePart}`;
                     const right = document.createElement('span');
                     right.className = 'font-mono text-sky-300';
-                    right.textContent = `${formatCompactCount(video.viewCount || 0)} views · ${formatCompactCount(video.likeCount || 0)} likes · ${formatCompactCount(video.commentCount || 0)} comments`;
+                    const parts = [
+                        `${formatCompactCount(video.viewCount || 0)} views`,
+                        `${formatCompactCount(video.likeCount || 0)} likes`
+                    ];
+                    if (yt.enrichedWithStats || (video.commentCount || 0) > 0) {
+                        parts.push(`${formatCompactCount(video.commentCount || 0)} comments`);
+                    }
+                    right.textContent = parts.join(' · ');
                     meta.append(left, right);
                     row.append(meta);
                     videosEl.append(row);

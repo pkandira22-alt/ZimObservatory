@@ -33,9 +33,26 @@ GEMINI_MODELS = ("gemini-3.8-flash", "gemini-3.1-flash-lite")
 SOCIAL_CACHE = {"expires_at": 0, "payload": None}
 SOCIAL_CACHE_LOCK = Lock()
 YOUTUBE_CACHE = {"expires_at": 0, "result": None}
-YOUTUBE_CACHE_TTL_SECONDS = 900
+YOUTUBE_CACHE_TTL_SECONDS = 1800
+YOUTUBE_PUBLIC_FEEDS_TTL_SECONDS = 900
 HASHTAG_PATTERN = re.compile(r"(?<![\w&])#(?:[A-Za-z][\w-]*|[0-9]+[A-Za-z][\w-]*)", re.UNICODE)
 YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,20}$")
+YOUTUBE_CHANNEL_ID_PATTERN = re.compile(r"^UC[A-Za-z0-9_-]{22}$")
+YOUTUBE_API_KEY_ENV_NAMES = (
+    "YOUTUBE_API_KEY",
+    "YOUTUBE_DATA_API_KEY",
+    "YOUTUBE_KEY",
+    "YT_API_KEY",
+    "GOOGLE_YOUTUBE_API_KEY",
+)
+YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS = (
+    ("UCbRLXDWleeg-7sHuJ_b8wog", "Open Parly ZW"),
+    ("UCnnFhHSWNNPjIUxPGqevy0w", "Parliament of Zimbabwe"),
+    ("UCksaANJdN739zAMRapwxB1Q", "CITEZW"),
+    ("UCrCiK3Ej1lDggxiYG1tmnCw", "263Chat"),
+    ("UCGXpCeZNe7kzeHqMlg96Ebg", "BUSTOP TV"),
+    ("UC8z43AxZwpXkEfNqJopiCew", "SlyMediaTv"),
+)
 
 
 def _is_placeholder_key(value):
@@ -73,7 +90,7 @@ def get_gemini_api_key():
 
 
 def get_youtube_api_key():
-    for env_name in ("YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"):
+    for env_name in YOUTUBE_API_KEY_ENV_NAMES:
         val = os.environ.get(env_name, "").strip()
         if not _is_placeholder_key(val):
             return val
@@ -85,7 +102,7 @@ def get_youtube_api_key():
                     if not stripped or stripped.startswith("#") or "=" not in stripped:
                         continue
                     k, v = stripped.split("=", 1)
-                    if k.strip() in ("YOUTUBE_API_KEY", "YOUTUBE_DATA_API_KEY"):
+                    if k.strip() in YOUTUBE_API_KEY_ENV_NAMES:
                         val = v.strip().strip('"').strip("'")
                         if not _is_placeholder_key(val):
                             return val
@@ -331,6 +348,9 @@ def _fetch_youtube_source(api_key, now_ts):
     meta = {
         "configured": True,
         "status": "connected",
+        "transport": "youtube_api_v3",
+        "quotaUnitsPerRefresh": 101 if details_by_id else 100,
+        "cacheWindowMinutes": YOUTUBE_CACHE_TTL_SECONDS // 60,
         "videosSampled": len(videos),
         "enrichedWithStats": bool(details_by_id),
         "uniqueChannels": len(channels),
@@ -345,6 +365,135 @@ def _fetch_youtube_source(api_key, now_ts):
     result = ("YouTube", posts, meta)
     YOUTUBE_CACHE["result"] = result
     YOUTUBE_CACHE["expires_at"] = now_ts + YOUTUBE_CACHE_TTL_SECONDS
+    return result
+
+
+def _parse_youtube_atom_feed(xml_text, fallback_channel="YouTube Channel"):
+    feed_author_match = re.search(r"<author>\s*<name[^>]*>([\s\S]*?)</name>", xml_text or "", flags=re.IGNORECASE)
+    feed_author = re.sub(
+        r"\s+", " ", html_lib.unescape(feed_author_match.group(1) if feed_author_match else fallback_channel)
+    ).strip() or fallback_channel
+    items = []
+    for entry_match in re.finditer(r"<entry\b[^>]*>([\s\S]*?)</entry>", xml_text or "", flags=re.IGNORECASE):
+        entry = entry_match.group(1)
+        vid_match = re.search(r"<yt:videoId[^>]*>([\s\S]*?)</yt:videoId>", entry, flags=re.IGNORECASE)
+        vid = _sanitize_youtube_video_id(vid_match.group(1) if vid_match else "")
+        if not vid:
+            continue
+        title_match = re.search(r"<title[^>]*>([\s\S]*?)</title>", entry, flags=re.IGNORECASE)
+        title = re.sub(r"\s+", " ", html_lib.unescape(title_match.group(1) if title_match else "")).strip()
+        if not title:
+            continue
+        desc_match = re.search(r"<media:description[^>]*>([\s\S]*?)</media:description>", entry, flags=re.IGNORECASE)
+        description = re.sub(r"\s+", " ", html_lib.unescape(desc_match.group(1) if desc_match else "")).strip()
+        author_match = re.search(r"<author>\s*<name[^>]*>([\s\S]*?)</name>", entry, flags=re.IGNORECASE)
+        channel = re.sub(
+            r"\s+", " ", html_lib.unescape(author_match.group(1) if author_match else feed_author)
+        ).strip() or feed_author
+        pub_match = re.search(r"<(?:published|updated)[^>]*>([\s\S]*?)</(?:published|updated)>", entry, flags=re.IGNORECASE)
+        published_at = pub_match.group(1).strip() if pub_match else ""
+        views_match = re.search(r'<media:statistics[^>]*\bviews="(\d+)"', entry, flags=re.IGNORECASE)
+        likes_match = re.search(r'<media:starRating[^>]*\bcount="(\d+)"', entry, flags=re.IGNORECASE)
+        views = _parse_non_negative_int(views_match.group(1) if views_match else 0)
+        likes = _parse_non_negative_int(likes_match.group(1) if likes_match else 0)
+        url = f"https://www.youtube.com/watch?v={vid}"
+        combined = f"{title} {description}".strip()
+        items.append({
+            "videoId": vid,
+            "title": title,
+            "description": description,
+            "channelTitle": channel,
+            "publishedAt": published_at,
+            "url": url,
+            "viewCount": views,
+            "likeCount": likes,
+            "commentCount": 0,
+            "hashtags": list(dict.fromkeys(HASHTAG_PATTERN.findall(combined)))[:6],
+        })
+    return items
+
+
+def _fetch_youtube_public_atom_feeds(now_ts, configured=False):
+    if YOUTUBE_CACHE["result"] is not None and YOUTUBE_CACHE["expires_at"] > now_ts:
+        return YOUTUBE_CACHE["result"]
+
+    posts = []
+    videos = []
+    seen_ids = set()
+    channels = set()
+    total_views = 0
+    total_likes = 0
+
+    for channel_id, label in YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS:
+        if not YOUTUBE_CHANNEL_ID_PATTERN.match(channel_id):
+            continue
+        feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+        req = Request(
+            feed_url,
+            headers={
+                "Accept": "application/atom+xml, application/xml, text/xml",
+                "User-Agent": "KUVHURA-Observatory/1.0",
+            },
+        )
+        try:
+            with urlopen(req, timeout=8) as resp:
+                xml_text = resp.read().decode("utf-8", errors="replace")
+        except Exception:
+            continue
+        for item in _parse_youtube_atom_feed(xml_text, label)[:10]:
+            if item["videoId"] in seen_ids:
+                continue
+            seen_ids.add(item["videoId"])
+            total_views += item["viewCount"]
+            total_likes += item["likeCount"]
+            channels.add(item["channelTitle"])
+            combined = f"{item['title']} {item['description']}".strip()
+            posts.append({
+                "text": combined,
+                "created_at": item["publishedAt"],
+                "url": item["url"],
+            })
+            videos.append({
+                "videoId": item["videoId"],
+                "title": item["title"],
+                "channelTitle": item["channelTitle"],
+                "publishedAt": item["publishedAt"],
+                "url": item["url"],
+                "viewCount": item["viewCount"],
+                "likeCount": item["likeCount"],
+                "commentCount": 0,
+                "hashtags": item["hashtags"],
+            })
+
+    if not videos:
+        raise RuntimeError("YouTube public channel feeds are temporarily unavailable.")
+
+    videos.sort(key=lambda v: (v["publishedAt"] or "", v["viewCount"]), reverse=True)
+    top_videos = sorted(
+        videos[:24],
+        key=lambda v: (str(v["publishedAt"] or "")[:10], v["viewCount"] + v["likeCount"] * 5),
+        reverse=True,
+    )[:8]
+    meta = {
+        "configured": configured,
+        "status": "connected",
+        "transport": "youtube_public_feeds",
+        "quotaUnitsPerRefresh": 0,
+        "cacheWindowMinutes": YOUTUBE_PUBLIC_FEEDS_TTL_SECONDS // 60,
+        "videosSampled": len(videos),
+        "enrichedWithStats": False,
+        "uniqueChannels": len(channels),
+        "totalViews": total_views,
+        "totalLikes": total_likes,
+        "totalComments": 0,
+        "topVideos": top_videos,
+        "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "refreshIntervalSeconds": YOUTUBE_PUBLIC_FEEDS_TTL_SECONDS,
+        "message": None,
+    }
+    result = ("YouTube", posts, meta)
+    YOUTUBE_CACHE["result"] = result
+    YOUTUBE_CACHE["expires_at"] = now_ts + YOUTUBE_PUBLIC_FEEDS_TTL_SECONDS
     return result
 
 
@@ -529,7 +678,10 @@ def fetch_social_hashtag_trends():
     youtube_api_key = get_youtube_api_key()
     youtube_meta = {
         "configured": bool(youtube_api_key),
-        "status": "not_configured",
+        "status": "unavailable",
+        "transport": "unavailable",
+        "quotaUnitsPerRefresh": 0,
+        "cacheWindowMinutes": YOUTUBE_CACHE_TTL_SECONDS // 60,
         "videosSampled": 0,
         "enrichedWithStats": False,
         "uniqueChannels": 0,
@@ -539,15 +691,15 @@ def fetch_social_hashtag_trends():
         "topVideos": [],
         "updatedAt": now.isoformat(timespec="seconds"),
         "refreshIntervalSeconds": YOUTUBE_CACHE_TTL_SECONDS,
-        "message": "Set YOUTUBE_API_KEY with YouTube Data API v3 access to include recent videos.",
+        "message": "YouTube stream is temporarily unavailable.",
     }
-    max_workers = len(SOCIAL_FEEDS) + (1 if youtube_api_key else 0)
+    max_workers = len(SOCIAL_FEEDS) + 1
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(_fetch_social_source, feed) for feed in SOCIAL_FEEDS]
         yt_future = (
             executor.submit(_fetch_youtube_source, youtube_api_key, now.timestamp())
             if youtube_api_key
-            else None
+            else executor.submit(_fetch_youtube_public_atom_feeds, now.timestamp(), False)
         )
         for feed, future in zip(SOCIAL_FEEDS, futures):
             source = feed[0]
@@ -556,17 +708,30 @@ def fetch_social_hashtag_trends():
             except Exception as exc:
                 LOGGER.warning("Social feed %s failed: %s", source, exc)
                 failed_sources.append(source)
-        if yt_future is not None:
-            try:
-                yt_source, yt_posts, youtube_meta = yt_future.result()
-                fetched_posts.append((yt_source, yt_posts))
-            except Exception as exc:
-                safe_err = _redact_api_key(exc)
+        try:
+            yt_source, yt_posts, youtube_meta = yt_future.result()
+            fetched_posts.append((yt_source, yt_posts))
+        except Exception as exc:
+            safe_err = _redact_api_key(exc)
+            if youtube_api_key:
+                try:
+                    yt_source, yt_posts, youtube_meta = _fetch_youtube_public_atom_feeds(now.timestamp(), True)
+                    fetched_posts.append((yt_source, yt_posts))
+                except Exception:
+                    LOGGER.warning("Social feed YouTube failed: %s", safe_err)
+                    failed_sources.append("YouTube")
+                    youtube_meta = {
+                        **youtube_meta,
+                        "configured": True,
+                        "status": "unavailable",
+                        "message": safe_err,
+                    }
+            else:
                 LOGGER.warning("Social feed YouTube failed: %s", safe_err)
                 failed_sources.append("YouTube")
                 youtube_meta = {
                     **youtube_meta,
-                    "configured": True,
+                    "configured": False,
                     "status": "unavailable",
                     "message": safe_err,
                 }
