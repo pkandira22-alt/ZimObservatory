@@ -1242,12 +1242,17 @@ class YouTubeDataApiTests(unittest.TestCase):
         self.assertEqual(posts[1]["url"], "")
         self.assertIn("#Zimbabwe", posts[0]["hashtags"])
         self.assertTrue(all("cricket" not in p["text"].lower() for p in posts))
-        self.assertGreaterEqual(len(py_server.YOUTUBE_MODEL_QUERIES), 4)
-        self.assertGreaterEqual(len(py_server.X_PUBLIC_INDEX_RSS_URLS), 4)
+        self.assertGreaterEqual(len(py_server.YOUTUBE_MODEL_QUERIES), 5)
+        self.assertGreaterEqual(len(py_server.X_PUBLIC_INDEX_RSS_URLS), 6)
         self.assertTrue(py_server._is_model_relevant_social_item("CAB3 constitutional amendment debate in Zimbabwe"))
         self.assertTrue(py_server._is_model_relevant_social_item("ZIMRA tax policy and Mthuli Ncube fiscal review"))
         self.assertTrue(py_server._is_model_relevant_social_item("Starlink POTRAZ licensing and ZESA load shedding"))
+        self.assertTrue(py_server._is_model_relevant_social_item("ZSE and VFEX liquidity tightens under RBZ monetary policy"))
+        self.assertTrue(py_server._is_model_relevant_social_item("PRAZ tender audit report flags patronage and rent-seeking"))
+        self.assertTrue(py_server._is_model_relevant_social_item("ZANU-PF politburo factionalism over 2030 succession and term limit"))
+        self.assertTrue(py_server._is_model_relevant_social_item("ARTUZ teachers threaten stayaway over living wage and IMTT"))
         self.assertFalse(py_server._is_model_relevant_social_item("Zimbabwe cricket match highlights vs Ireland"))
+        self.assertFalse(py_server._is_model_relevant_social_item("Excavators for sale heavy machinery supplier Zimbabwe"))
 
     def test_landportal_ingestion_filters_zimbabwe_and_classifies_lineage(self):
         import os

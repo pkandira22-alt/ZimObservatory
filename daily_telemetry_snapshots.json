@@ -1,0 +1,76 @@
+[
+  {
+    "date": "2026-11-23",
+    "phi": 10.55,
+    "markov_crisis_prob": 38.02,
+    "state": "Acute Systemic Crisis",
+    "social_volume": 389,
+    "engagement_score_proxy": 144,
+    "sampled_platforms": [
+      "Bluesky",
+      "Mastodon",
+      "X",
+      "YouTube"
+    ],
+    "telemetry_source": "Node social telemetry (Bluesky, Mastodon, X, YouTube)",
+    "updated_at": "2026-11-23T16:21:48.941Z",
+    "hansard_friction": 51.75,
+    "treasury_friction": 51.45,
+    "tracked_topics": [
+      {
+        "topic": "National Assembly Hansard Vol. 50 No. 75 (2024-07-25)",
+        "category": "Hansards",
+        "friction": 58.59
+      },
+      {
+        "topic": "Chapter 2:09 To Top Page",
+        "category": "Enacted Acts",
+        "friction": 52.7
+      },
+      {
+        "topic": "Thematic Committtee On Peace And Security",
+        "category": "Enacted Acts",
+        "friction": 50.76
+      },
+      {
+        "topic": "Chapter 2:07 To Top Page",
+        "category": "Enacted Acts",
+        "friction": 50.38
+      },
+      {
+        "topic": "Chapter 14:02 PREVIOUS CHAPTER",
+        "category": "Enacted Acts",
+        "friction": 48.41
+      },
+      {
+        "topic": "Parliament of Zimbabwe Latest Hansard",
+        "category": "Hansards",
+        "friction": 48.41
+      },
+      {
+        "topic": "The Nightmare Realities of Leaving Care",
+        "category": "Policy Briefs",
+        "friction": 47.62
+      },
+      {
+        "topic": "The Role of the Security Sector in Climate Change Adaptation and Disaster Response in",
+        "category": "Policy Briefs",
+        "friction": 47.46
+      },
+      {
+        "topic": "Zero-Rating vs VAT Exemption: Policy Choices for",
+        "category": "Policy Briefs",
+        "friction": 46.64
+      },
+      {
+        "topic": "The Future of Burial Space in Zimbabwe – A Growing Land Crisis in",
+        "category": "Policy Briefs",
+        "friction": 46.6
+      }
+    ],
+    "macro_volatility_proxy": 37.55,
+    "fsi": 57.99,
+    "warning_level": "Accelerated Degradation",
+    "persisted": true
+  }
+]

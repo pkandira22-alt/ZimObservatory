@@ -176,7 +176,7 @@
         <section class="card-panel" style="border-top: 4px solid #38BDF8;">
             <div class="panel-hdr">
                 <span style="color: #38BDF8;">🔍 Advanced Structural Predictors (Under-Radar Metrics)</span>
-                <span style="font-size:10px; color:var(--text-muted);">Deep Institutional Telemetry</span>
+                <span id="structuralPredictorsMeta" style="font-size:10px; color:var(--text-muted);">Syncing Deep Institutional Telemetry...</span>
             </div>
             <div style="font-size: 12px; color: #CBD5E1; margin-bottom: 8px;">
                 Tracking structural blind spots: micro-tax extraction friction, carbon land tenure shifts, and administrative-logistic militarization.
@@ -184,18 +184,18 @@
             <div class="predictor-grid">
                 <article class="predictor-box">
                     <div style="font-size: 10px; color: var(--zim-gold); font-weight: 700;">INFORMAL EXTRACTION FRICTION (IEFR)</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-top: 4px;">2.48 <span style="font-size: 11px; color: #4ade80; font-weight: normal;">(+18.4% MoM)</span></div>
-                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Ratio of digital mobile/IMTT levies vs formal PAYE receipts.</div>
+                    <div style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-top: 4px;"><span id="iefrValue">2.48</span> <span id="iefrDelta" style="font-size: 11px; color: #4ade80; font-weight: normal;">(syncing...)</span></div>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">National mean across 10 provinces modulated by Treasury F_treas, CPI &amp; informal-tax signals.</div>
                 </article>
                 <article class="predictor-box">
                     <div style="font-size: 10px; color: var(--zim-gold); font-weight: 700;">RESOURCE SECURITIZATION (RSR)</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-top: 4px;">1.85 <span style="font-size: 11px; color: #f87171; font-weight: normal;">(High Concession)</span></div>
-                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Communal land hectares tied up in carbon offset concessions.</div>
+                    <div style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-top: 4px;"><span id="rsrValue">1.85</span> <span id="rsrStatus" style="font-size: 11px; color: #f87171; font-weight: normal;">(syncing...)</span></div>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Mining/lithium/diamond extraction intensity blended with Zimbabwe Land Portal tenure signals.</div>
                 </article>
                 <article class="predictor-box">
                     <div style="font-size: 10px; color: var(--zim-gold); font-weight: 700;">LOGISTICAL PENETRATION (CLP)</div>
-                    <div style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-top: 4px;">0.64 <span style="font-size: 11px; color: #38BDF8; font-weight: normal;">(Security Embedded)</span></div>
-                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Proportion of civilian logistics managed by security parastatals.</div>
+                    <div style="font-size: 16px; font-weight: 800; color: #f8fafc; margin-top: 4px;"><span id="clpValue">0.64</span> <span id="clpStatus" style="font-size: 11px; color: #38BDF8; font-weight: normal;">(syncing...)</span></div>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Security-parastatal footprint modulated by live ParlZim F_parl &amp; provincial coercion signals.</div>
                 </article>
             </div>
         </section>
@@ -204,27 +204,45 @@
         <section class="card-panel" style="border-top: 4px solid #10B981;">
             <div class="panel-hdr">
                 <span style="color: #10B981;">🗺️ Zimbabwe Spatial Context &amp; Structural Friction Map</span>
-                <span style="font-size:10px; color:var(--text-muted);">Live Provincial Telemetry Overlay</span>
+                <span id="provincialMapMeta" style="font-size:10px; color:var(--text-muted);">Loading 10-Province Live Telemetry Overlay...</span>
             </div>
             <div style="font-size: 12px; color: #CBD5E1; margin-bottom: 12px;">
-                Geospatial tracking of resource concessions, informal extraction corridors, and administrative durability indices.
+                Live geospatial tracking of all 10 Zimbabwe provinces: resource concessions, informal extraction corridors, and coercive-logistical penetration. Click any marker or province card to inspect live drivers.
             </div>
             <div id="zimbabwemap" style="height: 400px; width: 100%; border-radius: 8px; border: 1px solid var(--border-soft); background: #070B14;"></div>
+            <div id="provincialRosterGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 8px; margin-top: 12px;"></div>
         </section>
 
         <!-- LIVE TELEMETRY & FORECAST PANEL -->
         <section class="card-panel" style="border-top: 4px solid #A5B4FC;">
             <div class="panel-hdr">
                 <span style="color: #A5B4FC;">📈 Live Telemetry Stream &amp; Out-of-Sample Forecast</span>
-                <span id="streamStatusLabel" style="font-size:10px; color:var(--text-muted);">Connecting WebSocket...</span>
+                <span id="streamStatusLabel" style="font-size:10px; color:var(--text-muted);">Connecting Live Telemetry...</span>
             </div>
             <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 20px;" id="outOfSampleForecastPanel">
-                Listening for live WebSocket JSON payloads from Render backend...
+                Fetching live provincial structural telemetry and macroeconomic inputs...
             </div>
         </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        function escapeHtml(value) {
+            return String(value ?? "").replace(/[&<>"']/g, ch => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            })[ch]);
+        }
+
+        function getApiBase() {
+            return window.location.hostname.endsWith(".github.io")
+                ? (window.KUVHURA_API_BASE_URL || "").replace(/\/+$/, "")
+                : "";
+        }
+
         function resolveSocketUrl() {
             const paramUrl = new URLSearchParams(window.location.search).get("ws");
             if (paramUrl) return paramUrl;
@@ -240,13 +258,225 @@
         let forecastSocket;
         let reconnectTimer;
         let receivedLivePacket = false;
+        let structuralMap = null;
+        let provincialMarkersLayer = null;
+        const provincialMarkerById = new Map();
+
+        function initZimbabweSpatialMap() {
+            const mapEl = document.getElementById("zimbabwemap");
+            if (!mapEl || typeof L === "undefined") {
+                if (mapEl) {
+                    const msg = document.createElement("div");
+                    msg.style.padding = "20px";
+                    msg.style.textAlign = "center";
+                    msg.style.color = "#94a3b8";
+                    msg.style.fontSize = "12px";
+                    msg.textContent = "Interactive map library could not be loaded. Check your network connection.";
+                    mapEl.replaceChildren(msg);
+                }
+                return;
+            }
+
+            const apiBase = getApiBase();
+            structuralMap = L.map("zimbabwemap").setView([-19.0154, 29.1549], 6);
+            const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>';
+
+            const proxyTiles = L.tileLayer(`${apiBase}/api/maps/tiles/dark_all/{z}/{x}/{y}.png`, {
+                attribution,
+                maxZoom: 18
+            }).addTo(structuralMap);
+
+            const directFallbackTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
+                attribution,
+                subdomains: "abcd",
+                maxZoom: 18
+            });
+
+            proxyTiles.once("tileerror", () => {
+                structuralMap.removeLayer(proxyTiles);
+                directFallbackTiles.addTo(structuralMap);
+            });
+
+            provincialMarkersLayer = L.layerGroup().addTo(structuralMap);
+
+            if (typeof ResizeObserver !== "undefined") {
+                new ResizeObserver(() => structuralMap.invalidateSize()).observe(mapEl);
+            }
+            setTimeout(() => structuralMap.invalidateSize(), 250);
+        }
+
+        function formatSignedDelta(delta) {
+            if (!Number.isFinite(Number(delta))) return "0.00";
+            const n = Number(delta);
+            return `${n >= 0 ? "+" : ""}${n.toFixed(2)}`;
+        }
+
+        function renderProvincialTelemetry(payload) {
+            if (!payload || !payload.available) return;
+            receivedLivePacket = true;
+
+            const badge = document.getElementById("telemetryStatusBadge");
+            if (badge) {
+                badge.textContent = `● LIVE STRUCTURAL TELEMETRY · ${payload.provinceCount || 10} PROVINCES`;
+            }
+
+            const s = payload.summary || {};
+            if (Number.isFinite(s.basePhi)) {
+                const el = document.getElementById("basePhiDisplay");
+                if (el) el.textContent = Number(s.basePhi).toFixed(3);
+            }
+            if (Number.isFinite(s.praxisYieldPct)) {
+                const el = document.getElementById("praxisYieldDisplay");
+                if (el) el.textContent = `${Number(s.praxisYieldPct).toFixed(1)}%`;
+            }
+            if (Number.isFinite(s.adjustedPhi)) {
+                const el = document.getElementById("adjustedPhiDisplay");
+                if (el) el.textContent = Number(s.adjustedPhi).toFixed(3);
+            }
+
+            if (s.iefr) {
+                const v = document.getElementById("iefrValue");
+                const d = document.getElementById("iefrDelta");
+                if (v) v.textContent = Number(s.iefr.value).toFixed(2);
+                if (d) {
+                    d.textContent = `(${s.iefr.label})`;
+                    d.style.color = s.iefr.deltaPct > 5 ? "#f87171" : "#4ade80";
+                }
+            }
+            if (s.rsr) {
+                const v = document.getElementById("rsrValue");
+                const st = document.getElementById("rsrStatus");
+                if (v) v.textContent = Number(s.rsr.value).toFixed(2);
+                if (st) st.textContent = `(${s.rsr.label})`;
+            }
+            if (s.clp) {
+                const v = document.getElementById("clpValue");
+                const st = document.getElementById("clpStatus");
+                if (v) v.textContent = Number(s.clp.value).toFixed(2);
+                if (st) st.textContent = `(${s.clp.label})`;
+            }
+
+            const predictorsMeta = document.getElementById("structuralPredictorsMeta");
+            if (predictorsMeta) {
+                predictorsMeta.textContent = `${payload.scannedPosts || 0} live posts · ${payload.geoMatchedSignals || 0} provincial matches · ${payload.landPortalRecords || 0} Land Portal records`;
+            }
+
+            const mapMeta = document.getElementById("provincialMapMeta");
+            if (mapMeta) {
+                const ts = payload.updatedAt ? new Date(payload.updatedAt).toLocaleTimeString() : "";
+                mapMeta.textContent = `Live 10-Province Overlay · ${payload.geoMatchedSignals || 0} geo-tagged signals${ts ? ` · ${ts}` : ""}`;
+            }
+
+            const provinces = Array.isArray(payload.provinces) ? payload.provinces : [];
+            if (structuralMap && provincialMarkersLayer) {
+                provincialMarkersLayer.clearLayers();
+                provincialMarkerById.clear();
+
+                provinces.forEach(prov => {
+                    const circleColor = prov.iefr >= 3.05
+                        ? "#f87171"
+                        : (prov.rsr >= 2.30 || prov.iefr >= 2.65)
+                            ? "#f59e0b"
+                            : "#38bdf8";
+                    const radius = Math.min(16, Math.max(7, 7 + Math.sqrt(prov.signalCount || 0) * 1.4));
+
+                    const marker = L.circleMarker([prov.lat, prov.lng], {
+                        radius,
+                        fillColor: circleColor,
+                        color: "#ffffff",
+                        weight: 1.5,
+                        opacity: 0.95,
+                        fillOpacity: 0.84
+                    }).addTo(provincialMarkersLayer);
+
+                    const themesLine = Array.isArray(prov.topThemes) && prov.topThemes.length
+                        ? `<div style="margin-top:4px; color:#334155;"><b>Live Drivers:</b> ${escapeHtml(prov.topThemes.join(", "))}</div>`
+                        : `<div style="margin-top:4px; color:#475569;"><b>Profile:</b> ${escapeHtml(prov.profile)}</div>`;
+
+                    marker.bindPopup(`
+                        <div style="font-family: system-ui, sans-serif; color: #030712; font-size: 11px; min-width: 190px;">
+                            <b style="font-size: 13px; color: #0f172a;">${escapeHtml(prov.name)}</b><br>
+                            <span style="font-size: 10px; color: #475569;">${escapeHtml(prov.status)}</span>
+                            <hr style="margin: 5px 0; border-color: #cbd5e1;">
+                            <b>IEFR Index:</b> ${Number(prov.iefr).toFixed(2)} (${formatSignedDelta(prov.iefrDelta)})<br>
+                            <b>RSR Concession:</b> ${Number(prov.rsr).toFixed(2)} (${formatSignedDelta(prov.rsrDelta)})<br>
+                            <b>CLP Penetration:</b> ${Number(prov.clp).toFixed(2)} (${formatSignedDelta(prov.clpDelta)})<br>
+                            <b>Live Geo Signals:</b> ${Number(prov.signalCount || 0)} (${Number(prov.socialMentions || 0)} social, ${Number(prov.landPortalMatches || 0)} Land Portal)
+                            ${themesLine}
+                        </div>
+                    `);
+                    provincialMarkerById.set(prov.id, marker);
+                });
+            }
+
+            const rosterEl = document.getElementById("provincialRosterGrid");
+            if (rosterEl) {
+                rosterEl.replaceChildren();
+                provinces.forEach(prov => {
+                    const card = document.createElement("button");
+                    card.type = "button";
+                    card.style.cssText = "text-align:left; background:#070B14; border:1px solid var(--border-soft); border-radius:8px; padding:9px 10px; color:var(--text-main); cursor:pointer;";
+                    const accent = prov.iefr >= 3.05 ? "#f87171" : (prov.rsr >= 2.30 ? "#f59e0b" : "#38bdf8");
+                    card.style.borderLeft = `3px solid ${accent}`;
+
+                    const titleRow = document.createElement("div");
+                    titleRow.style.cssText = "display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:11px; font-weight:700;";
+                    const nameSpan = document.createElement("span");
+                    nameSpan.textContent = prov.name;
+                    const sigSpan = document.createElement("span");
+                    sigSpan.style.cssText = "font-size:9.5px; color:#94a3b8; font-weight:600;";
+                    sigSpan.textContent = `${prov.signalCount || 0} sig`;
+                    titleRow.append(nameSpan, sigSpan);
+
+                    const metricsRow = document.createElement("div");
+                    metricsRow.style.cssText = "font-size:10px; color:#cbd5e1; margin-top:4px;";
+                    metricsRow.textContent = `IEFR ${Number(prov.iefr).toFixed(2)} · RSR ${Number(prov.rsr).toFixed(2)} · CLP ${Number(prov.clp).toFixed(2)}`;
+
+                    const statusRow = document.createElement("div");
+                    statusRow.style.cssText = `font-size:9.5px; color:${accent}; margin-top:3px;`;
+                    statusRow.textContent = prov.status;
+
+                    card.append(titleRow, metricsRow, statusRow);
+                    card.addEventListener("click", () => {
+                        const marker = provincialMarkerById.get(prov.id);
+                        if (structuralMap && marker) {
+                            structuralMap.setView([prov.lat, prov.lng], 7, { animate: true });
+                            marker.openPopup();
+                        }
+                    });
+                    rosterEl.appendChild(card);
+                });
+            }
+
+            updateForecastDisplay({
+                regimeDurability: s.basePhi,
+                updatedAt: payload.updatedAt,
+                layer2Macro: payload.layer2Macro,
+                telemetry: {
+                    scannedPosts: payload.scannedPosts,
+                    sampledPlatforms: payload.sampledPlatforms || []
+                }
+            });
+        }
+
+        async function fetchLiveProvincialTelemetry() {
+            try {
+                const res = await fetch(`${getApiBase()}/api/structural/provincial-telemetry`, { cache: "no-store" });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                renderProvincialTelemetry(data);
+                return true;
+            } catch (err) {
+                console.warn("Could not load live provincial telemetry:", err);
+                return false;
+            }
+        }
 
         function initForecastStream() {
             const statusLabel = document.getElementById("streamStatusLabel");
             const explicitWs = new URLSearchParams(window.location.search).get("ws");
             if (!explicitWs && /^ais-(dev|pre)-/.test(window.location.hostname)) {
-                if (statusLabel) statusLabel.textContent = "Baseline Simulation Active";
-                loadSyntheticBaseline();
+                if (statusLabel) statusLabel.textContent = "Live HTTP Telemetry Active";
                 return;
             }
 
@@ -256,14 +486,13 @@
             try {
                 forecastSocket = new WebSocket(socketUrl);
             } catch (e) {
-                console.warn("WebSocket creation failed. Falling back to synthetic baseline simulation.", e);
-                loadSyntheticBaseline();
+                console.warn("WebSocket creation failed; relying on live HTTP telemetry.", e);
                 return;
             }
 
             forecastSocket.onopen = function() {
                 openedOnce = true;
-                if (statusLabel) statusLabel.textContent = "WebSocket Connected";
+                if (statusLabel) statusLabel.textContent = "WebSocket + HTTP Telemetry Active";
             };
 
             forecastSocket.onmessage = function(event) {
@@ -272,6 +501,7 @@
                     if (data && (data.forecastSeries || data.regimeDurability || data.type === "trending_telemetry")) {
                         receivedLivePacket = true;
                         updateForecastDisplay(data);
+                        fetchLiveProvincialTelemetry();
                     }
                 } catch (e) {
                     console.warn("Error parsing incoming stream packet:", e);
@@ -279,17 +509,13 @@
             };
 
             forecastSocket.onerror = function() {
-                console.warn("WebSocket stream error. Falling back to synthetic baseline simulation.");
-                if (statusLabel) statusLabel.textContent = "Baseline Simulation Fallback";
-                loadSyntheticBaseline();
+                if (!receivedLivePacket) loadSyntheticBaseline();
             };
 
             forecastSocket.onclose = function() {
                 if (!receivedLivePacket) {
                     if (statusLabel) statusLabel.textContent = "Baseline Simulation Fallback";
                     loadSyntheticBaseline();
-                } else if (statusLabel) {
-                    statusLabel.textContent = "Reconnecting...";
                 }
                 if (openedOnce || explicitWs) {
                     window.clearTimeout(reconnectTimer);
@@ -303,23 +529,23 @@
             const statusLabel = document.getElementById("streamStatusLabel");
             if (statusLabel) statusLabel.textContent = "Live Telemetry Active";
 
-            if (data.regimeDurability !== undefined) {
+            if (data.regimeDurability !== undefined && Number.isFinite(Number(data.regimeDurability))) {
                 const basePhi = document.getElementById("basePhiDisplay");
                 if (basePhi) basePhi.textContent = Number(data.regimeDurability).toFixed(3);
             }
 
             if (forecastCard) {
-                const updatedText = data.updatedAt ? ` · Updated ${data.updatedAt}` : "";
+                const updatedText = data.updatedAt ? ` · Updated ${escapeHtml(new Date(data.updatedAt).toLocaleString())}` : "";
                 const telemetryNote = data.telemetry && typeof data.telemetry.scannedPosts === "number"
-                    ? ` (${data.telemetry.scannedPosts} live social posts sampled across ${data.telemetry.sampledPlatforms?.length || 0} platforms)`
+                    ? ` (${Number(data.telemetry.scannedPosts)} live social posts sampled across ${data.telemetry.sampledPlatforms?.length || 0} platforms)`
                     : "";
                 const macro = data.layer2Macro;
                 const macroLine = macro
-                    ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">Layer 2 Macro (ZWE): GDP Growth <strong style="color:#f8fafc;">${macro.GDP_Growth}%</strong> · Inflation <strong style="color:#f8fafc;">${macro.Inflation}%</strong> · External Debt/GNI <strong style="color:#f8fafc;">${macro.Debt_GNI}%</strong></div>`
+                    ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">Layer 2 Macro (ZWE): GDP Growth <strong style="color:#f8fafc;">${escapeHtml(macro.GDP_Growth)}%</strong> · Inflation <strong style="color:#f8fafc;">${escapeHtml(macro.Inflation)}%</strong> · External Debt/GNI <strong style="color:#f8fafc;">${escapeHtml(macro.Debt_GNI)}%</strong></div>`
                     : "";
                 forecastCard.innerHTML = `
                     <div style="font-size: 11px; color: #4ADE80; font-weight: 700; margin-bottom: 6px;">LIVE TELEMETRY ACTIVE${updatedText}</div>
-                    <div style="font-size: 13px; color: #f8fafc;">Model Status: Out-of-sample holdout error within stable parameters (RMSE: 0.042)${telemetryNote}.</div>
+                    <div style="font-size: 13px; color: #f8fafc;">Model Status: Out-of-sample holdout error within stable parameters (RMSE: 0.042)${escapeHtml(telemetryNote)}.</div>
                     ${macroLine}
                 `;
             }
@@ -335,102 +561,30 @@
             }
         }
 
-        document.addEventListener("DOMContentLoaded", () => {
+        let provincialPollTimer = null;
+        document.addEventListener("DOMContentLoaded", async () => {
+            initZimbabweSpatialMap();
+            const ok = await fetchLiveProvincialTelemetry();
             initForecastStream();
-            window.setTimeout(() => {
-                const statusText = document.querySelector("#outOfSampleForecastPanel");
-                if (!receivedLivePacket && statusText && (statusText.textContent.includes("Listening") || statusText.textContent.includes("Awaiting"))) {
-                    const statusLabel = document.getElementById("streamStatusLabel");
-                    if (statusLabel) statusLabel.textContent = "Baseline Simulation";
-                    loadSyntheticBaseline();
-                }
-            }, 2000);
+            provincialPollTimer = window.setInterval(fetchLiveProvincialTelemetry, 60000);
+            if (!ok) {
+                window.setTimeout(() => {
+                    if (!receivedLivePacket) {
+                        const statusLabel = document.getElementById("streamStatusLabel");
+                        if (statusLabel) statusLabel.textContent = "Baseline Simulation";
+                        loadSyntheticBaseline();
+                    }
+                }, 2500);
+            }
         });
 
         window.addEventListener("pagehide", () => {
             window.clearTimeout(reconnectTimer);
+            window.clearInterval(provincialPollTimer);
             if (forecastSocket && forecastSocket.readyState < WebSocket.CLOSING) {
                 forecastSocket.close();
             }
         });
-    </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        (function initZimbabweSpatialMap() {
-            const mapEl = document.getElementById("zimbabwemap");
-            if (!mapEl || typeof L === "undefined") {
-                if (mapEl) {
-                    const msg = document.createElement("div");
-                    msg.style.padding = "20px";
-                    msg.style.textAlign = "center";
-                    msg.style.color = "#94a3b8";
-                    msg.style.fontSize = "12px";
-                    msg.textContent = "Interactive map library could not be loaded. Check your network connection.";
-                    mapEl.replaceChildren(msg);
-                }
-                return;
-            }
-
-            const apiBase = window.location.hostname.endsWith(".github.io")
-                ? (window.KUVHURA_API_BASE_URL || "").replace(/\/+$/, "")
-                : "";
-            const map = L.map("zimbabwemap").setView([-19.0154, 29.1549], 6);
-            const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>';
-
-            const proxyTiles = L.tileLayer(`${apiBase}/api/maps/tiles/dark_all/{z}/{x}/{y}.png`, {
-                attribution,
-                maxZoom: 18
-            }).addTo(map);
-
-            const directFallbackTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
-                attribution,
-                subdomains: "abcd",
-                maxZoom: 18
-            });
-
-            proxyTiles.once("tileerror", () => {
-                map.removeLayer(proxyTiles);
-                directFallbackTiles.addTo(map);
-            });
-
-            const provincialTelemetry = [
-                { name: "Harare Metropolitan", lat: -17.8252, lng: 31.0335, iefr: 3.12, rsr: 1.20, clp: 0.85, status: "High Extraction Friction" },
-                { name: "Bulawayo Metropolitan", lat: -20.1594, lng: 28.5838, iefr: 2.65, rsr: 1.10, clp: 0.70, status: "Moderate Friction" },
-                { name: "Manicaland", lat: -18.9216, lng: 32.1663, iefr: 2.80, rsr: 2.45, clp: 0.60, status: "High Resource Securitization" },
-                { name: "Mashonaland Central", lat: -16.9333, lng: 31.0833, iefr: 2.10, rsr: 2.15, clp: 0.75, status: "Concession Enclave" },
-                { name: "Midlands", lat: -19.4500, lng: 29.8167, iefr: 2.95, rsr: 2.30, clp: 0.80, status: "Extractive Corridor Active" },
-                { name: "Matabeleland North", lat: -18.5000, lng: 27.7000, iefr: 1.90, rsr: 1.95, clp: 0.55, status: "Stable Baseline" }
-            ];
-
-            provincialTelemetry.forEach(prov => {
-                const circleColor = prov.iefr > 2.8 ? "#f87171" : "#f59e0b";
-                const marker = L.circleMarker([prov.lat, prov.lng], {
-                    radius: 8,
-                    fillColor: circleColor,
-                    color: "#fff",
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.85
-                }).addTo(map);
-
-                marker.bindPopup(`
-                    <div style="font-family: system-ui, sans-serif; color: #030712; font-size: 11px;">
-                        <b style="font-size: 13px; color: #1e293b;">${prov.name}</b><br>
-                        <hr style="margin: 4px 0;">
-                        <b>Status:</b> ${prov.status}<br>
-                        <b>IEFR Index:</b> ${prov.iefr}<br>
-                        <b>RSR Concession:</b> ${prov.rsr}<br>
-                        <b>CLP Penetration:</b> ${prov.clp}
-                    </div>
-                `);
-            });
-
-            if (typeof ResizeObserver !== "undefined") {
-                new ResizeObserver(() => map.invalidateSize()).observe(mapEl);
-            }
-            setTimeout(() => map.invalidateSize(), 250);
-        })();
     </script>
 
 </body>

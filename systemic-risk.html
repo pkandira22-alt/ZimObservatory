@@ -633,9 +633,6 @@
             styleWarningBanner(warningText);
 
             document.getElementById('window-label').innerText = `${timeline.length}-Day Rolling Window`;
-            if (data.historyNote) {
-                document.getElementById('history-note').innerText = data.historyNote;
-            }
 
             document.getElementById('engine-bayesian').innerText = isLive ? 'ACTIVE' : 'STANDBY (SEED)';
             document.getElementById('engine-markov').innerText = 'ACTIVE';

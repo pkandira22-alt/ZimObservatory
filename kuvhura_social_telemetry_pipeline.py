@@ -17,23 +17,76 @@ USER_AGENT = "KUVHURA-Observatory/1.0"
 FEED_TIMEOUT_SECONDS = 20
 PUBLISH_TIMEOUT_SECONDS = 30
 RSS_SEARCHES = (
-    "Zimbabwe",
-    "Zimbabwe economy OR mining OR agriculture",
-    "Zimbabwe politics OR election OR protest",
+    "Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR constitution OR CAB3 OR election OR opposition OR judiciary OR SADC) -cricket -rugby -football -soccer",
+    "Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR IMF OR forex OR dollarization) -cricket -rugby -football -soccer",
+    "Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR Mutapa OR ZESA OR mining OR lithium OR gold OR land reform OR agriculture) -cricket -rugby -football -soccer",
+    "Zimbabwe (protest OR strike OR PVO Bill OR human rights OR ZCTU OR diaspora OR remittances OR wages OR load shedding OR water crisis OR drought) -cricket -rugby -football -soccer",
+)
+NOISE_TERMS = re.compile(
+    r"\b(cricket|rugby|football|soccer|chevrons|sables|dynamos|highlanders|t20|odi|"
+    r"wickets?|innings|zimdancehall|amapiano|prophecy|sermon|safari\s+tour|recipe|"
+    r"earthmoving\s+equipment|excavators?\s+for\s+sale)\b",
+    re.IGNORECASE,
 )
 TOPICS = {
     "#Zimbabwe": (r"\bzimbabwe\b",),
-    "#Harare": (r"\bharare\b",),
-    "#Bulawayo": (r"\bbulawayo\b",),
-    "#Mutare": (r"\bmutare\b",),
-    "#Economy": (r"\beconomy\b", r"\binflation\b", r"\bcurrency\b", r"\bcost of living\b"),
-    "#Politics": (r"\bpolitic\w*\b", r"\belection\w*\b", r"\bgovernment\b", r"\bopposition\b"),
-    "#Agriculture": (r"\bagricultur\w*\b", r"\bfarm(?:ing|er|ers)?\b", r"\bharvest\b", r"\bcrop\w*\b"),
-    "#Mining": (r"\bmin(?:e|es|ing|er|ers)\b", r"\bgold\b", r"\blithium\b"),
+    "#Harare": (r"\bharare\b", r"\bchitungwiza\b", r"\bepworth\b"),
+    "#Bulawayo": (r"\bbulawayo\b", r"\bmatabeleland\b"),
+    "#Mutare": (r"\bmutare\b", r"\bmanicaland\b"),
+    "#Economy": (
+        r"\beconom(?:y|ic|ics)\b", r"\binflation\b", r"\bhyperinflation\b", r"\bcurrency\b",
+        r"\bzig\b", r"\bzwg\b", r"\brbz\b", r"\bdollarization\b", r"\bforex\b",
+        r"\bexchange\s+rate\b", r"\bparallel\s+market\b", r"\bcost\s+of\s+living\b",
+        r"\bzse\b", r"\bvfex\b", r"\bliquidity\b", r"\bgdp\b",
+    ),
+    "#FiscalDebt": (
+        r"\btreasury\b", r"\bbudget\b", r"\bmthuli\b", r"\bzimra\b", r"\btax(?:ation)?\b",
+        r"\bvat\b", r"\bimtt\b", r"\bdebt\b", r"\barrears\b", r"\bimf\b", r"\bworld\s+bank\b",
+        r"\bfiscal\b", r"\bausterity\b", r"\bsubsid(?:y|ies)\b", r"\btariffs?\b",
+    ),
+    "#Politics": (
+        r"\bpolitic\w*\b", r"\bzanu[\s-]?pf\b", r"\bmnangagwa\b", r"\bchiwenga\b",
+        r"\bchamisa\b", r"\bparliament\b", r"\bparlzim\b", r"\bhansard\b",
+        r"\bconstitution\w*\b", r"\bcab3\b", r"\b2030\b", r"\bsuccession\b",
+        r"\bpolitburo\b", r"\belection\w*\b", r"\bgovernment\b", r"\bopposition\b",
+        r"\bjudiciar\w*\b", r"\bsadc\b", r"\bsanctions\b",
+    ),
+    "#StateCapture": (
+        r"\bcorrupt\w*\b", r"\bzacc\b", r"\bauditor[\s-]?general\b", r"\boag\b",
+        r"\btender\w*\b", r"\bprocurement\b", r"\bpraz\b", r"\bmutapa\b",
+        r"\bparastatal\w*\b", r"\bstate\s+capture\b", r"\bpatronage\b", r"\bcartel\w*\b",
+        r"\blooting\b", r"\btagwirei\b", r"\bchivayo\b", r"\bzinara\b",
+    ),
+    "#Mining": (
+        r"\bmin(?:e|es|ing|er|ers|eral|erals)\b", r"\bgold\b", r"\blithium\b",
+        r"\bdiamonds?\b", r"\bplatinum\b", r"\bchrome\b", r"\bmarange\b",
+        r"\bgreat\s+dyke\b", r"\bbeneficiation\b", r"\bconcessions?\b",
+    ),
+    "#AgricultureLand": (
+        r"\bagricultur\w*\b", r"\bfarm(?:ing|er|ers)?\b", r"\bharvest\b", r"\bcrop\w*\b",
+        r"\bland\s+reform\b", r"\btitle\s+deeds?\b", r"\bland\s+tenure\b",
+        r"\btobacco\b", r"\bmaize\b", r"\bgrain\b", r"\bdrought\b", r"\bfood\s+security\b",
+    ),
+    "#CivicLabor": (
+        r"\bprotest\w*\b", r"\bstrike\w*\b", r"\bstayaway\b", r"\bpvo\s+(?:bill|act)\b",
+        r"\bhuman\s+rights\b", r"\bcivil\s+society\b", r"\bzctu\b", r"\btrade\s+union\b",
+        r"\bteachers\b", r"\bnurses\b", r"\bdoctors\b", r"\bwages\b", r"\bsalar(?:y|ies)\b",
+        r"\binformal\s+(?:sector|economy)\b", r"\bvendors?\b", r"\bcensorship\b",
+    ),
+    "#ServiceDelivery": (
+        r"\bzesa\b", r"\bload\s+shedding\b", r"\bpower\s+cuts?\b", r"\bwater\s+crisis\b",
+        r"\bcholera\b", r"\bhealthcare\b", r"\bhospital\b", r"\bdemolitions?\b",
+        r"\bevictions?\b", r"\bservice\s+delivery\b", r"\bstarlink\b", r"\bpotraz\b",
+    ),
+    "#Diaspora": (
+        r"\bdiaspora\b", r"\bremittances?\b", r"\bbrain\s+drain\b", r"\bemigration\b", r"\bzep\b",
+    ),
 }
 CONTESTED_TERMS = re.compile(
     r"\b(protest\w*|clash\w*|disput\w*|critic\w*|allegation\w*|conflict\w*|"
-    r"opposition|crackdown|controvers\w*)\b",
+    r"opposition|crackdown|controvers\w*|arrest\w*|detention|repression|"
+    r"strike\w*|stayaway|boycott|walkout|impeachment|rigging|looting|scandal|"
+    r"sanctions|demolition\w*|eviction\w*|censorship|lawfare|factionalism)\b",
     re.IGNORECASE,
 )
 
@@ -105,6 +158,8 @@ def build_rows(entries, now=None):
     counts = {topic: {"mentions": 0, "recent": 0, "contested": 0} for topic in TOPICS}
     for entry in entries:
         text = entry["text"]
+        if NOISE_TERMS.search(text):
+            continue
         published = _published_datetime(entry.get("published", ""))
         is_recent = published is not None and dt.timedelta(0) <= now - published <= dt.timedelta(hours=24)
         is_contested = CONTESTED_TERMS.search(text) is not None

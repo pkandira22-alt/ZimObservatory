@@ -477,9 +477,13 @@ const socialSourceCache = new Map();
 
 const BLUESKY_MODEL_QUERIES = [
   { label: 'Core', query: 'Zimbabwe' },
-  { label: 'Governance', query: 'Zimbabwe parliament OR ZANU OR Mnangagwa OR constitution OR opposition OR SADC' },
-  { label: 'Economy', query: 'Zimbabwe economy OR inflation OR ZiG OR RBZ OR budget OR Treasury OR IMF OR mining' },
-  { label: 'Civic', query: 'Zimbabwe corruption OR protest OR strike OR rights OR ZESA OR drought OR healthcare' }
+  { label: 'Politics', query: 'Zimbabwe politics' },
+  { label: 'Parliament', query: 'Zimbabwe parliament' },
+  { label: 'Economy', query: 'Zimbabwe economy' },
+  { label: 'Inflation', query: 'Zimbabwe inflation' },
+  { label: 'Corruption', query: 'Zimbabwe corruption' },
+  { label: 'Mining', query: 'Zimbabwe mining' },
+  { label: 'Civic', query: 'Zimbabwe protest' }
 ];
 
 const SOCIAL_FEEDS = [
@@ -524,10 +528,12 @@ const YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS = [
   { channelId: 'UC8z43AxZwpXkEfNqJopiCew', label: 'SlyMediaTv' }
 ];
 const X_PUBLIC_INDEX_RSS_URLS = [
-  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(politics+OR+parliament+OR+ZANU+OR+Mnangagwa+OR+Chiwenga+OR+Chamisa+OR+constitution+OR+CAB3+OR+2030+OR+judiciary+OR+SADC+OR+election+OR+opposition)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
-  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(economy+OR+inflation+OR+ZiG+OR+ZWG+OR+RBZ+OR+Treasury+OR+budget+OR+Mthuli+OR+ZIMRA+OR+tax+OR+debt+OR+IMF+OR+forex+OR+remittances)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
-  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(corruption+OR+ZACC+OR+Auditor-General+OR+tender+OR+procurement+OR+Mutapa+OR+ZINARA+OR+ZESA+OR+Tagwirei+OR+Chivayo+OR+mining+OR+lithium+OR+gold+OR+cartel)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
-  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+drought+OR+healthcare+OR+Starlink)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en'
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(politics+OR+parliament+OR+ZANU+OR+Mnangagwa+OR+Chiwenga+OR+Chamisa+OR+constitution+OR+CAB3+OR+2030+OR+succession+OR+politburo+OR+judiciary+OR+SADC+OR+election+OR+opposition)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(economy+OR+inflation+OR+ZiG+OR+ZWG+OR+RBZ+OR+monetary+policy+OR+dollarization+OR+exchange+rate+OR+parallel+market+OR+forex+OR+ZSE+OR+VFEX+OR+banking+OR+liquidity)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(Treasury+OR+budget+OR+Mthuli+OR+ZIMRA+OR+tax+OR+VAT+OR+IMTT+OR+debt+OR+arrears+OR+IMF+OR+World+Bank+OR+fiscal+OR+austerity+OR+tariff+OR+subsidy)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(corruption+OR+ZACC+OR+Auditor-General+OR+tender+OR+procurement+OR+PRAZ+OR+Mutapa+OR+ZINARA+OR+ZESA+OR+Tagwirei+OR+Chivayo+OR+mining+OR+lithium+OR+gold+OR+land+reform+OR+cartel)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(diaspora+OR+remittances+OR+wages+OR+salaries+OR+unemployment+OR+informal+sector+OR+vendors+OR+civil+servants+OR+pension+OR+cost+of+living+OR+fuel+OR+agriculture+OR+tobacco+OR+drought)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+stayaway+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+healthcare+OR+Starlink+OR+censorship)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en'
 ];
 const X_PUBLIC_INDEX_CACHE_MS = 15 * 60 * 1000;
 const SOCIAL_CACHE_MS = 60 * 1000;
@@ -542,22 +548,25 @@ const SOCIAL_SOURCE_CACHE_MS = {
 };
 
 const YOUTUBE_MODEL_QUERIES = [
-  'Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR judiciary OR military OR SADC OR election OR opposition OR war veterans) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy',
-  'Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR IMF OR forex OR exchange rate OR diaspora OR remittances OR wages) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy',
-  'Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR mining OR lithium OR gold OR diamonds OR land OR cartel) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy -excavator -machinery',
-  'Zimbabwe (protest OR strike OR resistance OR human rights OR PVO Bill OR civil society OR ZCTU OR teachers OR nurses OR doctors OR water crisis OR load shedding OR power cuts OR demolitions OR drought OR healthcare OR Starlink) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy'
+  'Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR succession OR politburo OR judiciary OR military OR SADC OR election OR opposition OR war veterans) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy',
+  'Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR arrears OR IMF OR World Bank OR forex OR exchange rate OR dollarization OR monetary policy OR ZSE OR VFEX) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy',
+  'Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR PRAZ OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR state capture OR mining OR lithium OR gold OR diamonds OR land reform OR title deeds OR cartel) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy -excavator -machinery',
+  'Zimbabwe (diaspora OR remittances OR wages OR salaries OR civil servants OR unemployment OR informal economy OR vendors OR cost of living OR fuel OR agriculture OR tobacco OR maize OR drought OR food security) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy',
+  'Zimbabwe (protest OR strike OR stayaway OR resistance OR human rights OR PVO Bill OR civil society OR ZCTU OR teachers OR nurses OR doctors OR water crisis OR load shedding OR power cuts OR demolitions OR healthcare OR Starlink OR censorship) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy'
 ];
 
 const X_MODEL_QUERIES = [
-  'Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR judiciary OR SADC OR election OR opposition) -cricket -rugby -football -is:retweet',
-  'Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR IMF OR forex OR remittances OR wages) -cricket -rugby -football -is:retweet',
-  'Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR mining OR lithium OR gold OR cartel) -cricket -rugby -football -is:retweet',
-  'Zimbabwe (protest OR strike OR resistance OR "human rights" OR PVO OR ZCTU OR teachers OR nurses OR doctors OR "water crisis" OR "load shedding" OR demolitions OR drought OR healthcare OR Starlink) -cricket -rugby -football -is:retweet'
+  'Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR succession OR judiciary OR SADC OR election OR opposition) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR dollarization OR forex OR "exchange rate" OR "parallel market" OR liquidity OR banking OR ZSE OR VFEX) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (Treasury OR budget OR Mthuli OR ZIMRA OR tax OR VAT OR IMTT OR debt OR arrears OR IMF OR austerity OR fiscal OR tariff OR subsidy) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR PRAZ OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR mining OR lithium OR gold OR "land reform" OR cartel) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (diaspora OR remittances OR wages OR salaries OR unemployment OR "informal sector" OR vendors OR "civil servants" OR pension OR "cost of living" OR fuel OR drought OR agriculture) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (protest OR strike OR stayaway OR resistance OR "human rights" OR PVO OR ZCTU OR teachers OR nurses OR doctors OR "water crisis" OR "load shedding" OR demolitions OR healthcare OR Starlink OR censorship) -cricket -rugby -football -is:retweet'
 ];
 
 const SOCIAL_NOISE_EXCLUDE_REGEX = /\b(cricket|rugby|football|soccer|chevrons|sables|warriors\s+fc|dynamos|highlanders|caps\s+united|premier\s+soccer|castle\s+lager|world\s+cup|nations\s+cup|one\s+day\s+match|t20|odi|test\s+match|wickets?|innings|overs|balls\s+left|runs\s+off|century\s+for|batting|bowling|match\s+highlights|extended\s+highlights|live\s+fan\s+chat|audio\s+commentar|milton\s+shumba|sikandar\s+raza|brian\s+bennett|blessing\s+muzarabani|sean\s+williams|zimdancehall|sungura|amapiano|official\s+music\s+video|lyric\s+video|gospel\s+song|prophecy|prophet\s+says|sermon|pastor\s+predicts|comedy\s+skit|standup\s+comedy|cooking\s+vlog|travel\s+vlog|backpacking|kino\s+yves|how\s+to\s+buy\s+crypto|buy\s+crypto\s+in\s+zimbabwe|buy\s+usdt|recipe|safari\s+tour|victoria\s+falls\s+hotel|wildlife\s+photography|road\s+traffic\s+accident|fatal\s+road\s+accident|accident\s+update|accident\s+scene|fatal\s+crash|wellness\s+and\s+cancer\s+campaign|prize-winning\s+story|earthmoving\s+equipment|construction\s+machinery|mining\s+equipment|mining\s+machinery|excavators?\s+for\s+sale|bulldozer|heavy\s+machinery\s+supplier)\b/i;
 
-const MODEL_RELEVANCE_REGEX = /\b(zanu[\s-]?pf|zanupf|zanu|mnangagwa|chiwenga|chamisa|ccc|parliament|parlzim|hansard|constitution|constitutional|constitutionalism|cab3|2030|term\s+extension|amendment|cabinet|minister|ministry|government|regime|opposition|election|electoral|by-election|delimitation|voter\s+roll|zec|sadc|sanctions|zidera|brics|foreign\s+policy|diplomacy|sovereignty|judiciary|high\s+court|supreme\s+court|constitutional\s+court|magistrate|court\s+ruling|court\s+challenge|impeachment|recall|arrest|arrested|detention|bail|zrp|police|military|zdf|army|cio|war\s+veterans?|geza|mukonori|repression|censorship|pvo\s+bill|human\s+rights|democracy|democratic|rule\s+of\s+law|state\s+capture|devolution|municipality|city\s+council|local\s+authorit|mayor|governor|governance|policy|bill|statute|statutory\s+instrument|gazette|legislation|lawmaker|senate|commission\s+of\s+inquiry|economy|economic|economics|zimeconomy|zimbudget|zimpolitics|inflation|hyperinflation|zig|zwg|zimdollar|rtgs|bond\s+note|dollarization|de-dollarization|dedollarization|rbz|reserve\s+bank|central\s+bank|monetary\s+policy|gold[\s-]backed|mushayavanhu|exchange\s+rate|parallel\s+market|black\s+market|forex|currency|devaluation|treasury|budget|budget\s+presentation|finance\s+bill|appropriation|mthuli|ncube|fiscal|debt|public\s+debt|sovereign\s+debt|arrears|structured\s+dialogue|imf|world\s+bank|afdb|afreximbank|zimstat|zimra|tax|vat|imtt|customs|tariff|tollgate|subsidy|austerity|corruption|corrupt|zacc|auditor[\s-]?general|oag|tender|procurement|looting|cartel|smuggl|illicit|gold\s+mafia|al\s+jazeera|geo\s+pomona|pomona|drax|tagwirei|wicknell|chivayo|parastatal|mutapa|zinara|zesa|zupco|netone|telone|econet|starlink|potraz|zbc|gmb|cottco|nssa|cmed|kariba|hwange|air\s+zimbabwe|mining|lithium|gold|diamond|platinum|chrome|mineral|marange|bikita|land\s+reform|title\s+deed|compensation|command\s+agriculture|pfumvudza|diaspora|remittance|remittances|brain\s+drain|emigration|zep|gdp|poverty|unemployment|youth\s+unemployment|informal\s+sector|informal\s+economy|vendors|civil\s+serv|public\s+sector|salary|salaries|wages|pension|fuel|diesel|petrol|price\s+hike|cost\s+of\s+living|investment|trade|protest|protests|strike|strikes|industrial\s+action|go-slow|petition|shutdown|boycott|resistance|activis|mobiliz|civic|civil\s+society|trade\s+union|zctu|teachers|nurses|doctors|zinasu|students|whistleblower|accountability|transparency|chin'ono|hopewell|mahere|sikhala|bhoroma|newshawks|zimlive|openparly|veritas|zlhr|misa|kubatana|crisis\s+coalition|load\s+shedding|power\s+cut|blackout|electricity|energy\s+tariff|water\s+crisis|borehole|sewer|refuse\s+collection|service\s+delivery|potholes|road\s+rehab|rates|cholera|hospital|healthcare|clinic|maternity|drug\s+shortage|school|education|demolition|eviction|housing|drought|el\s+nino|hunger|food\s+security|food\s+aid|grain|maize|energy\s+crisis|infrastructure|freedom|liberation|civic\s+space|media\s+freedom|journalist|chitungwiza|epworth|gweru|mutare|masvingo|marondera|kwekwe|kadoma|matabeleland|gukurahundi)\b/i;
+const MODEL_RELEVANCE_REGEX = /\b(zanu[\s-]?pf|zanupf|zanu|mnangagwa|chiwenga|mohadi|chamisa|ccc|mdc|mwonzora|tshabangu|politburo|central\s+committee|presidium|factionalism|succession|lacoste|g40|ruling\s+party|shadow\s+cabinet|parliament|parlzim|hansard|national\s+assembly|senate|speaker\s+of\s+parliament|portfolio\s+committee|public\s+accounts\s+committee|order\s+paper|constitution|constitutional|constitutionalism|cab3|2030|vision\s+2030|term\s+extension|term\s+limit|amendment|referendum|cabinet|minister|ministry|executive|presidency|state\s+house|government|regime|hegemony|authoritarian|autocracy|opposition|coalition|election|electoral|by-election|harmonised\s+elections?|delimitation|voter\s+roll|voter\s+registration|ballot|rigging|electoral\s+reform|zec|sadc|african\s+union|sanctions|zidera|ofac|magnitsky|brics|foreign\s+policy|diplomacy|sovereignty|geopolitics|bilateral|judiciary|judicial|high\s+court|supreme\s+court|constitutional\s+court|magistrate|chief\s+justice|malaba|prosecutor|lawfare|court\s+ruling|court\s+challenge|impeachment|recall|recalls|no\s+confidence|walkout|arrest|arrested|detention|remand|bail|abduction|political\s+prisoner|zrp|police|riot\s+police|military|zdf|army|cio|intelligence|security\s+sector|securitization|militarization|coercion|coercive|war\s+veterans?|geza|mukonori|repression|crackdown|impunity|tear\s+gas|censorship|propaganda|disinformation|misinformation|internet\s+shutdown|throttling|surveillance|cyber\s+bill|pvo\s+bill|pvo\s+act|human\s+rights|civil\s+liberties|democracy|democratic|democratization|rule\s+of\s+law|separation\s+of\s+powers|checks\s+and\s+balances|state\s+capture|devolution|municipality|city\s+council|local\s+authorit|local\s+government|mayor|town\s+clerk|councillor|governor|governance|public\s+administration|policy|bill|statute|statutory\s+instrument|gazette|legislation|lawmaker|mps?|commission\s+of\s+inquiry|economy|economic|economics|political\s+economy|macroeconomic|macroeconomy|zimeconomy|zimbudget|zimpolitics|inflation|hyperinflation|deflation|cpi|zig|zwg|zimdollar|rtgs|bond\s+note|dollarization|de-dollarization|dedollarization|multi[\s-]?currency|mono[\s-]?currency|rbz|reserve\s+bank|central\s+bank|monetary\s+policy|mpc|interest\s+rate|bank\s+rate|liquidity|money\s+supply|gold[\s-]backed|gold\s+reserves|mushayavanhu|mangudya|exchange\s+rate|interbank|willing[\s-]buyer|auction\s+rate|parallel\s+market|black\s+market|forex|foreign\s+currency|foreign\s+exchange|currency|devaluation|depreciation|convertibility|nostro|ecocash|mobile\s+money|banking|commercial\s+bank|microfinance|financial\s+sector|capital\s+controls|capital\s+flight|zse|vfex|stock\s+exchange|bond\s+market|treasury\s+bills?|t[\s-]bills?|treasury|zimtreasury|ministry\s+of\s+finance|budget|national\s+budget|mid[\s-]term\s+budget|budget\s+deficit|budget\s+presentation|finance\s+bill|finance\s+act|appropriation|mthuli|ncube|fiscal|fiscal\s+policy|fiscal\s+space|public\s+finance|public\s+expenditure|expenditure|revenue|debt|public\s+debt|sovereign\s+debt|external\s+debt|domestic\s+debt|debt\s+distress|debt\s+restructuring|arrears|structured\s+dialogue|paris\s+club|imf|staff\s+monitored|article\s+iv|world\s+bank|afdb|afreximbank|zimstat|zimra|tax|taxation|vat|imtt|paye|corporate\s+tax|wealth\s+tax|sugar\s+tax|royalt(?:y|ies)|customs|excise|tariff|tariffs|tollgate|toll\s+fees?|levy|levies|subsidy|subsidies|austerity|ipsas|gdp|recession|stagnation|economic\s+growth|balance\s+of\s+payments|current\s+account|trade\s+deficit|exports?|imports?|fdi|foreign\s+direct\s+investment|investment|trade|zida|industrialization|deindustrialization|manufacturing|capacity\s+utilization|czi|zncc|private\s+sector|smes|formalization|business\s+environment|ok\s+zimbabwe|retail\s+sector|corruption|corrupt|graft|bribery|embezzlement|misappropriation|kickback|patronage|clientelism|nepotism|cronyism|oligarch|tenderpreneur|rent[\s-]seeking|rent\s+extraction|zacc|auditor[\s-]?general|oag|audit\s+report|audit\s+discrepancy|unvouched|tender|praz|procurement|looting|plunder|cartel|monopoly|oligopoly|smuggl|illicit|money\s+laundering|fiu|asset\s+recovery|forfeiture|gold\s+mafia|al\s+jazeera|geo\s+pomona|pomona|drax|tagwirei|sakunda|wicknell|chivayo|sakupwanya|betterbrands|parastatal|parastatals|state[\s-]owned|soe|mutapa|sovereign\s+wealth|zinara|zesa|zetdc|zpc|zupco|netone|telone|econet|starlink|potraz|zbc|gmb|cottco|nssa|cmed|kariba|hwange|air\s+zimbabwe|nrz|zisco(?:steel)?|zcdc|mmcz|fidelity\s+gold|fidelity\s+printers|petrotrade|noic|zera|mining|mine|miners|artisanal|makorokoza|lithium|gold|diamond|diamonds|platinum|chrome|coal|nickel|manhize|dinson|mineral|minerals|beneficiation|concessions?|special\s+grant|marange|chiadzwa|bikita|great\s+dyke|zimplats|mimosa|land\s+reform|land\s+tenure|title\s+deeds?|offer\s+letter|99[\s-]year\s+lease|communal\s+land|resettlement|land\s+grab|land\s+barons?|compensation|agriculture|agrarian|command\s+agriculture|pfumvudza|tobacco|grain|maize|wheat|farmers?|diaspora|remittance|remittances|brain\s+drain|emigration|migration|zep|mukuru|poverty|inequality|unemployment|youth\s+unemployment|informal\s+sector|informal\s+economy|informalization|vendors?|vending|mbare|tuckshops?|civil\s+serv|public\s+sector|salary|salaries|wages|living\s+wage|minimum\s+wage|pension|pensioners|fuel|diesel|petrol|transport\s+fare|kombi|mushikashika|price\s+hike|basic\s+commodities|cost\s+of\s+living|protest|protests|demonstration|strike|strikes|industrial\s+action|job\s+action|go[\s-]slow|stayaway|petition|shutdown|boycott|resistance|uprising|dissent|activis|mobiliz|civic|civil\s+society|grassroots|social\s+movement|trade\s+union|labou?r\s+union|labou?r|zctu|artuz|ptuz|zimta|teachers|nurses|doctors|zhda|zinasu|students|whistleblower|accountability|transparency|chin'ono|hopewell|mahere|sikhala|bhoroma|newshawks|zimlive|openparly|veritas|zlhr|misa|kubatana|crisis\s+coalition|citezw|zimrights|heal\s+zimbabwe|zesn|load\s+shedding|power\s+cut|blackout|electricity|energy\s+tariff|energy\s+crisis|water\s+crisis|water\s+rationing|borehole|sewer|sewage|refuse\s+collection|service\s+delivery|potholes|road\s+rehab|rates|cholera|typhoid|hospital|healthcare|clinic|maternity|drug\s+shortage|parirenyatwa|mpilo|school\s+fees|school|education|demolition|demolitions|eviction|evictions|housing|drought|el\s+nino|famine|hunger|food\s+security|food\s+aid|infrastructure|freedom|liberation|civic\s+space|media\s+freedom|press\s+freedom|journalist|journalists|chitungwiza|epworth|gweru|mutare|masvingo|marondera|kwekwe|kadoma|chinhoyi|bindura|beitbridge|matabeleland|gukurahundi)\b/i;
 
 const EXCLUDED_HASHTAGS = new Set([
   '#shorts', '#short', '#viral', '#fyp', '#foryou', '#trending', '#explore', '#reels', '#tiktok',
@@ -1582,7 +1591,16 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
       ? hashtags.length ? null : "Connected sources returned no model-relevant hashtags in the current window."
       : "No public social feeds are currently reachable."
   };
-  socialCache = { expiresAt: now + SOCIAL_CACHE_MS, payload };
+  socialCache = {
+    expiresAt: now + SOCIAL_CACHE_MS,
+    payload,
+    posts: posts.map(post => ({
+      platform: post.platform,
+      text: post.text,
+      createdAt: post.createdAt.toISOString(),
+      url: post.url || null
+    }))
+  };
   latestSocialTelemetry = payload;
   return payload;
 }
@@ -1662,6 +1680,7 @@ if (timelineStorageDir) {
   }
 }
 const LOCAL_SNAPSHOTS_FALLBACK_PATH = path.join(timelineStorageDir || PRIVATE_UPLOAD_DIR, 'daily_telemetry_snapshots.json');
+const REPO_SNAPSHOTS_PATH = path.join(__dirname, 'daily_telemetry_snapshots.json');
 let hasHydratedPersistedTimeline = false;
 let persistedTimelineHydrationPromise = null;
 let lastPersistedSnapshotSignature = null;
@@ -1696,6 +1715,63 @@ function writeLocalDailySnapshotFallback(entry) {
   }
 }
 
+function mergeSnapshotEntryFields(existing, incoming) {
+  if (!existing || typeof existing !== 'object') return { ...incoming };
+  if (!incoming || typeof incoming !== 'object') return { ...existing };
+  const merged = { ...existing, ...incoming };
+  const preserveNumericKeys = [
+    'phi',
+    'markov_crisis_prob',
+    'macro_volatility_proxy',
+    'fsi',
+    'hansard_friction',
+    'treasury_friction'
+  ];
+  for (const key of preserveNumericKeys) {
+    if (!Number.isFinite(incoming[key]) && Number.isFinite(existing[key])) {
+      merged[key] = existing[key];
+    }
+  }
+  if (!merged.warning_level && existing.warning_level) {
+    merged.warning_level = existing.warning_level;
+  }
+  if ((!Array.isArray(incoming.tracked_topics) || incoming.tracked_topics.length === 0)
+    && Array.isArray(existing.tracked_topics) && existing.tracked_topics.length > 0) {
+    merged.tracked_topics = existing.tracked_topics;
+  }
+  return merged;
+}
+
+function readRepoDailySnapshots() {
+  try {
+    if (!existsSync(REPO_SNAPSHOTS_PATH)) return [];
+    const parsed = JSON.parse(readFileSync(REPO_SNAPSHOTS_PATH, 'utf8'));
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(entry => entry && typeof entry.date === 'string' && Number.isFinite(entry.social_volume));
+  } catch (error) {
+    console.warn('Repo snapshot archive read skipped:', error?.message || error);
+    return [];
+  }
+}
+
+function writeRepoDailySnapshot(entry) {
+  try {
+    const existing = readRepoDailySnapshots();
+    const byDate = new Map(existing.map(item => [item.date, item]));
+    const prior = byDate.get(entry.date);
+    byDate.set(entry.date, { ...mergeSnapshotEntryFields(prior, entry), persisted: true });
+    const sorted = Array.from(byDate.values())
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const tmpPath = `${REPO_SNAPSHOTS_PATH}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(sorted, null, 2), 'utf8');
+    renameSync(tmpPath, REPO_SNAPSHOTS_PATH);
+    return sorted;
+  } catch (error) {
+    console.warn('Repo snapshot archive write skipped:', error?.message || error);
+    return null;
+  }
+}
+
 function mergePersistedSnapshotsIntoTimeline(persistedEntries, referenceDate = new Date()) {
   const byDate = new Map();
   buildRollingSeedTimeline(referenceDate).forEach(entry => {
@@ -1709,7 +1785,10 @@ function mergePersistedSnapshotsIntoTimeline(persistedEntries, referenceDate = n
   if (Array.isArray(persistedEntries)) {
     persistedEntries.forEach(entry => {
       if (entry && typeof entry.date === 'string' && Number.isFinite(entry.social_volume)) {
-        byDate.set(entry.date, { ...entry, persisted: true });
+        const existing = byDate.get(entry.date);
+        const existingIsLive = existing && Number.isFinite(existing.social_volume);
+        const mergedEntry = existingIsLive ? mergeSnapshotEntryFields(existing, entry) : { ...entry };
+        byDate.set(entry.date, { ...mergedEntry, persisted: true });
       }
     });
   }
@@ -1725,8 +1804,36 @@ async function hydratePersistedTimelineOnce() {
     return persistedTimelineHydrationPromise;
   }
   persistedTimelineHydrationPromise = (async () => {
-    const localFallback = readLocalDailySnapshotsFallback();
-    mergePersistedSnapshotsIntoTimeline(localFallback);
+    const repoSnapshots = readRepoDailySnapshots();
+    let localSnapshots = [];
+    try {
+      localSnapshots = readLocalDailySnapshotsFallback();
+    } catch (error) {
+      console.warn('Local snapshot hydration warning:', error?.message || error);
+    }
+
+    const combinedByDate = new Map();
+    for (const item of repoSnapshots) {
+      combinedByDate.set(item.date, { ...item, persisted: true });
+    }
+    const localDates = new Set();
+    for (const item of localSnapshots) {
+      localDates.add(item.date);
+      const prior = combinedByDate.get(item.date);
+      combinedByDate.set(item.date, { ...mergeSnapshotEntryFields(prior, item), persisted: true });
+    }
+
+    const combined = Array.from(combinedByDate.values())
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    // Backfill any GitHub-archived dates into the local/persistent disk store
+    for (const item of repoSnapshots) {
+      if (!localDates.has(item.date)) {
+        writeLocalDailySnapshotFallback(item);
+      }
+    }
+
+    mergePersistedSnapshotsIntoTimeline(combined);
     hasHydratedPersistedTimeline = true;
   })().finally(() => {
     persistedTimelineHydrationPromise = null;
@@ -1797,6 +1904,8 @@ function computeMacroStressProxy(layer2Macro) {
   return Number((0.50 * inflationStress + 0.30 * debtStress + 0.20 * growthStress).toFixed(2));
 }
 
+let lastLiveWorldBankMacro = null;
+
 async function fetchLayer2MacroTelemetry() {
   const now = Date.now();
   if (layer2MacroCache.data && layer2MacroCache.expiresAt > now) {
@@ -1815,7 +1924,7 @@ async function fetchLayer2MacroTelemetry() {
     try {
       const response = await fetch(`https://api.worldbank.org/v2/country/ZWE/indicator/${code}?format=json&mrv=1`, {
         headers: { 'User-Agent': 'KUVHURA-Observatory/1.0' },
-        signal: AbortSignal.timeout(3500)
+        signal: AbortSignal.timeout(6500)
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
@@ -1824,15 +1933,26 @@ async function fetchLayer2MacroTelemetry() {
         result[key] = Number(val);
         return;
       }
+      if (lastLiveWorldBankMacro && Number.isFinite(lastLiveWorldBankMacro[key])) {
+        result[key] = lastLiveWorldBankMacro[key];
+        return;
+      }
       result[key] = fallback[key];
       usedFallback = true;
     } catch {
+      if (lastLiveWorldBankMacro && Number.isFinite(lastLiveWorldBankMacro[key])) {
+        result[key] = lastLiveWorldBankMacro[key];
+        return;
+      }
       result[key] = fallback[key];
       usedFallback = true;
     }
   }));
 
   result.source = usedFallback ? 'fallback_baseline' : 'world_bank_v2';
+  if (!usedFallback) {
+    lastLiveWorldBankMacro = { ...result };
+  }
   layer2MacroCache = {
     expiresAt: now + (usedFallback ? LAYER2_FALLBACK_TTL_MS : LAYER2_MACRO_TTL_MS),
     data: result
@@ -4616,8 +4736,7 @@ function getDualEngineTimelineResponse() {
       ? { ...latestFsiInputs }
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
     hansardStatus,
-    treasuryStatus,
-    historyNote: 'Saved daily readings are shown where available; missing dates are gaps. Baseline rows are illustrative. Durable history requires a configured persistent disk. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable).'
+    treasuryStatus
   };
 }
 
@@ -4837,30 +4956,35 @@ async function refreshDualEngineTimelineDataInternal({ allowPersistence = true, 
       };
     }
 
+    let mergedTodayEntry = entry;
     if (TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1]?.date === today) {
-      TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1] = entry;
+      const existingToday = TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1];
+      mergedTodayEntry = Number.isFinite(existingToday?.social_volume)
+        ? mergeSnapshotEntryFields(existingToday, entry)
+        : entry;
+      TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1] = mergedTodayEntry;
     } else {
-      TELEMETRY_TIMELINE.push(entry);
+      TELEMETRY_TIMELINE.push(mergedTodayEntry);
       if (TELEMETRY_TIMELINE.length > TIMELINE_WINDOW_DAYS) TELEMETRY_TIMELINE.shift();
     }
 
     if (allowPersistence) {
       const signature = JSON.stringify([
-        entry.date,
-        entry.phi,
-        entry.markov_crisis_prob,
-        entry.macro_volatility_proxy ?? null,
-        entry.hansard_friction ?? null,
-        entry.treasury_friction ?? null,
-        entry.fsi ?? null,
-        entry.social_volume,
-        entry.engagement_score_proxy
+        mergedTodayEntry.date,
+        mergedTodayEntry.phi,
+        mergedTodayEntry.markov_crisis_prob,
+        mergedTodayEntry.macro_volatility_proxy ?? null,
+        mergedTodayEntry.hansard_friction ?? null,
+        mergedTodayEntry.treasury_friction ?? null,
+        mergedTodayEntry.fsi ?? null,
+        mergedTodayEntry.social_volume,
+        mergedTodayEntry.engagement_score_proxy
       ]);
       if (forcePersist || signature !== lastPersistedSnapshotSignature) {
         const snapshotToPersist = {
-          ...entry,
-          tracked_topics: Array.isArray(entry.tracked_topics)
-            ? entry.tracked_topics.slice(0, 10).map(t => ({
+          ...mergedTodayEntry,
+          tracked_topics: Array.isArray(mergedTodayEntry.tracked_topics)
+            ? mergedTodayEntry.tracked_topics.slice(0, 10).map(t => ({
                 topic: t?.topic || '',
                 category: t?.category || '',
                 friction: t?.friction ?? null
@@ -4869,10 +4993,10 @@ async function refreshDualEngineTimelineDataInternal({ allowPersistence = true, 
         };
         if (writeLocalDailySnapshotFallback(snapshotToPersist)) {
           lastPersistedSnapshotSignature = signature;
-          entry.persisted = true;
+          mergedTodayEntry.persisted = true;
         }
       } else {
-        entry.persisted = true;
+        mergedTodayEntry.persisted = true;
       }
     }
 
@@ -5002,7 +5126,8 @@ async function fetchWorldBankIndicatorSeries(indicator, series, metric, unit, sc
     const observations = [];
     for (const row of rows) {
       const year = Number(row?.date);
-      const rawVal = Number(row?.value);
+      if (row?.value === null || row?.value === undefined || row?.value === '') continue;
+      const rawVal = Number(row.value);
       if (!Number.isFinite(year) || year < 2015 || year > currentYear) continue;
       if (!Number.isFinite(rawVal)) continue;
       observations.push({
@@ -5500,6 +5625,591 @@ app.get('/api/treasury', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// LIVE CORE MODEL PARAMETER CALIBRATION (E, Pr, CL, AL, DB, P, I, C)
+// ---------------------------------------------------------------------------
+const MODEL_SIGNAL_BUCKET_REGEX = Object.freeze({
+  rentMiningFx: /\b(zig|zwg|rbz|reserve\s+bank|parallel\s+rate|black\s+market|forex|fx|exchange\s+rate|gold|lithium|diamond|diamonds|platinum|chrome|mining|miners|concession|mutapa|tender|procurement|praz|cartel|gold\s+mafia|wicknell|chivayo|tagwirei|sakunda|smuggl|illicit|money\s+laundering|fuel|zesa|zinara|zacc|auditor[\s-]?general|corrupt|corruption|looting|plunder|rent[\s-]seeking)\b/i,
+  patronageClientelism: /\b(pfumvudza|food\s+aid|maize|grain|gmb|cottco|drought|el\s+nino|famine|hunger|subsidy|subsidies|civil\s+serv|salary|salaries|wages|allowance|pension|traditional\s+leader|chief|patronage|clientelism|parastatal|zupco|nssa|state[\s-]owned|budget|appropriation|treasury|mthuli|inflation|hyperinflation|cpi|cost\s+of\s+living|price\s+hike|basic\s+commodities)\b/i,
+  coercionSecurity: /\b(police|zrp|zdf|army|military|cio|security|arrest|arrested|detain|detained|detention|bail|prison|abduct|abduction|torture|crackdown|tear\s*gas|ban|banned|intimidation|judiciary|court|magistrate|pvo\s+bill|patriotic\s+act|ed2030|term\s+limit|constitutional\s+amendment|zanu[\s-]?pf|politburo|succession|censorship|throttl|shutdown|repression|authoritarian)\b/i,
+  civicAutonomy: /\b(informal\s+sector|informal\s+economy|vendor|vendors|vending|mbare|tuckshop|tuckshops|cooperative|mutual\s+aid|strike|strikes|stayaway|protest|protests|demonstration|zctu|artuz|ptuz|zimta|zhda|zinasu|teachers|nurses|doctors|union|grassroots|activis|mobiliz|civic|civil\s+society|borehole|solar|community|resistance|boycott|petition|accountability|whistleblower)\b/i,
+  diasporaRemittances: /\b(diaspora|remittance|remittances|mukuru|western\s+union|worldremit|innbucks|ecocash|mobile\s+money|brain\s+drain|emigration|migration|zep|south\s+africa|uk\s+care|usd\s+cash|dollaris|dollariz)\b/i
+});
+
+function clampRange(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function round1(value) {
+  return Number(Number(value || 0).toFixed(1));
+}
+
+function round2(value) {
+  return Number(Number(value || 0).toFixed(2));
+}
+
+function getLatestSeriesObservation(observations, series, metric, { positiveOnly = false } = {}) {
+  if (!Array.isArray(observations)) return null;
+  const matches = observations.filter(
+    obs => obs
+      && obs.series === series
+      && obs.metric === metric
+      && obs.value !== null
+      && obs.value !== undefined
+      && Number.isFinite(Number(obs.value))
+      && (!positiveOnly || Number(obs.value) > 0)
+  );
+  if (!matches.length) return null;
+  matches.sort((a, b) => String(b.period || '').localeCompare(String(a.period || '')));
+  return matches[0];
+}
+
+function computeLiveModelParameters({
+  socialPosts = [],
+  socialPayload = null,
+  layer2Macro = null,
+  timeSeries = null,
+  hansardTelemetry = null,
+  treasuryTelemetry = null,
+  latestTimelineEntry = null
+} = {}) {
+  const posts = Array.isArray(socialPosts) ? socialPosts : [];
+  const totalPosts = posts.length;
+  const bucketCounts = {
+    rentMiningFx: 0,
+    patronageClientelism: 0,
+    coercionSecurity: 0,
+    civicAutonomy: 0,
+    diasporaRemittances: 0
+  };
+
+  for (const post of posts) {
+    const text = String(post?.text || '');
+    if (!text) continue;
+    for (const [bucket, regex] of Object.entries(MODEL_SIGNAL_BUCKET_REGEX)) {
+      if (regex.test(text)) bucketCounts[bucket] += 1;
+    }
+  }
+
+  const bucketShares = {};
+  for (const [bucket, count] of Object.entries(bucketCounts)) {
+    bucketShares[bucket] = totalPosts > 0 ? Number((count / totalPosts).toFixed(4)) : 0;
+  }
+
+  const observations = Array.isArray(timeSeries?.observations) ? timeSeries.observations : [];
+  const latestRemittance = getLatestSeriesObservation(observations, 'remittance-purchasing-power', 'remittances_received', { positiveOnly: true });
+  const latestFxPremium = getLatestSeriesObservation(observations, 'fx-inflation', 'parallel_fx_premium_pct', { positiveOnly: true });
+  const latestCpiObs = getLatestSeriesObservation(observations, 'fx-inflation', 'monthly_cpi_yoy_pct', { positiveOnly: true });
+  const latestRealPay = getLatestSeriesObservation(observations, 'remittance-purchasing-power', 'civil_service_real_pay', { positiveOnly: true });
+  const ooniObs = observations.filter(obs => obs && obs.series === 'narrative-throttling' && obs.metric === 'ooni_anomalies');
+  const recentOoniCount = ooniObs.slice(-4).reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+
+  const wbLive = layer2Macro?.source === 'world_bank_v2';
+  const inflationPct = Number.isFinite(Number(layer2Macro?.Inflation))
+    ? Number(layer2Macro.Inflation)
+    : (latestCpiObs ? Number(latestCpiObs.value) : 32.4);
+  const gdpGrowthPct = Number.isFinite(Number(layer2Macro?.GDP_Growth))
+    ? Number(layer2Macro.GDP_Growth)
+    : 3.5;
+  const debtGniPct = Number.isFinite(Number(layer2Macro?.Debt_GNI))
+    ? Number(layer2Macro.Debt_GNI)
+    : 37.9;
+  const fxPremiumPct = latestFxPremium ? Number(latestFxPremium.value) : 38.6;
+  const remittancesUsdM = latestRemittance ? Number(latestRemittance.value) : 2150;
+  const realPayIndex = latestRealPay ? Number(latestRealPay.value) : 52.1;
+
+  const treasuryScore = (treasuryTelemetry?.status === 'available' && Number.isFinite(Number(treasuryTelemetry.score)))
+    ? Number(treasuryTelemetry.score)
+    : (Number.isFinite(Number(latestTimelineEntry?.treasury_friction)) ? Number(latestTimelineEntry.treasury_friction) : null);
+  const hansardScore = Number.isFinite(Number(hansardTelemetry?.score))
+    ? Number(hansardTelemetry.score)
+    : (Number.isFinite(Number(latestTimelineEntry?.hansard_friction)) ? Number(latestTimelineEntry.hansard_friction) : null);
+
+  // Baseline anchors matching KUVHURA calibrated status quo
+  const baselines = { E: 8.8, Pr: 7.6, CL: 8.9, AL: 2.8, DB: 6.8 };
+
+  // 1. E (Mineral & FX Rent Monopoly): FX spread + external debt + Treasury fiscal risk + mining/FX/corruption social share
+  const eFxAdj = clampRange((fxPremiumPct - 35) / 45, -0.7, 0.8);
+  const eDebtAdj = clampRange((debtGniPct - 38) / 50, -0.5, 0.7);
+  const eTreasAdj = treasuryScore !== null ? clampRange((treasuryScore - 55) / 50, -0.6, 0.7) : 0;
+  const eSocialAdj = totalPosts >= 10 ? clampRange((bucketShares.rentMiningFx - 0.28) * 2.2, -0.6, 0.8) : 0;
+  const valE = round1(clampRange(baselines.E + eFxAdj + eDebtAdj + eTreasAdj + eSocialAdj, 1.5, 9.9));
+
+  // 2. Pr (Clientelist Patronage Redistribution): CPI/inflation pressure + GDP strain + Treasury score + patronage social share
+  const prInflAdj = clampRange((Math.min(inflationPct, 150) - 30) / 80, -0.6, 0.9);
+  const prGdpAdj = clampRange((4.0 - gdpGrowthPct) / 10, -0.4, 0.6);
+  const prTreasAdj = treasuryScore !== null ? clampRange((treasuryScore - 55) / 55, -0.5, 0.7) : 0;
+  const prSocialAdj = totalPosts >= 10 ? clampRange((bucketShares.patronageClientelism - 0.22) * 2.4, -0.5, 0.8) : 0;
+  const valPr = round1(clampRange(baselines.Pr + prInflAdj + prGdpAdj + prTreasAdj + prSocialAdj, 1.5, 9.9));
+
+  // 3. CL (Coercive Enforcement Liquidity): ParlZim Hansard friction + OONI throttling + coercion/security social share
+  const clHansardAdj = hansardScore !== null ? clampRange((hansardScore - 55) / 45, -0.8, 0.8) : 0;
+  const clOoniAdj = ooniObs.length > 0 ? clampRange((recentOoniCount - 8) / 40, -0.2, 0.5) : 0;
+  const clSocialAdj = totalPosts >= 10 ? clampRange((bucketShares.coercionSecurity - 0.24) * 2.2, -0.6, 0.7) : 0;
+  const valCL = round1(clampRange(baselines.CL + clHansardAdj + clOoniAdj + clSocialAdj, 1.5, 9.9));
+
+  // 4. DB (Diaspora Remittance Decoupling): World Bank Remittances ($M) + diaspora social share
+  // $1,400M -> ~5.6, $2,150M -> ~7.1, $2,600M -> ~8.0
+  const dbRemitBase = clampRange(4.8 + ((remittancesUsdM - 1000) / 500), 3.0, 9.2);
+  const dbSocialAdj = totalPosts >= 10 ? clampRange((bucketShares.diasporaRemittances - 0.06) * 4.0, -0.4, 0.7) : 0;
+  const valDB = round1(clampRange(dbRemitBase + dbSocialAdj, 1.5, 9.8));
+
+  // 5. AL (Citizen Livelihood Autonomy): civic/informal autonomy share + real pay erosion + diaspora buffer spillover
+  const alSocialAdj = totalPosts >= 10 ? clampRange((bucketShares.civicAutonomy - 0.14) * 3.5, -0.6, 1.4) : 0;
+  const alPayAdj = clampRange((realPayIndex - 50) / 45, -0.5, 0.6);
+  const alDbSpillover = clampRange((valDB - 6.8) * 0.25, -0.3, 0.5);
+  const valAL = round1(clampRange(baselines.AL + alSocialAdj + alPayAdj + alDbSpillover, 1.2, 9.5));
+
+  // Explicit structural friction vector (P, I, C)
+  const valP = round1(clampRange(
+    valE * 0.65 + (hansardScore !== null ? (hansardScore / 10) * 0.35 : valPr * 0.35),
+    1.0,
+    10.0
+  ));
+  const inflationNormalized = clampRange((Math.min(inflationPct, 120) / 12) + (fxPremiumPct / 40), 1.0, 10.0);
+  const valI = round1(clampRange(
+    valPr * 0.50 + inflationNormalized * 0.30 + (treasuryScore !== null ? (treasuryScore / 10) * 0.20 : valE * 0.20),
+    1.0,
+    10.0
+  ));
+  const valC = round1(clampRange(
+    valCL * 0.70 + (hansardScore !== null ? (hansardScore / 10) * 0.20 : valCL * 0.20) + clampRange(recentOoniCount / 15, 0, 1.0),
+    1.0,
+    10.0
+  ));
+
+  const num = valE * valPr * valCL;
+  const den = (valAL * valDB) + 0.1;
+  const phi = round2(num / den);
+  const coupledR = 8.0;
+  const coupledA = clampRange(valAL * 1.1, 1.0, 10.0);
+  const praxis = round2((coupledR * coupledA) / (valP + valI + valC));
+  const regimeState = phi > 60
+    ? 'ENTRENCHED CAPTIVE HEGEMONY'
+    : phi > 25
+      ? 'CONTESTED EQUILIBRIUM / ATTRITION'
+      : 'PRE-RUPTURE / REGIME FRAGILITY';
+
+  const makeDriverMeta = (value, base, lineage, drivers) => ({
+    value,
+    baseline: base,
+    delta: round1(value - base),
+    lineage,
+    drivers
+  });
+
+  return {
+    available: true,
+    updatedAt: new Date().toISOString(),
+    sampledPosts: totalPosts,
+    sampledPlatforms: Array.isArray(socialPayload?.sampledPlatforms) ? socialPayload.sampledPlatforms : [],
+    parameters: {
+      E: makeDriverMeta(
+        valE,
+        baselines.E,
+        treasuryScore !== null || totalPosts > 0 ? 'Live Empirical' : 'Baseline Proxy',
+        [
+          treasuryScore !== null ? `Treasury F_treas ${treasuryScore.toFixed(1)}` : `FX spread ${fxPremiumPct.toFixed(1)}%`,
+          `Debt/GNI ${debtGniPct.toFixed(1)}%${wbLive ? ' (WB live)' : ''}`,
+          `Rent/Mining/FX signal ${(bucketShares.rentMiningFx * 100).toFixed(1)}% (${bucketCounts.rentMiningFx}/${totalPosts})`
+        ]
+      ),
+      Pr: makeDriverMeta(
+        valPr,
+        baselines.Pr,
+        wbLive || treasuryScore !== null || totalPosts > 0 ? 'Live Empirical' : 'Baseline Proxy',
+        [
+          `CPI ${inflationPct.toFixed(1)}%${wbLive ? ' (WB live)' : ''}`,
+          `GDP ${gdpGrowthPct.toFixed(1)}%`,
+          `Patronage/Cost signal ${(bucketShares.patronageClientelism * 100).toFixed(1)}% (${bucketCounts.patronageClientelism}/${totalPosts})`
+        ]
+      ),
+      CL: makeDriverMeta(
+        valCL,
+        baselines.CL,
+        hansardScore !== null || totalPosts > 0 ? 'Live Empirical' : 'Baseline Proxy',
+        [
+          hansardScore !== null ? `ParlZim F_parl ${hansardScore.toFixed(1)}` : 'ParlZim baseline',
+          ooniObs.length > 0 ? `OONI anomalies ${recentOoniCount}` : 'Civic-space baseline',
+          `Coercion/Security signal ${(bucketShares.coercionSecurity * 100).toFixed(1)}% (${bucketCounts.coercionSecurity}/${totalPosts})`
+        ]
+      ),
+      AL: makeDriverMeta(
+        valAL,
+        baselines.AL,
+        totalPosts > 0 ? 'Live Empirical' : 'Baseline Proxy',
+        [
+          `Civic/Informal autonomy ${(bucketShares.civicAutonomy * 100).toFixed(1)}% (${bucketCounts.civicAutonomy}/${totalPosts})`,
+          `Real pay idx ${realPayIndex.toFixed(1)}`,
+          `Diaspora spillover DB=${valDB.toFixed(1)}`
+        ]
+      ),
+      DB: makeDriverMeta(
+        valDB,
+        baselines.DB,
+        latestRemittance ? 'Live Empirical' : 'Baseline Proxy',
+        [
+          `WB Remittances $${Math.round(remittancesUsdM).toLocaleString()}M (${latestRemittance?.period || 'baseline'})`,
+          `Diaspora signal ${(bucketShares.diasporaRemittances * 100).toFixed(1)}% (${bucketCounts.diasporaRemittances}/${totalPosts})`
+        ]
+      )
+    },
+    frictionVector: {
+      P: { value: valP, label: 'Political & Institutional Friction' },
+      I: { value: valI, label: 'Inflation & Informal-Economic Friction' },
+      C: { value: valC, label: 'Coercive & Civic-Space Friction' }
+    },
+    signalBreakdown: {
+      counts: bucketCounts,
+      shares: bucketShares
+    },
+    derived: {
+      phi,
+      praxis,
+      regimeMass: Math.round(num),
+      autonomyMass: Math.round(den),
+      asymmetricRatio: Number((num / den).toFixed(1)),
+      regimeState
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// LIVE STRUCTURAL TELEMETRY & 10-PROVINCE SPATIAL OVERLAY (IEFR, RSR, CLP)
+// ---------------------------------------------------------------------------
+const ZIMBABWE_PROVINCIAL_BASELINES = Object.freeze([
+  {
+    id: 'harare',
+    name: 'Harare Metropolitan',
+    lat: -17.8252,
+    lng: 31.0335,
+    baseIefr: 3.12,
+    baseRsr: 1.20,
+    baseClp: 0.85,
+    primaryProfile: 'Urban Informal Taxation & State Command Core',
+    regex: /\b(harare|chitungwiza|epworth|mbare|glen\s+view|kuwadzana|highfield|avondale|borrowdale|harare\s+city|harare\s+council|parirenyatwa|budiriro|dzivarasekwa|mabvuku)\b/i
+  },
+  {
+    id: 'bulawayo',
+    name: 'Bulawayo Metropolitan',
+    lat: -20.1594,
+    lng: 28.5838,
+    baseIefr: 2.65,
+    baseRsr: 1.15,
+    baseClp: 0.70,
+    primaryProfile: 'Deindustrialized Urban Corridor & Municipal Water Stress',
+    regex: /\b(bulawayo|nkulumane|makokoba|mpilo|entumbane|luveve|khami|byo|cowdray\s+park|emganwini)\b/i
+  },
+  {
+    id: 'manicaland',
+    name: 'Manicaland',
+    lat: -18.9216,
+    lng: 32.1663,
+    baseIefr: 2.80,
+    baseRsr: 2.45,
+    baseClp: 0.68,
+    primaryProfile: 'Diamond & Gold Extraction Corridor (Marange / Penhalonga)',
+    regex: /\b(manicaland|mutare|marange|chiadzwa|chimanimani|chipinge|rusape|nyanga|penhalonga|buhera|makoni)\b/i
+  },
+  {
+    id: 'mashonaland-central',
+    name: 'Mashonaland Central',
+    lat: -16.9333,
+    lng: 31.0833,
+    baseIefr: 2.15,
+    baseRsr: 2.20,
+    baseClp: 0.75,
+    primaryProfile: 'Gold / Gas Concession Enclave & Rural Patronage Belt',
+    regex: /\b(mashonaland\s+central|bindura|mazowe|shamva|mt\s+darwin|mount\s+darwin|mbire|muzarabani|guruve|rushinga|centenary)\b/i
+  },
+  {
+    id: 'mashonaland-east',
+    name: 'Mashonaland East',
+    lat: -18.1853,
+    lng: 31.5519,
+    baseIefr: 2.30,
+    baseRsr: 2.10,
+    baseClp: 0.66,
+    primaryProfile: 'Arcadia Lithium Belt & Peri-Urban Land Barons',
+    regex: /\b(mashonaland\s+east|marondera|ruwa|goromonzi|murewa|mutoko|wedza|hwedza|chikomba|arcadia|uzumba|seke|mudzi)\b/i
+  },
+  {
+    id: 'mashonaland-west',
+    name: 'Mashonaland West',
+    lat: -17.3667,
+    lng: 30.2000,
+    baseIefr: 2.45,
+    baseRsr: 2.25,
+    baseClp: 0.72,
+    primaryProfile: 'Great Dyke Platinum / Kariba Energy & Artisanal Gold',
+    regex: /\b(mashonaland\s+west|chinhoyi|kadoma|chegutu|kariba|karoi|norton|zvimba|mhondoro|ngezi|hurungwe|sanyati|makonde)\b/i
+  },
+  {
+    id: 'midlands',
+    name: 'Midlands',
+    lat: -19.4500,
+    lng: 29.8167,
+    baseIefr: 2.95,
+    baseRsr: 2.38,
+    baseClp: 0.80,
+    primaryProfile: 'Gold / Chrome / Manhize Steel Extractive Spine',
+    regex: /\b(midlands|gweru|kwekwe|zvishavane|shurugwi|manhize|dinson|redcliff|gokwe|mvuma|chirumanzu|mberengwa)\b/i
+  },
+  {
+    id: 'masvingo',
+    name: 'Masvingo',
+    lat: -20.0744,
+    lng: 30.8328,
+    baseIefr: 2.35,
+    baseRsr: 2.32,
+    baseClp: 0.64,
+    primaryProfile: 'Bikita Lithium, Sugar Estates & Communal Land Tenure',
+    regex: /\b(masvingo|bikita|chiredzi|gutu|mwenezi|zaka|chivi|tokwe|mukosi|triangle|hippo\s+valley|great\s+zimbabwe)\b/i
+  },
+  {
+    id: 'matabeleland-north',
+    name: 'Matabeleland North',
+    lat: -18.5000,
+    lng: 27.7000,
+    baseIefr: 2.05,
+    baseRsr: 2.15,
+    baseClp: 0.58,
+    primaryProfile: 'Hwange Coal/Power, Kamativi Lithium & Carbon Concessions',
+    regex: /\b(matabeleland\s+north|hwange|victoria\s+falls|lupane|binga|tsholotsho|nkayi|umguza|kamativi|gwayi|shangani|matabeleland)\b/i
+  },
+  {
+    id: 'matabeleland-south',
+    name: 'Matabeleland South',
+    lat: -20.9333,
+    lng: 29.0000,
+    baseIefr: 2.40,
+    baseRsr: 2.05,
+    baseClp: 0.69,
+    primaryProfile: 'Beitbridge Border Logistics, Remittance Corridor & Gold',
+    regex: /\b(matabeleland\s+south|gwanda|beitbridge|plumtree|filabusi|esigodini|insiza|matobo|kezi|mangwe|umzingwane|matabeleland)\b/i
+  }
+]);
+
+const PROVINCIAL_THEME_REGEX = Object.freeze({
+  'Extraction / Mining': /\b(mining|mine|miners|gold|lithium|diamond|platinum|chrome|coal|concession|makorokoza|steel|manhize|bikita|marange|arcadia|hwange|kamativi)\b/i,
+  'Informal / Fiscal': /\b(tax|imtt|zimra|informal|vendor|mbare|tuckshop|rates|tariff|zig|zwg|inflation|fuel|price\s+hike|budget|treasury|council)\b/i,
+  'Land / Concessions': /\b(land|tenure|title\s+deeds|communal|eviction|demolition|resettlement|carbon|forest|agriculture|pfumvudza|drought|maize|farms?)\b/i,
+  'Coercion / Security': /\b(police|zrp|army|military|zdf|cio|arrest|detain|crackdown|parastatal|zesa|zinara|security|zanu|parliament|pvo|ed2030)\b/i,
+  'Civic / Service Delivery': /\b(water|borehole|cholera|hospital|clinic|load\s+shedding|blackout|power\s+cut|protest|strike|school|roads|potholes|sewer)\b/i
+});
+
+function classifyProvincialStatus(iefr, rsr, clp) {
+  if (iefr >= 3.15 || (iefr >= 2.85 && clp >= 0.78)) return 'Critical Extraction & Coercive Hotspot';
+  if (rsr >= 2.35) return 'High Resource Securitization';
+  if (iefr >= 2.65 || clp >= 0.72) return 'Elevated Structural Friction';
+  if (rsr >= 2.05 || iefr >= 2.25) return 'Active Concession & Informal Corridor';
+  return 'Baseline Monitoring';
+}
+
+function computeStructuralProvincialTelemetry({
+  socialPosts = [],
+  socialPayload = null,
+  layer2Macro = null,
+  hansardTelemetry = null,
+  treasuryTelemetry = null,
+  landPortalData = null,
+  liveModelParams = null,
+  latestTimelineEntry = null
+} = {}) {
+  const posts = Array.isArray(socialPosts) ? socialPosts : [];
+  const lpSignals = Array.isArray(landPortalData?.signals) ? landPortalData.signals : [];
+
+  const treasuryScore = (treasuryTelemetry?.status === 'available' && Number.isFinite(Number(treasuryTelemetry.score)))
+    ? Number(treasuryTelemetry.score)
+    : (Number.isFinite(Number(latestTimelineEntry?.treasury_friction)) ? Number(latestTimelineEntry.treasury_friction) : 55);
+  const hansardScore = Number.isFinite(Number(hansardTelemetry?.score))
+    ? Number(hansardTelemetry.score)
+    : (Number.isFinite(Number(latestTimelineEntry?.hansard_friction)) ? Number(latestTimelineEntry.hansard_friction) : 55);
+  const inflationPct = Number.isFinite(Number(layer2Macro?.Inflation)) ? Number(layer2Macro.Inflation) : 32.4;
+
+  const nationalIefrFactor = clampRange(((treasuryScore - 50) / 140) + ((Math.min(inflationPct, 120) - 30) / 280), -0.25, 0.45);
+  const nationalClpFactor = clampRange((hansardScore - 50) / 220, -0.08, 0.14);
+  const nationalLandPortalBoost = clampRange(lpSignals.length * 0.015, 0, 0.22);
+
+  let totalProvinceMatches = 0;
+
+  const provinces = ZIMBABWE_PROVINCIAL_BASELINES.map(prov => {
+    let socialMentions = 0;
+    let miningMentions = 0;
+    let fiscalMentions = 0;
+    let coercionMentions = 0;
+    let landMentions = 0;
+    const themeHits = {};
+
+    for (const post of posts) {
+      const text = String(post?.text || '');
+      if (!text || !prov.regex.test(text)) continue;
+      socialMentions += 1;
+      for (const [theme, re] of Object.entries(PROVINCIAL_THEME_REGEX)) {
+        if (re.test(text)) {
+          themeHits[theme] = (themeHits[theme] || 0) + 1;
+        }
+      }
+      if (PROVINCIAL_THEME_REGEX['Extraction / Mining'].test(text)) miningMentions += 1;
+      if (PROVINCIAL_THEME_REGEX['Informal / Fiscal'].test(text)) fiscalMentions += 1;
+      if (PROVINCIAL_THEME_REGEX['Coercion / Security'].test(text)) coercionMentions += 1;
+      if (PROVINCIAL_THEME_REGEX['Land / Concessions'].test(text)) landMentions += 1;
+    }
+
+    let landPortalMatches = 0;
+    for (const sig of lpSignals) {
+      const blob = `${sig?.indicator || ''} ${sig?.note || ''} ${sig?.provider || ''}`;
+      if (prov.regex.test(blob)) {
+        landPortalMatches += 1;
+        themeHits['Land / Concessions'] = (themeHits['Land / Concessions'] || 0) + 1;
+      }
+    }
+
+    totalProvinceMatches += socialMentions + landPortalMatches;
+
+    const iefr = round2(clampRange(
+      prov.baseIefr + nationalIefrFactor + Math.min(0.45, fiscalMentions * 0.06 + socialMentions * 0.015),
+      1.1,
+      4.5
+    ));
+    const rsr = round2(clampRange(
+      prov.baseRsr + nationalLandPortalBoost + Math.min(0.55, miningMentions * 0.07 + landMentions * 0.05 + landPortalMatches * 0.09),
+      0.8,
+      3.8
+    ));
+    const clp = round2(clampRange(
+      prov.baseClp + nationalClpFactor + Math.min(0.16, coercionMentions * 0.025 + socialMentions * 0.005),
+      0.30,
+      0.98
+    ));
+
+    const topThemes = Object.entries(themeHits)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 3)
+      .map(([name, count]) => `${name} (${count})`);
+
+    return {
+      id: prov.id,
+      name: prov.name,
+      lat: prov.lat,
+      lng: prov.lng,
+      iefr,
+      rsr,
+      clp,
+      iefrDelta: round2(iefr - prov.baseIefr),
+      rsrDelta: round2(rsr - prov.baseRsr),
+      clpDelta: round2(clp - prov.baseClp),
+      signalCount: socialMentions + landPortalMatches,
+      socialMentions,
+      landPortalMatches,
+      profile: prov.primaryProfile,
+      topThemes,
+      status: classifyProvincialStatus(iefr, rsr, clp)
+    };
+  });
+
+  const avgIefr = round2(provinces.reduce((s, p) => s + p.iefr, 0) / provinces.length);
+  const avgRsr = round2(provinces.reduce((s, p) => s + p.rsr, 0) / provinces.length);
+  const avgClp = round2(provinces.reduce((s, p) => s + p.clp, 0) / provinces.length);
+  const baseAvgIefr = ZIMBABWE_PROVINCIAL_BASELINES.reduce((s, p) => s + p.baseIefr, 0) / ZIMBABWE_PROVINCIAL_BASELINES.length;
+  const iefrPctDelta = round1(((avgIefr - baseAvgIefr) / baseAvgIefr) * 100);
+
+  const basePhi = Number.isFinite(Number(latestTimelineEntry?.phi))
+    ? Number(latestTimelineEntry.phi)
+    : (Number.isFinite(Number(liveModelParams?.derived?.phi)) ? Number(liveModelParams.derived.phi) : 37.4);
+  const praxisYieldRaw = Number.isFinite(Number(liveModelParams?.derived?.praxis))
+    ? Number(liveModelParams.derived.praxis)
+    : 0.89;
+  const praxisYieldPct = round1(clampRange(praxisYieldRaw * 100, 5, 99.9));
+  // Adjusted Regime Durability discounts base Phi by live structural extraction/securitization/coercion drag
+  const structuralDrag = clampRange((avgIefr - 2.0) * 3.8 + (avgRsr - 1.5) * 3.2 + (avgClp - 0.5) * 14.0, 2.0, 22.0);
+  const adjustedPhi = round2(clampRange(basePhi - structuralDrag, 5.0, 95.0));
+
+  return {
+    available: true,
+    updatedAt: new Date().toISOString(),
+    provinceCount: provinces.length,
+    scannedPosts: posts.length,
+    geoMatchedSignals: totalProvinceMatches,
+    landPortalRecords: lpSignals.length,
+    sampledPlatforms: Array.isArray(socialPayload?.sampledPlatforms) ? socialPayload.sampledPlatforms : [],
+    layer2Macro: layer2Macro || null,
+    summary: {
+      basePhi: Number(basePhi.toFixed(3)),
+      praxisYieldPct,
+      adjustedPhi: Number(adjustedPhi.toFixed(3)),
+      iefr: {
+        value: avgIefr,
+        deltaPct: iefrPctDelta,
+        label: `${iefrPctDelta >= 0 ? '+' : ''}${iefrPctDelta}% vs baseline`
+      },
+      rsr: {
+        value: avgRsr,
+        label: avgRsr >= 2.2 ? 'High Concession Pressure' : avgRsr >= 1.85 ? 'Active Concession Belt' : 'Moderate Concession'
+      },
+      clp: {
+        value: avgClp,
+        label: avgClp >= 0.72 ? 'Deep Security Embedding' : avgClp >= 0.62 ? 'Security Embedded' : 'Contained Footprint'
+      }
+    },
+    provinces
+  };
+}
+
+async function gatherLiveModelAndStructuralInputs() {
+  const cachedTreasury = (treasuryCache.data && treasuryCache.expiresAt > Date.now())
+    ? treasuryCache.data
+    : readVerifiedTreasuryCache();
+  const treasuryPromise = cachedTreasury
+    ? (fetchMinistryOfFinanceTracker().catch(() => {}), Promise.resolve(cachedTreasury))
+    : fetchMinistryOfFinanceTracker().catch(() => null);
+
+  const [socialPayload, layer2Macro, timeSeries, hansardTelemetry, treasuryTelemetry] = await Promise.all([
+    getSocialHashtagTrends().catch(() => null),
+    fetchLayer2MacroTelemetry().catch(() => null),
+    getPoliticalEconomyTimeSeriesData().catch(() => null),
+    fetchSemanticHansardTelemetry().catch(() => null),
+    treasuryPromise
+  ]);
+
+  const socialPosts = Array.isArray(socialCache?.posts) ? socialCache.posts : [];
+  const landPortalData = readLandPortalSignalsFromCache();
+  const latestTimelineEntry = [...TELEMETRY_TIMELINE].reverse().find(e => Number.isFinite(e?.social_volume))
+    || TELEMETRY_TIMELINE[TELEMETRY_TIMELINE.length - 1]
+    || null;
+
+  return {
+    socialPosts,
+    socialPayload,
+    layer2Macro,
+    timeSeries,
+    hansardTelemetry,
+    treasuryTelemetry,
+    landPortalData,
+    latestTimelineEntry
+  };
+}
+
+app.get('/api/model/live-parameters', async (req, res) => {
+  try {
+    const inputs = await gatherLiveModelAndStructuralInputs();
+    res.json(computeLiveModelParameters(inputs));
+  } catch (err) {
+    res.status(500).json({ available: false, error: err.message || 'Failed to compute live model parameters' });
+  }
+});
+
+app.get('/api/structural/provincial-telemetry', async (req, res) => {
+  try {
+    const inputs = await gatherLiveModelAndStructuralInputs();
+    const liveModelParams = computeLiveModelParameters(inputs);
+    res.json(computeStructuralProvincialTelemetry({ ...inputs, liveModelParams }));
+  } catch (err) {
+    res.status(500).json({ available: false, error: err.message || 'Failed to compute structural provincial telemetry' });
+  }
+});
+
 const CARTO_TILE_STYLE_TEMPLATES = Object.freeze({
   voyager: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`,
   dark_all: (z, x, y) => `https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`,
@@ -5970,6 +6680,7 @@ const PUBLIC_FRONTEND_FILES = new Set([
   '/political-economy-timeseries.js',
   '/treasury_cache.json',
   '/telemetry_cache.json',
+  '/daily_telemetry_snapshots.json',
   '/manifest.json',
   '/service-worker.js',
   '/icon.svg',
@@ -6099,6 +6810,37 @@ if (process.argv.includes('--update-treasury-cache')) {
       console.error(`Treasury cache update failed: ${err.message}`);
       process.exit(1);
     });
+} else if (process.argv.includes('--record-daily-snapshot')) {
+  refreshDualEngineTimelineData({ allowPersistence: true, forcePersist: true })
+    .then(result => {
+      const today = new Date().toISOString().slice(0, 10);
+      const todayEntry = (result.timeline || []).find(entry => entry.date === today && Number.isFinite(entry.social_volume));
+      if (!todayEntry) {
+        console.warn(`Daily snapshot skipped: no live social telemetry available for ${today}`);
+        process.exit(0);
+      }
+      const snapshotToCommit = {
+        ...todayEntry,
+        tracked_topics: Array.isArray(todayEntry.tracked_topics)
+          ? todayEntry.tracked_topics.slice(0, 10).map(t => ({
+              topic: t?.topic || '',
+              category: t?.category || '',
+              friction: t?.friction ?? null
+            }))
+          : []
+      };
+      const savedList = writeRepoDailySnapshot(snapshotToCommit);
+      console.log(
+        `Daily telemetry snapshot recorded for ${today}: phi=${todayEntry.phi}, fsi=${todayEntry.fsi ?? 'n/a'}, ` +
+        `hansard=${todayEntry.hansard_friction ?? 'n/a'}, treasury=${todayEntry.treasury_friction ?? 'n/a'}, ` +
+        `social_volume=${todayEntry.social_volume}, archived_days=${savedList?.length ?? 0}`
+      );
+      process.exit(0);
+    })
+    .catch(err => {
+      console.error(`Daily telemetry snapshot failed: ${err.message}`);
+      process.exit(1);
+    });
 } else {
   const initialTreasuryCache = readVerifiedTreasuryCache();
   if (initialTreasuryCache) {
@@ -6111,6 +6853,17 @@ if (process.argv.includes('--update-treasury-cache')) {
         console.warn(`Initial timeline warmup warning: ${err.message}`);
       });
     }, 1500).unref();
+    setInterval(() => {
+      const today = new Date().toISOString().slice(0, 10);
+      const hasTodayPersisted = TELEMETRY_TIMELINE.some(
+        entry => entry.date === today && Number.isFinite(entry.social_volume) && entry.persisted
+      );
+      if (!hasTodayPersisted) {
+        refreshDualEngineTimelineData({ allowPersistence: true, forcePersist: true }).catch(err => {
+          console.warn(`UTC rollover snapshot warning: ${err.message}`);
+        });
+      }
+    }, 15 * 60 * 1000).unref();
     setInterval(() => {
       refreshDualEngineTimelineData({ allowPersistence: true }).catch(err => {
         console.warn(`Scheduled timeline refresh warning: ${err.message}`);

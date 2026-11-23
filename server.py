@@ -54,17 +54,20 @@ YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS = (
     ("UC8z43AxZwpXkEfNqJopiCew", "SlyMediaTv"),
 )
 X_PUBLIC_INDEX_RSS_URLS = (
-    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(politics+OR+parliament+OR+ZANU+OR+Mnangagwa+OR+Chiwenga+OR+Chamisa+OR+constitution+OR+CAB3+OR+2030+OR+judiciary+OR+SADC+OR+election+OR+opposition)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
-    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(economy+OR+inflation+OR+ZiG+OR+ZWG+OR+RBZ+OR+Treasury+OR+budget+OR+Mthuli+OR+ZIMRA+OR+tax+OR+debt+OR+IMF+OR+forex+OR+remittances)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
-    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(corruption+OR+ZACC+OR+Auditor-General+OR+tender+OR+procurement+OR+Mutapa+OR+ZINARA+OR+ZESA+OR+Tagwirei+OR+Chivayo+OR+mining+OR+lithium+OR+gold+OR+cartel)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
-    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+drought+OR+healthcare+OR+Starlink)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(politics+OR+parliament+OR+ZANU+OR+Mnangagwa+OR+Chiwenga+OR+Chamisa+OR+constitution+OR+CAB3+OR+2030+OR+succession+OR+politburo+OR+judiciary+OR+SADC+OR+election+OR+opposition)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(economy+OR+inflation+OR+ZiG+OR+ZWG+OR+RBZ+OR+monetary+policy+OR+dollarization+OR+exchange+rate+OR+parallel+market+OR+forex+OR+ZSE+OR+VFEX+OR+banking+OR+liquidity)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(Treasury+OR+budget+OR+Mthuli+OR+ZIMRA+OR+tax+OR+VAT+OR+IMTT+OR+debt+OR+arrears+OR+IMF+OR+World+Bank+OR+fiscal+OR+austerity+OR+tariff+OR+subsidy)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(corruption+OR+ZACC+OR+Auditor-General+OR+tender+OR+procurement+OR+PRAZ+OR+Mutapa+OR+ZINARA+OR+ZESA+OR+Tagwirei+OR+Chivayo+OR+mining+OR+lithium+OR+gold+OR+land+reform+OR+cartel)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(diaspora+OR+remittances+OR+wages+OR+salaries+OR+unemployment+OR+informal+sector+OR+vendors+OR+civil+servants+OR+pension+OR+cost+of+living+OR+fuel+OR+agriculture+OR+tobacco+OR+drought)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
+    "https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+stayaway+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+healthcare+OR+Starlink+OR+censorship)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en",
 )
 X_PUBLIC_INDEX_RSS_URL = X_PUBLIC_INDEX_RSS_URLS[0]
 YOUTUBE_MODEL_QUERIES = (
-    "Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR judiciary OR military OR SADC OR election OR opposition OR war veterans) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
-    "Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR IMF OR forex OR exchange rate OR diaspora OR remittances OR wages) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
-    "Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR mining OR lithium OR gold OR diamonds OR land OR cartel) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy -excavator -machinery",
-    "Zimbabwe (protest OR strike OR resistance OR human rights OR PVO Bill OR civil society OR ZCTU OR teachers OR nurses OR doctors OR water crisis OR load shedding OR power cuts OR demolitions OR drought OR healthcare OR Starlink) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
+    "Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR succession OR politburo OR judiciary OR military OR SADC OR election OR opposition OR war veterans) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
+    "Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR arrears OR IMF OR World Bank OR forex OR exchange rate OR dollarization OR monetary policy OR ZSE OR VFEX) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
+    "Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR PRAZ OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR state capture OR mining OR lithium OR gold OR diamonds OR land reform OR title deeds OR cartel) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy -excavator -machinery",
+    "Zimbabwe (diaspora OR remittances OR wages OR salaries OR civil servants OR unemployment OR informal economy OR vendors OR cost of living OR fuel OR agriculture OR tobacco OR maize OR drought OR food security) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
+    "Zimbabwe (protest OR strike OR stayaway OR resistance OR human rights OR PVO Bill OR civil society OR ZCTU OR teachers OR nurses OR doctors OR water crisis OR load shedding OR power cuts OR demolitions OR healthcare OR Starlink OR censorship) -cricket -rugby -football -soccer -highlights -prophecy -music -comedy",
 )
 YOUTUBE_MODEL_QUERY = YOUTUBE_MODEL_QUERIES[0]
 X_CACHE = {"expires_at": 0, "result": None}
@@ -87,37 +90,75 @@ SOCIAL_NOISE_EXCLUDE_RE = re.compile(
 )
 
 MODEL_RELEVANCE_RE = re.compile(
-    r"\b(zanu[\s-]?pf|zanupf|zanu|mnangagwa|chiwenga|chamisa|ccc|parliament|parlzim|hansard|constitution|"
-    r"constitutional|constitutionalism|cab3|2030|term\s+extension|amendment|cabinet|minister|ministry|"
-    r"government|regime|opposition|election|electoral|by-election|delimitation|voter\s+roll|zec|sadc|"
-    r"sanctions|zidera|brics|foreign\s+policy|diplomacy|sovereignty|judiciary|high\s+court|supreme\s+court|"
-    r"constitutional\s+court|magistrate|court\s+ruling|court\s+challenge|impeachment|recall|arrest|arrested|"
-    r"detention|bail|zrp|police|military|zdf|army|cio|war\s+veterans?|geza|mukonori|repression|censorship|"
-    r"pvo\s+bill|human\s+rights|democracy|democratic|rule\s+of\s+law|state\s+capture|devolution|municipality|"
-    r"city\s+council|local\s+authorit|mayor|governor|governance|policy|bill|statute|statutory\s+instrument|"
-    r"gazette|legislation|lawmaker|senate|commission\s+of\s+inquiry|economy|economic|economics|zimeconomy|"
-    r"zimbudget|zimpolitics|inflation|hyperinflation|zig|zwg|zimdollar|rtgs|bond\s+note|dollarization|"
-    r"de-dollarization|dedollarization|rbz|reserve\s+bank|central\s+bank|monetary\s+policy|gold[\s-]backed|"
-    r"mushayavanhu|exchange\s+rate|parallel\s+market|black\s+market|forex|currency|devaluation|treasury|"
-    r"budget|budget\s+presentation|finance\s+bill|appropriation|mthuli|ncube|fiscal|debt|public\s+debt|"
-    r"sovereign\s+debt|arrears|structured\s+dialogue|imf|world\s+bank|afdb|afreximbank|zimstat|zimra|tax|"
-    r"vat|imtt|customs|tariff|tollgate|subsidy|austerity|corruption|corrupt|zacc|auditor[\s-]?general|oag|"
-    r"tender|procurement|looting|cartel|smuggl|illicit|gold\s+mafia|al\s+jazeera|geo\s+pomona|pomona|drax|"
-    r"tagwirei|wicknell|chivayo|parastatal|mutapa|zinara|zesa|zupco|netone|telone|econet|starlink|potraz|"
-    r"zbc|gmb|cottco|nssa|cmed|kariba|hwange|air\s+zimbabwe|mining|lithium|gold|diamond|platinum|chrome|"
-    r"mineral|marange|bikita|land\s+reform|title\s+deed|compensation|command\s+agriculture|pfumvudza|diaspora|"
-    r"remittance|remittances|brain\s+drain|emigration|zep|gdp|poverty|unemployment|youth\s+unemployment|"
-    r"informal\s+sector|informal\s+economy|vendors|civil\s+serv|public\s+sector|salary|salaries|wages|"
-    r"pension|fuel|diesel|petrol|price\s+hike|cost\s+of\s+living|investment|trade|protest|protests|strike|"
-    r"strikes|industrial\s+action|go-slow|petition|shutdown|boycott|resistance|activis|mobiliz|civic|"
-    r"civil\s+society|trade\s+union|zctu|teachers|nurses|doctors|zinasu|students|whistleblower|accountability|"
-    r"transparency|chin'ono|hopewell|mahere|sikhala|bhoroma|newshawks|zimlive|openparly|veritas|zlhr|misa|"
-    r"kubatana|crisis\s+coalition|load\s+shedding|power\s+cut|blackout|electricity|energy\s+tariff|"
-    r"water\s+crisis|borehole|sewer|refuse\s+collection|service\s+delivery|potholes|road\s+rehab|rates|"
-    r"cholera|hospital|healthcare|clinic|maternity|drug\s+shortage|school|education|demolition|eviction|"
-    r"housing|drought|el\s+nino|hunger|food\s+security|food\s+aid|grain|maize|energy\s+crisis|infrastructure|"
-    r"freedom|liberation|civic\s+space|media\s+freedom|journalist|chitungwiza|epworth|gweru|mutare|masvingo|"
-    r"marondera|kwekwe|kadoma|matabeleland|gukurahundi)\b",
+    r"\b(zanu[\s-]?pf|zanupf|zanu|mnangagwa|chiwenga|mohadi|chamisa|ccc|mdc|mwonzora|tshabangu|"
+    r"politburo|central\s+committee|presidium|factionalism|succession|lacoste|g40|ruling\s+party|"
+    r"shadow\s+cabinet|parliament|parlzim|hansard|national\s+assembly|senate|speaker\s+of\s+parliament|"
+    r"portfolio\s+committee|public\s+accounts\s+committee|order\s+paper|constitution|constitutional|"
+    r"constitutionalism|cab3|2030|vision\s+2030|term\s+extension|term\s+limit|amendment|referendum|"
+    r"cabinet|minister|ministry|executive|presidency|state\s+house|government|regime|hegemony|"
+    r"authoritarian|autocracy|opposition|coalition|election|electoral|by-election|harmonised\s+elections?|"
+    r"delimitation|voter\s+roll|voter\s+registration|ballot|rigging|electoral\s+reform|zec|sadc|"
+    r"african\s+union|sanctions|zidera|ofac|magnitsky|brics|foreign\s+policy|diplomacy|sovereignty|"
+    r"geopolitics|bilateral|judiciary|judicial|high\s+court|supreme\s+court|constitutional\s+court|"
+    r"magistrate|chief\s+justice|malaba|prosecutor|lawfare|court\s+ruling|court\s+challenge|"
+    r"impeachment|recall|recalls|no\s+confidence|walkout|arrest|arrested|detention|remand|bail|"
+    r"abduction|political\s+prisoner|zrp|police|riot\s+police|military|zdf|army|cio|intelligence|"
+    r"security\s+sector|securitization|militarization|coercion|coercive|war\s+veterans?|geza|mukonori|"
+    r"repression|crackdown|impunity|tear\s+gas|censorship|propaganda|disinformation|misinformation|"
+    r"internet\s+shutdown|throttling|surveillance|cyber\s+bill|pvo\s+bill|pvo\s+act|human\s+rights|"
+    r"civil\s+liberties|democracy|democratic|democratization|rule\s+of\s+law|separation\s+of\s+powers|"
+    r"checks\s+and\s+balances|state\s+capture|devolution|municipality|city\s+council|local\s+authorit|"
+    r"local\s+government|mayor|town\s+clerk|councillor|governor|governance|public\s+administration|"
+    r"policy|bill|statute|statutory\s+instrument|gazette|legislation|lawmaker|mps?|commission\s+of\s+inquiry|"
+    r"economy|economic|economics|political\s+economy|macroeconomic|macroeconomy|zimeconomy|zimbudget|"
+    r"zimpolitics|inflation|hyperinflation|deflation|cpi|zig|zwg|zimdollar|rtgs|bond\s+note|dollarization|"
+    r"de-dollarization|dedollarization|multi[\s-]?currency|mono[\s-]?currency|rbz|reserve\s+bank|"
+    r"central\s+bank|monetary\s+policy|mpc|interest\s+rate|bank\s+rate|liquidity|money\s+supply|"
+    r"gold[\s-]backed|gold\s+reserves|mushayavanhu|mangudya|exchange\s+rate|interbank|willing[\s-]buyer|"
+    r"auction\s+rate|parallel\s+market|black\s+market|forex|foreign\s+currency|foreign\s+exchange|currency|"
+    r"devaluation|depreciation|convertibility|nostro|ecocash|mobile\s+money|banking|commercial\s+bank|"
+    r"microfinance|financial\s+sector|capital\s+controls|capital\s+flight|zse|vfex|stock\s+exchange|"
+    r"bond\s+market|treasury\s+bills?|t[\s-]bills?|treasury|zimtreasury|ministry\s+of\s+finance|budget|"
+    r"national\s+budget|mid[\s-]term\s+budget|budget\s+deficit|budget\s+presentation|finance\s+bill|"
+    r"finance\s+act|appropriation|mthuli|ncube|fiscal|fiscal\s+policy|fiscal\s+space|public\s+finance|"
+    r"public\s+expenditure|expenditure|revenue|debt|public\s+debt|sovereign\s+debt|external\s+debt|"
+    r"domestic\s+debt|debt\s+distress|debt\s+restructuring|arrears|structured\s+dialogue|paris\s+club|"
+    r"imf|staff\s+monitored|article\s+iv|world\s+bank|afdb|afreximbank|zimstat|zimra|tax|taxation|vat|"
+    r"imtt|paye|corporate\s+tax|wealth\s+tax|sugar\s+tax|royalt(?:y|ies)|customs|excise|tariff|tariffs|"
+    r"tollgate|toll\s+fees?|levy|levies|subsidy|subsidies|austerity|ipsas|gdp|recession|stagnation|"
+    r"economic\s+growth|balance\s+of\s+payments|current\s+account|trade\s+deficit|exports?|imports?|fdi|"
+    r"foreign\s+direct\s+investment|investment|trade|zida|industrialization|deindustrialization|"
+    r"manufacturing|capacity\s+utilization|czi|zncc|private\s+sector|smes|formalization|"
+    r"business\s+environment|ok\s+zimbabwe|retail\s+sector|corruption|corrupt|graft|bribery|embezzlement|"
+    r"misappropriation|kickback|patronage|clientelism|nepotism|cronyism|oligarch|tenderpreneur|"
+    r"rent[\s-]seeking|rent\s+extraction|zacc|auditor[\s-]?general|oag|audit\s+report|audit\s+discrepancy|"
+    r"unvouched|tender|praz|procurement|looting|plunder|cartel|monopoly|oligopoly|smuggl|illicit|"
+    r"money\s+laundering|fiu|asset\s+recovery|forfeiture|gold\s+mafia|al\s+jazeera|geo\s+pomona|pomona|"
+    r"drax|tagwirei|sakunda|wicknell|chivayo|sakupwanya|betterbrands|parastatal|parastatals|state[\s-]owned|"
+    r"soe|mutapa|sovereign\s+wealth|zinara|zesa|zetdc|zpc|zupco|netone|telone|econet|starlink|potraz|zbc|"
+    r"gmb|cottco|nssa|cmed|kariba|hwange|air\s+zimbabwe|nrz|zisco(?:steel)?|zcdc|mmcz|fidelity\s+gold|"
+    r"fidelity\s+printers|petrotrade|noic|zera|mining|mine|miners|artisanal|makorokoza|lithium|gold|"
+    r"diamond|diamonds|platinum|chrome|coal|nickel|manhize|dinson|mineral|minerals|beneficiation|"
+    r"concessions?|special\s+grant|marange|chiadzwa|bikita|great\s+dyke|zimplats|mimosa|land\s+reform|"
+    r"land\s+tenure|title\s+deeds?|offer\s+letter|99[\s-]year\s+lease|communal\s+land|resettlement|"
+    r"land\s+grab|land\s+barons?|compensation|agriculture|agrarian|command\s+agriculture|pfumvudza|tobacco|"
+    r"grain|maize|wheat|farmers?|diaspora|remittance|remittances|brain\s+drain|emigration|migration|zep|"
+    r"mukuru|poverty|inequality|unemployment|youth\s+unemployment|informal\s+sector|informal\s+economy|"
+    r"informalization|vendors?|vending|mbare|tuckshops?|civil\s+serv|public\s+sector|salary|salaries|wages|"
+    r"living\s+wage|minimum\s+wage|pension|pensioners|fuel|diesel|petrol|transport\s+fare|kombi|"
+    r"mushikashika|price\s+hike|basic\s+commodities|cost\s+of\s+living|protest|protests|demonstration|"
+    r"strike|strikes|industrial\s+action|job\s+action|go[\s-]slow|stayaway|petition|shutdown|boycott|"
+    r"resistance|uprising|dissent|activis|mobiliz|civic|civil\s+society|grassroots|social\s+movement|"
+    r"trade\s+union|labou?r\s+union|labou?r|zctu|artuz|ptuz|zimta|teachers|nurses|doctors|zhda|zinasu|"
+    r"students|whistleblower|accountability|transparency|chin'ono|hopewell|mahere|sikhala|bhoroma|"
+    r"newshawks|zimlive|openparly|veritas|zlhr|misa|kubatana|crisis\s+coalition|citezw|zimrights|"
+    r"heal\s+zimbabwe|zesn|load\s+shedding|power\s+cut|blackout|electricity|energy\s+tariff|energy\s+crisis|"
+    r"water\s+crisis|water\s+rationing|borehole|sewer|sewage|refuse\s+collection|service\s+delivery|"
+    r"potholes|road\s+rehab|rates|cholera|typhoid|hospital|healthcare|clinic|maternity|drug\s+shortage|"
+    r"parirenyatwa|mpilo|school\s+fees|school|education|demolition|demolitions|eviction|evictions|housing|"
+    r"drought|el\s+nino|famine|hunger|food\s+security|food\s+aid|infrastructure|freedom|liberation|"
+    r"civic\s+space|media\s+freedom|press\s+freedom|journalist|journalists|chitungwiza|epworth|gweru|"
+    r"mutare|masvingo|marondera|kwekwe|kadoma|chinhoyi|bindura|beitbridge|matabeleland|gukurahundi)\b",
     re.IGNORECASE,
 )
 
@@ -376,19 +417,35 @@ def query_gemini_model(prompt):
 SOCIAL_FEEDS = (
     (
         "Bluesky (Core)",
-        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe', 'sort': 'latest', 'limit': '100'})}",
+        f"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe', 'sort': 'latest', 'limit': '100'})}",
     ),
     (
-        "Bluesky (Governance)",
-        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe parliament OR ZANU OR Mnangagwa OR constitution OR opposition OR SADC', 'sort': 'latest', 'limit': '100'})}",
+        "Bluesky (Politics)",
+        f"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe politics', 'sort': 'latest', 'limit': '100'})}",
+    ),
+    (
+        "Bluesky (Parliament)",
+        f"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe parliament', 'sort': 'latest', 'limit': '100'})}",
     ),
     (
         "Bluesky (Economy)",
-        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe economy OR inflation OR ZiG OR RBZ OR budget OR Treasury OR IMF OR mining', 'sort': 'latest', 'limit': '100'})}",
+        f"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe economy', 'sort': 'latest', 'limit': '100'})}",
+    ),
+    (
+        "Bluesky (Inflation)",
+        f"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe inflation', 'sort': 'latest', 'limit': '100'})}",
+    ),
+    (
+        "Bluesky (Corruption)",
+        f"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe corruption', 'sort': 'latest', 'limit': '100'})}",
+    ),
+    (
+        "Bluesky (Mining)",
+        f"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe mining', 'sort': 'latest', 'limit': '100'})}",
     ),
     (
         "Bluesky (Civic)",
-        f"https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe corruption OR protest OR strike OR rights OR ZESA OR drought OR healthcare', 'sort': 'latest', 'limit': '100'})}",
+        f"https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?{urlencode({'q': 'Zimbabwe protest', 'sort': 'latest', 'limit': '100'})}",
     ),
     (
         "Mastodon (mastodon.social)",

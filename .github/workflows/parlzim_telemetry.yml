@@ -54,14 +54,22 @@ jobs:
         run: |
           node server.js --update-treasury-cache
 
+      - name: Record Daily Telemetry Snapshot
+        env:
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+        run: |
+          node server.js --record-daily-snapshot
+
       - name: Commit and Push Cache
         run: |
           git config user.name "KUVHURA Bot"
           git config user.email "bot@kuvhura.org"
           git config pull.rebase true
-          git add telemetry_cache.json treasury_cache.json
+          git add telemetry_cache.json treasury_cache.json daily_telemetry_snapshots.json
           if ! git diff --cached --quiet; then
-            git commit -m "chore: automated daily ParlZim & Treasury telemetry cache update"
+            git commit -m "chore: automated daily ParlZim, Treasury & telemetry snapshot update"
             git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
             git push origin "HEAD:${GITHUB_REF_NAME:-main}"
           fi
