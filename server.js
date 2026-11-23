@@ -1352,6 +1352,8 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
     if (cached?.result && !cached.result.failed && Array.isArray(cached.result.posts) && cached.result.posts.length > 0) {
       const staleResult = {
         ...cached.result,
+        stale: true,
+        error: safeErrorMessage,
         refreshIntervalSeconds: failureTtl / 1000
       };
       socialSourceCache.set(feed.name, { expiresAt: Date.now() + failureTtl, result: staleResult });
@@ -1474,7 +1476,9 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
   const seen = new Set();
   const posts = [];
   for (const feed of results) {
+    if (feed.stale) continue;
     for (const post of feed.posts) {
+      if (!isModelRelevantSocialItem(post.text, post.channelTitle || '')) continue;
       const id = post.url || `${post.platform}:${post.text}:${post.createdAt}`;
       if (seen.has(id)) continue;
       seen.add(id);
@@ -1502,22 +1506,24 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
   const hashtags = [...tagCounts.values()]
     .sort((a, b) => b.mentions - a.mentions || a.tag.localeCompare(b.tag))
     .slice(0, 50);
-  const successfulSources = results.filter(result => !result.failed);
+  const successfulSources = results.filter(result => !result.failed && !result.stale);
   const sampledPlatforms = [...new Set(successfulSources.map(result => result.platform))];
   const sourceStatuses = results.map(result => ({
     name: result.name,
     platform: result.platform,
-    status: result.failed ? "unavailable" : "connected",
+    status: result.failed ? "unavailable" : result.stale ? "stale" : "connected",
     posts: result.posts.length,
     updatedAt: result.updatedAt,
     refreshIntervalSeconds: result.refreshIntervalSeconds,
     ...(result.youtubeMeta?.transport ? { transport: result.youtubeMeta.transport } : {}),
     ...(result.xMeta?.transport ? { transport: result.xMeta.transport } : {}),
-    ...(result.failed ? { message: result.error } : {})
+    ...(result.failed || result.stale ? { message: result.error } : {})
   }));
 
   const xResult = results.find(result => result.platform === 'X');
-  const xSummary = xResult?.xMeta || {
+  const xSummary = xResult?.stale && xResult.xMeta
+    ? { ...xResult.xMeta, status: 'stale', message: xResult.error }
+    : xResult?.xMeta || {
     configured: Boolean(xBearerToken),
     status: 'unavailable',
     transport: 'unavailable',
@@ -1529,7 +1535,9 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
   };
 
   const youtubeResult = results.find(result => result.platform === 'YouTube');
-  const youtubeSummary = youtubeResult?.youtubeMeta || {
+  const youtubeSummary = youtubeResult?.stale && youtubeResult.youtubeMeta
+    ? { ...youtubeResult.youtubeMeta, status: 'stale', message: youtubeResult.error }
+    : youtubeResult?.youtubeMeta || {
     configured: Boolean(youtubeApiKey),
     status: 'unavailable',
     transport: 'unavailable',
@@ -1629,7 +1637,8 @@ function readLocalDailySnapshotsFallback() {
     return Array.isArray(parsed)
       ? parsed.filter(entry => entry && typeof entry.date === 'string' && Number.isFinite(entry.social_volume))
       : [];
-  } catch {
+  } catch (error) {
+    console.warn('Local snapshot history could not be read:', error?.message || error);
     return [];
   }
 }
@@ -1645,8 +1654,10 @@ function writeLocalDailySnapshotFallback(entry) {
     const tmpPath = `${LOCAL_SNAPSHOTS_FALLBACK_PATH}.tmp`;
     writeFileSync(tmpPath, JSON.stringify(sorted, null, 2), 'utf8');
     renameSync(tmpPath, LOCAL_SNAPSHOTS_FALLBACK_PATH);
+    return true;
   } catch (error) {
     console.warn('Local snapshot fallback write skipped:', error?.message || error);
+    return false;
   }
 }
 
@@ -4841,9 +4852,10 @@ async function refreshDualEngineTimelineDataInternal({ allowDbSync = true, recor
           }
         }
         if (!savedToSql) {
-          writeLocalDailySnapshotFallback(snapshotToPersist);
-          lastPersistedSnapshotSignature = signature;
-          entry.persisted = true;
+          if (writeLocalDailySnapshotFallback(snapshotToPersist)) {
+            lastPersistedSnapshotSignature = signature;
+            entry.persisted = true;
+          }
         }
       } else {
         entry.persisted = true;
@@ -5960,10 +5972,15 @@ if (process.argv.includes('--update-treasury-cache')) {
   server.listen(PORT, HOST, () => {
     console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
     setTimeout(() => {
-      refreshDualEngineTimelineData({ allowDbSync: false }).catch(err => {
+      refreshDualEngineTimelineData({ allowDbSync: true }).catch(err => {
         console.warn(`Initial timeline warmup warning: ${err.message}`);
       });
     }, 1500).unref();
+    setInterval(() => {
+      refreshDualEngineTimelineData({ allowDbSync: true }).catch(err => {
+        console.warn(`Scheduled timeline refresh warning: ${err.message}`);
+      });
+    }, 60 * 60 * 1000).unref();
   });
 }
 

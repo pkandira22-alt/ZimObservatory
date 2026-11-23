@@ -153,8 +153,8 @@
                 <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
                     <h3 class="text-lg font-bold text-white">Longitudinal Risk &amp; Legislative Trajectory</h3>
                     <div class="flex items-center gap-2">
-                        <select id="srTimelineDataModeSelect" aria-label="Filter trajectory between live readings only and all 30 days including baseline" class="bg-slate-900 text-slate-200 text-xs font-medium border border-slate-700 rounded-md px-2.5 py-1 focus:outline-none focus:border-accent">
-                            <option value="ALL" selected>All 30 Days (incl. Baseline)</option>
+                        <select id="srTimelineDataModeSelect" aria-label="Filter trajectory between live readings only and illustrative baseline" class="bg-slate-900 text-slate-200 text-xs font-medium border border-slate-700 rounded-md px-2.5 py-1 focus:outline-none focus:border-accent">
+                            <option value="ALL" selected>All 30 Days (incl. Illustrative Baseline)</option>
                             <option value="LIVE">Live Readings Only</option>
                         </select>
                         <span id="window-label" class="text-xs text-slate-400 font-mono">30-Day Rolling Window</span>
@@ -298,6 +298,7 @@
                         <option value="X">Platform: X</option>
                         <option value="Bluesky">Platform: Bluesky</option>
                         <option value="Mastodon">Platform: Mastodon</option>
+                        <option value="Reddit">Platform: Reddit</option>
                     </select>
                     <span id="youtube-tracker-badge" class="text-xs font-mono tabular-nums px-3 py-1.5 rounded-md border border-slate-700 bg-slate-900 text-slate-300">
                         Syncing Social Media Trends...
@@ -306,6 +307,7 @@
             </div>
 
             <div id="social-youtube-metrics" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+            <p id="sr-social-history" class="text-xs text-slate-400"></p>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div class="bg-slate-900/60 border border-slate-800/80 rounded-lg p-4 space-y-3">
@@ -585,7 +587,7 @@
 
             const rawTimeline = data.timeline;
             const timeline = normalizeRollingTimeline(rawTimeline, 30);
-            const latest = timeline[timeline.length - 1];
+            const latest = rawTimeline[rawTimeline.length - 1];
             const isLive = data.inputStatus === 'updated';
             const fsiAvailable = data.fsiStatus?.status === 'available' || (!isLive && Number.isFinite(latest.fsi));
             const macroVal = Number.isFinite(latest.macro_volatility_proxy)
@@ -701,6 +703,16 @@
                 socialStatus = await fetchSocialYouTubeFallback(connectedOriginUrl, socialStatus);
             }
             renderSocialYouTubePanel(socialStatus || {});
+            const liveHistory = rawTimeline.filter(entry => Number.isFinite(entry.social_volume));
+            const socialHistory = document.getElementById('sr-social-history');
+            if (liveHistory.length >= 2) {
+                const current = liveHistory[liveHistory.length - 1];
+                const previous = liveHistory[liveHistory.length - 2];
+                const change = current.social_volume - previous.social_volume;
+                socialHistory.textContent = `Sampled posts: ${current.social_volume} on ${current.date}, ${change >= 0 ? '+' : ''}${change} versus ${previous.date}. Feed coverage can change; this is not a population-wide trend.`;
+            } else {
+                socialHistory.textContent = 'A comparison appears after two daily social samples are recorded.';
+            }
 
             statusEl.innerHTML = isLive
                 ? `<span class="h-2 w-2 rounded-full bg-success mr-2"></span>Live Sync Active (${connectedOrigin})`
@@ -714,13 +726,13 @@
             const fullTimeline = Array.isArray(window.__latestSystemicTimeline) ? window.__latestSystemicTimeline : [];
             const mode = document.getElementById('srTimelineDataModeSelect')?.value || 'ALL';
             const filtered = mode === 'LIVE'
-                ? fullTimeline.filter(entry => Number.isFinite(entry.social_volume))
+                ? fullTimeline.map(entry => Number.isFinite(entry.social_volume) ? entry : { date: entry.date })
                 : fullTimeline;
             const liveCount = fullTimeline.filter(entry => Number.isFinite(entry.social_volume)).length;
             const labelEl = document.getElementById('window-label');
             if (labelEl) {
                 labelEl.innerText = mode === 'LIVE'
-                    ? `${filtered.length} Live ${filtered.length === 1 ? 'Day' : 'Days'}`
+                    ? `${liveCount} Live ${liveCount === 1 ? 'Day' : 'Days'} in 30 days`
                     : `${filtered.length}-Day Rolling Window (${liveCount} live)`;
             }
             renderChart(filtered);
@@ -845,17 +857,17 @@
             const sources = Array.isArray(social.sources) ? social.sources : [];
             const connectedSources = sources.filter(s => s.status === 'connected');
             const rawHashtags = Array.isArray(social.hashtags) ? social.hashtags : [];
-            const topVideos = Array.isArray(yt.topVideos) ? yt.topVideos : [];
-            const topXPosts = Array.isArray(xData.topPosts) ? xData.topPosts : [];
             const ytConnected = yt.status === 'connected';
             const xConnected = xData.status === 'connected';
+            const topVideos = ytConnected && Array.isArray(yt.topVideos) ? yt.topVideos : [];
+            const topXPosts = xConnected && Array.isArray(xData.topPosts) ? xData.topPosts : [];
 
             if (engineEl && barEl) {
-                if (ytConnected || xConnected) {
+                if (connectedSources.length) {
                     const parts = [];
                     if (xConnected) parts.push(`X ${xData.postsSampled || 0}`);
                     if (ytConnected) parts.push(`YT ${yt.videosSampled || 0}`);
-                    engineEl.textContent = `LIVE (${parts.join(' · ')})`;
+                    engineEl.textContent = parts.length ? `LIVE (${parts.join(' · ')})` : `LIVE (${connectedSources.length} feeds)`;
                     engineEl.className = 'text-emerald-400';
                     barEl.style.width = `${Math.min(100, Math.max(30, connectedSources.length * 16))}%`;
                 } else {
@@ -870,8 +882,8 @@
                     xConnected ? `X: ${xData.postsSampled || 0}` : '',
                     ytConnected ? `YouTube: ${yt.videosSampled || 0}` : ''
                   ].filter(Boolean).join(' · ')
-                : 'Syncing Social Media Trends...';
-            badge.className = (ytConnected || xConnected)
+                : connectedSources.length ? `${connectedSources.length} feeds connected` : 'No fresh feeds available';
+            badge.className = connectedSources.length
                 ? 'text-xs font-mono tabular-nums px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                 : 'text-xs font-mono tabular-nums px-3 py-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-300';
 
@@ -895,11 +907,11 @@
             });
 
             sourcesEl.replaceChildren();
-            const baseSources = connectedSources.length ? connectedSources : sources.slice(0, 4);
+            const baseSources = sources;
             const displaySources = platformFilter === 'all'
                 ? baseSources
                 : baseSources.filter(s => s.platform === platformFilter);
-            (displaySources.length ? displaySources : baseSources).forEach(src => {
+            displaySources.forEach(src => {
                 const pill = document.createElement('span');
                 const ok = src.status === 'connected';
                 const selected = platformFilter !== 'all' && src.platform === platformFilter;
@@ -908,9 +920,13 @@
                         ? 'text-[11px] px-2.5 py-1 rounded border border-sky-400/60 bg-sky-500/15 text-sky-200 font-semibold'
                         : 'text-[11px] px-2.5 py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-medium')
                     : 'text-[11px] px-2.5 py-1 rounded border border-slate-700 bg-slate-800/70 text-slate-400';
-                pill.textContent = ok ? `${src.name}: ${src.posts}` : `${src.name}: Syncing`;
+                pill.textContent = ok ? `${src.name}: ${src.posts}` : `${src.name}: ${src.status === 'stale' ? 'Cached' : 'Unavailable'}`;
+                if (src.message) pill.title = src.message;
                 sourcesEl.append(pill);
             });
+            if (!displaySources.length) {
+                sourcesEl.textContent = 'No sources for the selected platform.';
+            }
 
             const filteredHashtags = rawHashtags
                 .filter(tag => platformFilter === 'all' || Boolean(tag.platforms && tag.platforms[platformFilter] > 0))
@@ -2361,56 +2377,22 @@
             }
         }
 
-        function normalizeRollingTimeline(rawTimeline, targetDays = 30) {
-            if (!Array.isArray(rawTimeline) || rawTimeline.length === 0) return [];
-            if (rawTimeline.length >= targetDays) {
-                return rawTimeline.slice(-targetDays);
-            }
-            const first = rawTimeline[0];
-            const firstDate = new Date(`${String(first.date || '').slice(0, 10)}T00:00:00Z`);
-            if (Number.isNaN(firstDate.getTime())) {
-                return rawTimeline.slice(-targetDays);
-            }
-            const missing = targetDays - rawTimeline.length;
-            const basePhi = Number.isFinite(first.phi) ? first.phi : 39.5;
-            const baseMarkov = Number.isFinite(first.markov_crisis_prob) ? first.markov_crisis_prob : 22.0;
-            const baseMacro = Number.isFinite(first.macro_volatility_proxy)
-                ? first.macro_volatility_proxy
-                : (Number.isFinite(first.macro_volatility) ? first.macro_volatility : 45.0);
-            const padded = [];
-            for (let i = missing; i >= 1; i--) {
-                const d = new Date(firstDate.getTime() - i * 86400000);
-                const isoDate = d.toISOString().slice(0, 10);
-                const ratio = i / missing;
-                const phi = Number(Math.min(95, Math.max(5, basePhi + ratio * 15.3)).toFixed(2));
-                const markov_crisis_prob = Number(Math.min(95, Math.max(5, baseMarkov - ratio * 9.6)).toFixed(2));
-                const macro_volatility_proxy = Number(Math.min(95, Math.max(15, baseMacro - ratio * 12.5)).toFixed(2));
-                const fsi = Number((0.40 * (100 - phi) + 0.35 * markov_crisis_prob + 0.25 * macro_volatility_proxy).toFixed(2));
-                const warning_level = fsi <= 25
-                    ? 'Stable Consolidation'
-                    : fsi <= 50
-                        ? 'Latent Friction'
-                        : fsi <= 75
-                            ? 'Accelerated Degradation'
-                            : 'Acute Systemic Crisis';
-                padded.push({
-                    date: isoDate,
-                    phi,
-                    markov_crisis_prob,
-                    macro_volatility_proxy,
-                    fsi,
-                    warning_level,
-                    state: warning_level
-                });
-            }
-            return [...padded, ...rawTimeline];
+        function normalizeRollingTimeline(rawTimeline, targetDays = 30, now = new Date()) {
+            const entries = Array.isArray(rawTimeline) ? rawTimeline : [];
+            const byDate = new Map(entries.filter(entry => /^\d{4}-\d{2}-\d{2}$/.test(entry.date || ''))
+                .map(entry => [entry.date, entry]));
+            const end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+            return Array.from({ length: targetDays }, (_, index) => {
+                const date = new Date(end - (targetDays - index - 1) * 86400000).toISOString().slice(0, 10);
+                return byDate.get(date) || { date };
+            });
         }
 
         function renderChart(timeline) {
             const labels = timeline.map(item => item.date);
-            const phiData = timeline.map(item => item.phi);
+            const phiData = timeline.map(item => Number.isFinite(item.phi) ? item.phi : null);
             const fsiData = timeline.map(item => Number.isFinite(item.fsi) ? item.fsi : null);
-            const markovData = timeline.map(item => item.markov_crisis_prob);
+            const markovData = timeline.map(item => Number.isFinite(item.markov_crisis_prob) ? item.markov_crisis_prob : null);
             const hansardData = timeline.map(item => Number.isFinite(item.hansard_friction) ? item.hansard_friction : null);
             const treasuryData = timeline.map(item => Number.isFinite(item.treasury_friction) ? item.treasury_friction : null);
 
