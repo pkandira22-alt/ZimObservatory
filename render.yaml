@@ -4,19 +4,35 @@ services:
     runtime: node
     plan: free
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: npm run db:migrate && npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
-        value: 20.18.0
+        value: 24.22.0
       - key: ALLOWED_ORIGINS
         value: https://pkandira22-alt.github.io
       - key: GEMINI_API_KEY
         sync: false
       - key: YOUTUBE_API_KEY
         sync: false
+      - key: SQL_HOST
+        fromDatabase:
+          name: zimobservatory-telemetry
+          property: host
+      - key: SQL_USER
+        fromDatabase:
+          name: zimobservatory-telemetry
+          property: user
+      - key: SQL_PASSWORD
+        fromDatabase:
+          name: zimobservatory-telemetry
+          property: password
+      - key: SQL_DB_NAME
+        fromDatabase:
+          name: zimobservatory-telemetry
+          property: database
   - type: web
     name: zimobservatory-forecast
     runtime: python
@@ -29,3 +45,9 @@ services:
         value: 3.12.7
       - key: YOUTUBE_API_KEY
         sync: false
+
+databases:
+  - name: zimobservatory-telemetry
+    region: oregon
+    plan: 0.1c-256mb
+    ipAllowList: []

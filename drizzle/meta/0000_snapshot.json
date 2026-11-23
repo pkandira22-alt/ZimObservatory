@@ -1,0 +1,211 @@
+{
+  "id": "6e1f53ee-4bcf-47fa-8f83-68ba1b3c4723",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.daily_telemetry_snapshots": {
+      "name": "daily_telemetry_snapshots",
+      "schema": "",
+      "columns": {
+        "date": {
+          "name": "date",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "phi": {
+          "name": "phi",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "markov_crisis_prob": {
+          "name": "markov_crisis_prob",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "macro_volatility_proxy": {
+          "name": "macro_volatility_proxy",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hansard_friction": {
+          "name": "hansard_friction",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "treasury_friction": {
+          "name": "treasury_friction",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fsi": {
+          "name": "fsi",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "warning_level": {
+          "name": "warning_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "social_volume": {
+          "name": "social_volume",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "engagement_score_proxy": {
+          "name": "engagement_score_proxy",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telemetry_source": {
+          "name": "telemetry_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sampled_platforms": {
+          "name": "sampled_platforms",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "tracked_topics": {
+          "name": "tracked_topics",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "recorded_by_uid": {
+          "name": "recorded_by_uid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "daily_telemetry_snapshots_recorded_by_uid_users_uid_fk": {
+          "name": "daily_telemetry_snapshots_recorded_by_uid_users_uid_fk",
+          "tableFrom": "daily_telemetry_snapshots",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recorded_by_uid"
+          ],
+          "columnsTo": [
+            "uid"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "uid": {
+          "name": "uid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_uid_unique": {
+          "name": "users_uid_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "uid"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
