@@ -212,6 +212,103 @@ def get_youtube_api_key():
     return None
 
 
+CARTO_TILE_STYLE_TEMPLATES = {
+    "voyager": "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+    "dark_all": "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+    "light_all": "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+    "positron": "https://basemaps.cartocdn.com/rastertiles/positron/{z}/{x}/{y}.png",
+}
+MAP_TILE_ROUTE_RE = re.compile(r"^/api/maps/tiles/([a-z_]+)/(\d+)/(\d+)/(\d+)\.png$")
+MAP_TILE_CACHE = {}
+MAP_TILE_CACHE_LOCK = Lock()
+MAP_TILE_CACHE_MAX = 400
+MAP_TILE_CACHE_TTL_SECONDS = 3600
+
+
+def get_carto_maps_api_key():
+    for env_name in ("CARTO_MAPS_API_KEY", "MAPS_API_KEY"):
+        val = os.environ.get(env_name, "").strip()
+        if not _is_placeholder_key(val):
+            return val
+    if os.path.isfile(ENV_PATH):
+        try:
+            with open(ENV_PATH, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#") or "=" not in stripped:
+                        continue
+                    k, v = stripped.split("=", 1)
+                    if k.strip() in ("CARTO_MAPS_API_KEY", "MAPS_API_KEY"):
+                        val = v.strip().strip('"').strip("'")
+                        if not _is_placeholder_key(val):
+                            return val
+        except OSError:
+            pass
+    return None
+
+
+def resolve_carto_tile_upstream_url(style_raw, z_raw, x_raw, y_raw, api_key=None):
+    style = str(style_raw or "").strip().lower()
+    template = CARTO_TILE_STYLE_TEMPLATES.get(style)
+    if not template:
+        return None
+    if not (str(z_raw).isdigit() and str(x_raw).isdigit() and str(y_raw).isdigit()):
+        return None
+    z, x, y = int(z_raw), int(x_raw), int(y_raw)
+    if z < 0 or z > 19:
+        return None
+    max_index = 1 << z
+    if x < 0 or x >= max_index or y < 0 or y >= max_index:
+        return None
+    base_url = template.format(z=z, x=x, y=y)
+    clean_key = (api_key or "").strip()
+    url = f"{base_url}?{urlencode({'key': clean_key})}" if clean_key else base_url
+    return {"style": style, "z": z, "x": x, "y": y, "base_url": base_url, "url": url}
+
+
+def fetch_proxied_carto_tile(style_raw, z_raw, x_raw, y_raw):
+    api_key = get_carto_maps_api_key()
+    resolved = resolve_carto_tile_upstream_url(style_raw, z_raw, x_raw, y_raw, api_key)
+    if not resolved:
+        return 400, None, None
+    cache_key = f"{resolved['style']}/{resolved['z']}/{resolved['x']}/{resolved['y']}"
+    now_ts = datetime.now(timezone.utc).timestamp()
+    with MAP_TILE_CACHE_LOCK:
+        cached = MAP_TILE_CACHE.get(cache_key)
+        if cached and cached["expires_at"] > now_ts:
+            return 200, cached["data"], cached["content_type"]
+
+    candidates = [resolved["url"], resolved["base_url"]] if api_key else [resolved["base_url"]]
+    for upstream_url in candidates:
+        req = Request(
+            upstream_url,
+            headers={
+                "User-Agent": "KUVHURA-Observatory/1.0",
+                "Accept": "image/png,image/*;q=0.8",
+            },
+        )
+        try:
+            with urlopen(req, timeout=8) as resp:
+                content_type = (resp.headers.get("Content-Type") or "image/png").split(";")[0].strip()
+                if not content_type.lower().startswith("image/"):
+                    continue
+                data = resp.read()
+                if not data:
+                    continue
+                with MAP_TILE_CACHE_LOCK:
+                    if len(MAP_TILE_CACHE) >= MAP_TILE_CACHE_MAX:
+                        MAP_TILE_CACHE.pop(next(iter(MAP_TILE_CACHE)))
+                    MAP_TILE_CACHE[cache_key] = {
+                        "data": data,
+                        "content_type": content_type,
+                        "expires_at": now_ts + MAP_TILE_CACHE_TTL_SECONDS,
+                    }
+                return 200, data, content_type
+        except (HTTPError, URLError, HTTPException, OSError, TimeoutError):
+            continue
+    return 502, None, None
+
+
 def check_gemini_status():
     api_key = get_gemini_api_key()
     if not api_key:
@@ -1294,6 +1391,33 @@ class AppHandler(BaseHTTPRequestHandler):
         if path == "/api/ai/status":
             status_code, payload = check_gemini_status()
             respond_json(self, status_code, payload)
+            return
+
+        if path == "/api/maps/status":
+            respond_json(self, 200, {
+                "provider": "carto",
+                "keyConfigured": bool(get_carto_maps_api_key()),
+                "styles": list(CARTO_TILE_STYLE_TEMPLATES.keys()),
+            })
+            return
+
+        tile_match = MAP_TILE_ROUTE_RE.match(path)
+        if tile_match:
+            status_code, tile_bytes, content_type = fetch_proxied_carto_tile(*tile_match.groups())
+            if status_code == 200 and tile_bytes:
+                self.send_response(200)
+                self.send_header("Content-Type", content_type or "image/png")
+                self.send_header("Content-Length", str(len(tile_bytes)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(tile_bytes)
+                return
+            respond_json(
+                self,
+                status_code,
+                {"error": "Invalid map tile style or coordinates." if status_code == 400 else "Map tile upstream unavailable."},
+            )
             return
 
         if path == "/api/health":

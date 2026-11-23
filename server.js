@@ -118,6 +118,19 @@ function getGeminiApiKey() {
   return null;
 }
 
+function getCartoMapsApiKey() {
+  const procKey = (process.env.CARTO_MAPS_API_KEY || process.env.MAPS_API_KEY || '').trim();
+  if (procKey && !isPlaceholderKey(procKey)) {
+    return procKey;
+  }
+  const envFile = loadEnvFile();
+  const fileKey = (envFile.CARTO_MAPS_API_KEY || envFile.MAPS_API_KEY || '').trim();
+  if (fileKey && !isPlaceholderKey(fileKey)) {
+    return fileKey;
+  }
+  return null;
+}
+
 function getYouTubeApiKey() {
   const keyNames = [
     'YOUTUBE_API_KEY',
@@ -5485,6 +5498,125 @@ app.get('/api/treasury', async (req, res) => {
   } catch (err) {
     res.status(500).json({ status: 'unavailable', error: err.message });
   }
+});
+
+const CARTO_TILE_STYLE_TEMPLATES = Object.freeze({
+  voyager: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`,
+  dark_all: (z, x, y) => `https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`,
+  light_all: (z, x, y) => `https://basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png`,
+  positron: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/positron/${z}/${x}/${y}.png`
+});
+const MAP_TILE_CACHE = new Map();
+const MAP_TILE_CACHE_MAX = 400;
+const MAP_TILE_CACHE_TTL_MS = 60 * 60 * 1000;
+
+function redactSecretQueryParams(text) {
+  return String(text || '').replace(/([?&]key=)[^&\s]+/gi, '$1[REDACTED]');
+}
+
+function resolveCartoTileUpstreamUrl(styleRaw, zRaw, xRaw, yRaw, apiKey = null) {
+  const style = String(styleRaw || '').trim().toLowerCase();
+  const template = Object.prototype.hasOwnProperty.call(CARTO_TILE_STYLE_TEMPLATES, style)
+    ? CARTO_TILE_STYLE_TEMPLATES[style]
+    : null;
+  if (!template) return null;
+  const digitRe = /^\d+$/;
+  const zStr = String(zRaw ?? '');
+  const xStr = String(xRaw ?? '');
+  const yStr = String(yRaw ?? '');
+  if (!digitRe.test(zStr) || !digitRe.test(xStr) || !digitRe.test(yStr)) return null;
+  const z = Number.parseInt(zStr, 10);
+  const x = Number.parseInt(xStr, 10);
+  const y = Number.parseInt(yStr, 10);
+  if (z < 0 || z > 19) return null;
+  const maxIndex = 2 ** z;
+  if (x < 0 || x >= maxIndex || y < 0 || y >= maxIndex) return null;
+  const baseUrl = template(z, x, y);
+  const cleanKey = typeof apiKey === 'string' ? apiKey.trim() : '';
+  const url = cleanKey ? `${baseUrl}?key=${encodeURIComponent(cleanKey)}` : baseUrl;
+  return { style, z, x, y, baseUrl, url };
+}
+
+function cacheMapTile(cacheKey, buffer, contentType) {
+  if (MAP_TILE_CACHE.size >= MAP_TILE_CACHE_MAX) {
+    const oldestKey = MAP_TILE_CACHE.keys().next().value;
+    if (oldestKey !== undefined) MAP_TILE_CACHE.delete(oldestKey);
+  }
+  MAP_TILE_CACHE.set(cacheKey, {
+    buffer,
+    contentType,
+    expiresAt: Date.now() + MAP_TILE_CACHE_TTL_MS
+  });
+}
+
+app.get('/api/maps/status', (req, res) => {
+  res.json({
+    provider: 'carto',
+    keyConfigured: Boolean(getCartoMapsApiKey()),
+    styles: Object.keys(CARTO_TILE_STYLE_TEMPLATES)
+  });
+});
+
+app.get('/api/maps/tiles/:style/:z/:x/:y.png', async (req, res) => {
+  const apiKey = getCartoMapsApiKey();
+  const resolved = resolveCartoTileUpstreamUrl(
+    req.params.style,
+    req.params.z,
+    req.params.x,
+    req.params.y,
+    apiKey
+  );
+  if (!resolved) {
+    return res.status(400).json({ error: 'Invalid map tile style or coordinates.' });
+  }
+
+  const cacheKey = `${resolved.style}/${resolved.z}/${resolved.x}/${resolved.y}`;
+  const cached = MAP_TILE_CACHE.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    res.setHeader('Content-Type', cached.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.send(cached.buffer);
+  }
+
+  const candidateUrls = apiKey ? [resolved.url, resolved.baseUrl] : [resolved.baseUrl];
+  let lastStatus = 502;
+  for (const upstreamUrl of candidateUrls) {
+    try {
+      const response = await fetch(upstreamUrl, {
+        headers: {
+          'User-Agent': 'KUVHURA-Observatory/1.0',
+          Accept: 'image/png,image/*;q=0.8'
+        },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (!response.ok) {
+        lastStatus = response.status;
+        continue;
+      }
+      const contentType = (response.headers.get('content-type') || 'image/png').split(';')[0].trim();
+      if (!contentType.toLowerCase().startsWith('image/')) {
+        lastStatus = 502;
+        continue;
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (!buffer.length) {
+        lastStatus = 502;
+        continue;
+      }
+      cacheMapTile(cacheKey, buffer, contentType);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.send(buffer);
+    } catch (err) {
+      console.warn(`Map tile proxy fetch failed for ${cacheKey}: ${redactSecretQueryParams(err?.message)}`);
+    }
+  }
+
+  return res.status(lastStatus === 404 ? 404 : 502).json({
+    error: 'Map tile upstream unavailable.'
+  });
 });
 
 app.get('/api/timeline/stream', async (req, res) => {

@@ -103,3 +103,31 @@ test('rolling illustrative baseline anchors to today with zero gap before live r
   assert.equal(baseline.every(entry => Number.isFinite(entry.phi) && Number.isFinite(entry.fsi)), true);
   assert.equal(baseline.every(entry => entry.social_volume === undefined), true);
 });
+
+test('CARTO map tile proxy enforces allowlisted styles, valid tile bounds, and secret redaction', () => {
+  const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const code = extract(source, 'const CARTO_TILE_STYLE_TEMPLATES =', '\nfunction cacheMapTile(');
+  const helpers = runInNewContext(
+    `${code}; ({ resolveCartoTileUpstreamUrl, redactSecretQueryParams })`,
+    { Map, Object, Number, String, encodeURIComponent }
+  );
+
+  const valid = helpers.resolveCartoTileUpstreamUrl('voyager', '6', '37', '35', 'test_demo_key');
+  assert.equal(valid.baseUrl, 'https://basemaps.cartocdn.com/rastertiles/voyager/6/37/35.png');
+  assert.equal(valid.url, 'https://basemaps.cartocdn.com/rastertiles/voyager/6/37/35.png?key=test_demo_key');
+
+  const keyless = helpers.resolveCartoTileUpstreamUrl('dark_all', '6', '37', '35', null);
+  assert.equal(keyless.url, 'https://basemaps.cartocdn.com/dark_all/6/37/35.png');
+
+  assert.equal(helpers.resolveCartoTileUpstreamUrl('../evil', '6', '37', '35', 'k'), null);
+  assert.equal(helpers.resolveCartoTileUpstreamUrl('voyager', '20', '0', '0', 'k'), null);
+  assert.equal(helpers.resolveCartoTileUpstreamUrl('voyager', '6', '64', '35', 'k'), null);
+  assert.equal(helpers.resolveCartoTileUpstreamUrl('voyager', '6', '-1', '35', 'k'), null);
+  assert.equal(helpers.resolveCartoTileUpstreamUrl('voyager', '6', '37?host=x', '35', 'k'), null);
+
+  assert.equal(
+    helpers.redactSecretQueryParams('fetch failed https://basemaps.cartocdn.com/rastertiles/voyager/6/37/35.png?key=secret123&x=1'),
+    'fetch failed https://basemaps.cartocdn.com/rastertiles/voyager/6/37/35.png?key=[REDACTED]&x=1'
+  );
+});
+

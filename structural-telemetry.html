@@ -20,7 +20,8 @@
     <meta property="og:image" content="./pwa-512x512.png">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:image" content="./pwa-512x512.png">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="./api-config.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
             color-scheme: dark;
@@ -354,24 +355,44 @@
         });
     </script>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         (function initZimbabweSpatialMap() {
             const mapEl = document.getElementById("zimbabwemap");
             if (!mapEl || typeof L === "undefined") {
                 if (mapEl) {
-                    mapEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #94a3b8; font-size: 12px;">Interactive map library could not be loaded. Check network access to unpkg.com.</div>';
+                    const msg = document.createElement("div");
+                    msg.style.padding = "20px";
+                    msg.style.textAlign = "center";
+                    msg.style.color = "#94a3b8";
+                    msg.style.fontSize = "12px";
+                    msg.textContent = "Interactive map library could not be loaded. Check your network connection.";
+                    mapEl.replaceChildren(msg);
                 }
                 return;
             }
 
+            const apiBase = window.location.hostname.endsWith(".github.io")
+                ? (window.KUVHURA_API_BASE_URL || "").replace(/\/+$/, "")
+                : "";
             const map = L.map("zimbabwemap").setView([-19.0154, 29.1549], 6);
+            const attribution = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>';
 
-            L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-                subdomains: "abcd",
-                maxZoom: 12
+            const proxyTiles = L.tileLayer(`${apiBase}/api/maps/tiles/dark_all/{z}/{x}/{y}.png`, {
+                attribution,
+                maxZoom: 18
             }).addTo(map);
+
+            const directFallbackTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
+                attribution,
+                subdomains: "abcd",
+                maxZoom: 18
+            });
+
+            proxyTiles.once("tileerror", () => {
+                map.removeLayer(proxyTiles);
+                directFallbackTiles.addTo(map);
+            });
 
             const provincialTelemetry = [
                 { name: "Harare Metropolitan", lat: -17.8252, lng: 31.0335, iefr: 3.12, rsr: 1.20, clp: 0.85, status: "High Extraction Friction" },
@@ -404,6 +425,11 @@
                     </div>
                 `);
             });
+
+            if (typeof ResizeObserver !== "undefined") {
+                new ResizeObserver(() => map.invalidateSize()).observe(mapEl);
+            }
+            setTimeout(() => map.invalidateSize(), 250);
         })();
     </script>
 
