@@ -89,3 +89,17 @@ test('snapshot file preserves older days and refuses to overwrite corrupted hist
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('rolling illustrative baseline anchors to today with zero gap before live reading', () => {
+  const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const code = extract(source, 'const TIMELINE_WINDOW_DAYS = 30;', '\nconst TELEMETRY_TIMELINE = buildRollingSeedTimeline();');
+  const buildRolling = runInNewContext(`${code}; buildRollingSeedTimeline`, { Date });
+  const baseline = buildRolling(new Date('2026-11-23T12:00:00Z'));
+
+  assert.equal(baseline.length, 30);
+  assert.equal(baseline[0].date, '2026-10-25');
+  assert.equal(baseline[baseline.length - 2].date, '2026-11-22');
+  assert.equal(baseline[baseline.length - 1].date, '2026-11-23');
+  assert.equal(baseline.every(entry => Number.isFinite(entry.phi) && Number.isFinite(entry.fsi)), true);
+  assert.equal(baseline.every(entry => entry.social_volume === undefined), true);
+});
