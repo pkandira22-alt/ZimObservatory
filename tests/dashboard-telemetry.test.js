@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,4 +58,34 @@ test('stale and irrelevant posts do not contribute to fresh social metrics', asy
   assert.equal(result.hashtags[0].mentions, 1);
   assert.equal(result.sources.find(feed => feed.name === 'stale').status, 'stale');
   assert.deepEqual(Array.from(result.sampledPlatforms), ['Bluesky']);
+});
+
+test('snapshot file preserves older days and refuses to overwrite corrupted history', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'zimobservatory-snapshot-test-'));
+  const filename = join(dir, 'daily_telemetry_snapshots.json');
+  try {
+    const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+    const code = extract(source, 'function readLocalDailySnapshotsFallback()', 'function mergePersistedSnapshotsIntoTimeline(');
+    const context = {
+      LOCAL_SNAPSHOTS_FALLBACK_PATH: filename,
+      existsSync, readFileSync, writeFileSync, renameSync,
+      console: { warn() {} },
+    };
+    const store = runInNewContext(`${code}; ({ read: readLocalDailySnapshotsFallback, write: writeLocalDailySnapshotFallback })`, context);
+    for (let day = 1; day <= 31; day++) {
+      assert.equal(store.write({ date: `2026-10-${String(day).padStart(2, '0')}`, social_volume: day }), true);
+    }
+    assert.equal(store.write({ date: '2026-10-31', social_volume: 99 }), true);
+    const restartedStore = runInNewContext(`${code}; ({ read: readLocalDailySnapshotsFallback })`, context);
+    const saved = restartedStore.read();
+    assert.equal(saved.length, 31);
+    assert.equal(saved[0].date, '2026-10-01');
+    assert.equal(saved[30].social_volume, 99);
+
+    writeFileSync(filename, '{invalid', 'utf8');
+    assert.equal(store.write({ date: '2026-11-01', social_volume: 1 }), false);
+    assert.equal(readFileSync(filename, 'utf8'), '{invalid');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

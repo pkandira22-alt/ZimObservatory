@@ -9,8 +9,7 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { isCloudSqlConfigured } from './src/db/index.ts';
-import { getRecentDailyTelemetrySnapshots, upsertDailyTelemetrySnapshot } from './src/db/telemetry.ts';
+import 'dotenv/config';
 import { requireAuth } from './src/middleware/auth.ts';
 
 dns.setDefaultResultOrder('ipv4first');
@@ -1624,7 +1623,11 @@ const SEED_TELEMETRY_TIMELINE = [
 });
 
 const TELEMETRY_TIMELINE = SEED_TELEMETRY_TIMELINE.map(entry => ({ ...entry }));
-const LOCAL_SNAPSHOTS_FALLBACK_PATH = path.join(PRIVATE_UPLOAD_DIR, 'daily_telemetry_snapshots.json');
+const timelineStorageDir = process.env.TIMELINE_STORAGE_DIR?.trim();
+if (timelineStorageDir && (!path.isAbsolute(timelineStorageDir) || !existsSync(timelineStorageDir) || !statSync(timelineStorageDir).isDirectory())) {
+  throw new Error('TIMELINE_STORAGE_DIR must be an existing absolute directory on the persistent disk.');
+}
+const LOCAL_SNAPSHOTS_FALLBACK_PATH = path.join(timelineStorageDir || PRIVATE_UPLOAD_DIR, 'daily_telemetry_snapshots.json');
 let hasHydratedPersistedTimeline = false;
 let persistedTimelineHydrationPromise = null;
 let lastPersistedSnapshotSignature = null;
@@ -1633,12 +1636,12 @@ function readLocalDailySnapshotsFallback() {
   try {
     if (!existsSync(LOCAL_SNAPSHOTS_FALLBACK_PATH)) return [];
     const parsed = JSON.parse(readFileSync(LOCAL_SNAPSHOTS_FALLBACK_PATH, 'utf8'));
-    return Array.isArray(parsed)
-      ? parsed.filter(entry => entry && typeof entry.date === 'string' && Number.isFinite(entry.social_volume))
-      : [];
+    if (!Array.isArray(parsed) || parsed.some(entry => !entry || typeof entry.date !== 'string' || !Number.isFinite(entry.social_volume))) {
+      throw new Error('Invalid snapshot history format');
+    }
+    return parsed;
   } catch (error) {
-    console.warn('Local snapshot history could not be read:', error?.message || error);
-    return [];
+    throw new Error(`Local snapshot history could not be read: ${error.message}`, { cause: error });
   }
 }
 
@@ -1648,8 +1651,7 @@ function writeLocalDailySnapshotFallback(entry) {
     const byDate = new Map(existing.map(item => [item.date, item]));
     byDate.set(entry.date, { ...entry, persisted: true });
     const sorted = Array.from(byDate.values())
-      .sort((a, b) => String(a.date).localeCompare(String(b.date)))
-      .slice(-TIMELINE_WINDOW_DAYS);
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
     const tmpPath = `${LOCAL_SNAPSHOTS_FALLBACK_PATH}.tmp`;
     writeFileSync(tmpPath, JSON.stringify(sorted, null, 2), 'utf8');
     renameSync(tmpPath, LOCAL_SNAPSHOTS_FALLBACK_PATH);
@@ -1688,23 +1690,12 @@ async function hydratePersistedTimelineOnce() {
     return persistedTimelineHydrationPromise;
   }
   persistedTimelineHydrationPromise = (async () => {
-    let loadedFromSql = false;
-    if (isCloudSqlConfigured()) {
-      try {
-        const persisted = await getRecentDailyTelemetrySnapshots(TIMELINE_WINDOW_DAYS);
-        mergePersistedSnapshotsIntoTimeline(persisted);
-        loadedFromSql = true;
-      } catch (error) {
-        console.warn('Persisted telemetry history hydration skipped:', error?.message || error);
-      }
-    }
-    if (!loadedFromSql) {
-      const localFallback = readLocalDailySnapshotsFallback();
-      mergePersistedSnapshotsIntoTimeline(localFallback);
-    }
+    const localFallback = readLocalDailySnapshotsFallback();
+    mergePersistedSnapshotsIntoTimeline(localFallback);
     hasHydratedPersistedTimeline = true;
+  })().finally(() => {
     persistedTimelineHydrationPromise = null;
-  })();
+  });
   return persistedTimelineHydrationPromise;
 }
 
@@ -4591,7 +4582,7 @@ function getDualEngineTimelineResponse() {
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
     hansardStatus,
     treasuryStatus,
-    historyNote: 'Saved daily readings are shown where available; missing dates are gaps. Baseline rows are illustrative. Durable history requires configured database storage. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable).'
+    historyNote: 'Saved daily readings are shown where available; missing dates are gaps. Baseline rows are illustrative. Durable history requires a configured persistent disk. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable).'
   };
 }
 
@@ -4688,11 +4679,11 @@ app.get('/api/social/hashtags', async (req, res) => {
   }
 });
 
-let timelineRefreshInFlightAllowsDbSync = false;
+let timelineRefreshInFlightAllowsPersistence = false;
 
 async function refreshDualEngineTimelineData(options = {}) {
-  const { allowDbSync = true, recordedByUid = null, forcePersist = false } = options;
-  if (timelineRefreshInFlightPromise && !forcePersist && (!allowDbSync || timelineRefreshInFlightAllowsDbSync)) {
+  const { allowPersistence = true, forcePersist = false } = options;
+  if (timelineRefreshInFlightPromise && !forcePersist && (!allowPersistence || timelineRefreshInFlightAllowsPersistence)) {
     return timelineRefreshInFlightPromise;
   }
   const previousInFlight = timelineRefreshInFlightPromise;
@@ -4700,22 +4691,22 @@ async function refreshDualEngineTimelineData(options = {}) {
     if (previousInFlight) {
       await previousInFlight.catch(() => {});
     }
-    return refreshDualEngineTimelineDataInternal({ allowDbSync, recordedByUid, forcePersist });
+    return refreshDualEngineTimelineDataInternal({ allowPersistence, forcePersist });
   })().finally(() => {
     if (timelineRefreshInFlightPromise === promise) {
       timelineRefreshInFlightPromise = null;
-      timelineRefreshInFlightAllowsDbSync = false;
+      timelineRefreshInFlightAllowsPersistence = false;
     }
   });
   if (!forcePersist) {
     timelineRefreshInFlightPromise = promise;
-    timelineRefreshInFlightAllowsDbSync = Boolean(allowDbSync);
+    timelineRefreshInFlightAllowsPersistence = Boolean(allowPersistence);
   }
   return promise;
 }
 
-async function refreshDualEngineTimelineDataInternal({ allowDbSync = true, recordedByUid = null, forcePersist = false } = {}) {
-  if (allowDbSync) {
+async function refreshDualEngineTimelineDataInternal({ allowPersistence = true, forcePersist = false } = {}) {
+  if (allowPersistence) {
     await hydratePersistedTimelineOnce();
   }
 
@@ -4814,7 +4805,7 @@ async function refreshDualEngineTimelineDataInternal({ allowDbSync = true, recor
       if (TELEMETRY_TIMELINE.length > TIMELINE_WINDOW_DAYS) TELEMETRY_TIMELINE.shift();
     }
 
-    if (allowDbSync) {
+    if (allowPersistence) {
       const signature = JSON.stringify([
         entry.date,
         entry.phi,
@@ -4837,24 +4828,9 @@ async function refreshDualEngineTimelineDataInternal({ allowDbSync = true, recor
               }))
             : []
         };
-        let savedToSql = false;
-        if (isCloudSqlConfigured()) {
-          try {
-            const saved = await upsertDailyTelemetrySnapshot(snapshotToPersist, recordedByUid);
-            if (saved) {
-              savedToSql = true;
-              lastPersistedSnapshotSignature = signature;
-              entry.persisted = true;
-            }
-          } catch (error) {
-            console.warn('Daily telemetry snapshot persistence skipped:', error?.message || error);
-          }
-        }
-        if (!savedToSql) {
-          if (writeLocalDailySnapshotFallback(snapshotToPersist)) {
-            lastPersistedSnapshotSignature = signature;
-            entry.persisted = true;
-          }
+        if (writeLocalDailySnapshotFallback(snapshotToPersist)) {
+          lastPersistedSnapshotSignature = signature;
+          entry.persisted = true;
         }
       } else {
         entry.persisted = true;
@@ -4888,13 +4864,12 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 app.post('/api/timeline/snapshot', requireAuth, async (req, res) => {
   try {
     const response = await refreshDualEngineTimelineData({
-      allowDbSync: true,
-      recordedByUid: req.user?.uid || null,
+      allowPersistence: true,
       forcePersist: true
     });
     const latestLive = [...(response.timeline || [])].reverse().find(entry => Number.isFinite(entry.social_volume)) || null;
     res.json({
-      saved: Boolean(latestLive),
+      saved: Boolean(response.inputStatus === 'updated' && latestLive?.date === new Date().toISOString().slice(0, 10) && latestLive.persisted),
       snapshot: latestLive,
       liveDaysCount: (response.timeline || []).filter(entry => Number.isFinite(entry.social_volume)).length
     });
@@ -4905,7 +4880,7 @@ app.post('/api/timeline/snapshot', requireAuth, async (req, res) => {
 
 app.get('/api/timeline', async (req, res) => {
   try {
-    const response = await refreshDualEngineTimelineData({ allowDbSync: true });
+    const response = await refreshDualEngineTimelineData({ allowPersistence: true });
     if (String(req.query.mode || '').toLowerCase() === 'live') {
       return res.json({
         ...response,
@@ -5974,12 +5949,12 @@ if (process.argv.includes('--update-treasury-cache')) {
   server.listen(PORT, HOST, () => {
     console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
     setTimeout(() => {
-      refreshDualEngineTimelineData({ allowDbSync: true }).catch(err => {
+      refreshDualEngineTimelineData({ allowPersistence: true }).catch(err => {
         console.warn(`Initial timeline warmup warning: ${err.message}`);
       });
     }, 1500).unref();
     setInterval(() => {
-      refreshDualEngineTimelineData({ allowDbSync: true }).catch(err => {
+      refreshDualEngineTimelineData({ allowPersistence: true }).catch(err => {
         console.warn(`Scheduled timeline refresh warning: ${err.message}`);
       });
     }, 60 * 60 * 1000).unref();
