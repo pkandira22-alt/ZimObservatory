@@ -604,7 +604,7 @@
             phiNoteEl.replaceChildren();
             const phiBadgeSpan = document.createElement('span');
             phiBadgeSpan.className = isLive ? 'text-accent font-semibold mr-1' : 'text-slate-400 font-semibold mr-1';
-            phiBadgeSpan.textContent = isLive ? 'Bayesian' : 'Seed Baseline';
+            phiBadgeSpan.textContent = isLive ? 'Bayesian' : Number.isFinite(latest.social_volume) ? 'Last recorded' : 'Seed Baseline';
             phiNoteEl.append(
                 phiBadgeSpan,
                 document.createTextNode(isLive ? `Updated (${data.latestInputs?.social_volume ?? 0} posts${activePlatforms})` : 'Awaiting live social sample')
@@ -614,7 +614,7 @@
                 ? latest.fsi.toFixed(2)
                 : 'Awaiting';
             document.getElementById('kpi-fsi-note').innerText = fsiAvailable
-                ? (isLive ? 'Live Composite Score (0–100)' : 'Illustrative Seed Score (0–100)')
+                ? (isLive ? 'Live Composite Score (0–100)' : Number.isFinite(latest.social_volume) ? `Last recorded ${latest.date}` : 'Illustrative Seed Score (0–100)')
                 : 'Requires sourced World Bank macro feed';
 
             document.getElementById('kpi-markov').innerText = Number.isFinite(latest.markov_crisis_prob)
@@ -716,7 +716,7 @@
 
             statusEl.innerHTML = isLive
                 ? `<span class="h-2 w-2 rounded-full bg-success mr-2"></span>Live Sync Active (${connectedOrigin})`
-                : `<span class="h-2 w-2 rounded-full bg-warning mr-2"></span>Connected · Seed Mode (${connectedOrigin})`;
+                : `<span class="h-2 w-2 rounded-full bg-warning mr-2"></span>Connected · Awaiting fresh sample (${connectedOrigin})`;
 
             window.__latestSystemicTimeline = timeline;
             renderFilteredSystemicTimeline();

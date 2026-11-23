@@ -695,7 +695,7 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
       if (seenVideoIds.has(item.videoId)) continue;
       seenVideoIds.add(item.videoId);
       const combinedText = `${item.title} ${item.description}`.trim();
-      if (!isModelRelevantSocialItem(combinedText, item.channelTitle)) continue;
+      if (!isModelRelevantSocialItem(combinedText)) continue;
       totalViews += item.viewCount;
       totalLikes += item.likeCount;
       if (item.channelTitle) uniqueChannels.add(item.channelTitle);
@@ -1180,7 +1180,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
           ? snippet.tags.map(t => decodeXmlEntities(t).trim()).filter(Boolean)
           : [];
         const combinedText = `${title} ${description}`.trim();
-        if (!isModelRelevantSocialItem(combinedText, `${channelTitle} ${tags.join(' ')}`)) {
+        if (!isModelRelevantSocialItem(combinedText)) {
           continue;
         }
         const extractedTags = [...new Set(combinedText.match(HASHTAG_REGEX) || [])]
@@ -1478,7 +1478,7 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
   for (const feed of results) {
     if (feed.stale) continue;
     for (const post of feed.posts) {
-      if (!isModelRelevantSocialItem(post.text, post.channelTitle || '')) continue;
+      if (!isModelRelevantSocialItem(post.text)) continue;
       const id = post.url || `${post.platform}:${post.text}:${post.createdAt}`;
       if (seen.has(id)) continue;
       seen.add(id);
@@ -1490,7 +1490,6 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
 
   const tagCounts = new Map();
   for (const post of posts) {
-    if (!isModelRelevantSocialItem(post.text, post.channelTitle || '')) continue;
     for (const match of new Set(post.text.match(HASHTAG_REGEX) || [])) {
       if (!isModelRelevantHashtag(match)) continue;
       const key = match.toLowerCase();
@@ -4592,7 +4591,7 @@ function getDualEngineTimelineResponse() {
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
     hansardStatus,
     treasuryStatus,
-    historyNote: 'Daily live readings are archived automatically to build a rolling 30-day empirical series; earlier baseline rows remain illustrative until superseded by live captures. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable). Real-Time Systemic Risk Monitoring also tracks live Ministry of Finance (zimtreasury.co.zw) budgets, public debt reports, treasury bulletins, circulars, press releases, newsletters, and stakeholder engagements.'
+    historyNote: 'Saved daily readings are shown where available; missing dates are gaps. Baseline rows are illustrative. Durable history requires configured database storage. Live FSI uses 40% inverse Φ, 35% Markov crisis projection, and 25% macro-stress proxy (or 35%/30%/20%/15% when live ParlZim Semantic Legislative & Hansard Friction is reachable).'
   };
 }
 
@@ -4870,6 +4869,9 @@ async function refreshDualEngineTimelineDataInternal({ allowDbSync = true, recor
       telemetry_source: entry.telemetry_source,
       updated_at: updatedAt
     };
+  } else {
+    latestDualEngineInputs = null;
+    latestFsiInputs = null;
   }
 
   return getDualEngineTimelineResponse();
