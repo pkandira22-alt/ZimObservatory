@@ -1,4 +1,7 @@
 {
   "npm.packageManager": "npm",
-  "python-envs.defaultEnvManager": "ms-python.python:system"
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+  "git.autofetch": true,
+  "git.rebaseWhenSync": false,
+  "git.confirmSync": false
 }

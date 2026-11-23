@@ -56,7 +56,12 @@ jobs:
 
       - name: Commit and Push Cache
         run: |
-          git config --global user.name "KUVHURA Bot"
-          git config --global user.email "bot@kuvhura.org"
+          git config user.name "KUVHURA Bot"
+          git config user.email "bot@kuvhura.org"
+          git config pull.rebase true
           git add telemetry_cache.json treasury_cache.json
-          git diff --cached --quiet || (git commit -m "chore: automated daily ParlZim & Treasury telemetry cache update" && git push)
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: automated daily ParlZim & Treasury telemetry cache update"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}"
+            git push origin "HEAD:${GITHUB_REF_NAME:-main}"
+          fi

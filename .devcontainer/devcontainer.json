@@ -1,0 +1,13 @@
+{
+  "name": "ZimObservatory",
+  "postStartCommand": "git config pull.rebase false || true",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "git.autofetch": true,
+        "git.rebaseWhenSync": false,
+        "git.confirmSync": false
+      }
+    }
+  }
+}
