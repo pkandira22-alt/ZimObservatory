@@ -74,7 +74,13 @@ The Node.js backend samples recent Zimbabwe-matching public posts from Bluesky, 
 
 On the Node.js backend, cached results from failed feeds are marked as stale and excluded from fresh sample counts and model updates. The systemic-risk page compares the last two recorded daily sample sizes when available; changes can reflect changing feed coverage rather than changing public opinion.
 
-The Node.js service refreshes its timeline on startup and hourly while running. In Render, open the backend service's **Disks** settings and find its attached persistent disk's mount path. Set `TIMELINE_STORAGE_DIR` in the backend's environment to that existing absolute directory and redeploy. Daily snapshots are stored in `daily_telemetry_snapshots.json` under that directory, without PostgreSQL. Do not mount the disk inside a public static directory. The Blueprint does not create or resize a disk, and leaves the existing backend plan unchanged.
+The Node.js service refreshes its timeline on startup and hourly while running. The Render Blueprint sets `TIMELINE_STORAGE_DIR=/var/data` on the backend, storing daily snapshots in `/var/data/daily_telemetry_snapshots.json` without PostgreSQL. Verify the backend's existing persistent disk is mounted at `/var/data`, then deploy these changes and sync the Blueprint. The Blueprint does not create or resize a disk, and leaves the existing backend plan unchanged. After a successful live sample, check the file in the backend's Render shell:
+
+```sh
+ls -lh "$TIMELINE_STORAGE_DIR/daily_telemetry_snapshots.json"
+```
+
+The file is created when a live snapshot is first saved; it will not exist before then.
 
 Without `TIMELINE_STORAGE_DIR`, snapshots use the existing private upload directory, which is not durable on Render's ephemeral filesystem unless it is itself on a persistent disk. Only files under the disk mount survive deployments and restarts. A disk is attached to one service and requires a paid Render service; the separate Python stream's timeline remains in memory. A sleeping or stopped service cannot collect a snapshot. Setting a new directory does not automatically move snapshots from the old location.
 

@@ -12,10 +12,16 @@ services:
         value: 24.22.0
       - key: ALLOWED_ORIGINS
         value: https://pkandira22-alt.github.io
+      - key: TIMELINE_STORAGE_DIR
+        value: /var/data
       - key: GEMINI_API_KEY
         sync: false
       - key: YOUTUBE_API_KEY
         sync: false
+    disk:
+      name: timeline-storage
+      mountPath: /var/data
+      sizeGB: 1
   - type: web
     name: zimobservatory-forecast
     runtime: python

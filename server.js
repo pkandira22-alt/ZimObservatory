@@ -1635,8 +1635,18 @@ function buildRollingSeedTimeline(referenceDate = new Date()) {
 
 const TELEMETRY_TIMELINE = buildRollingSeedTimeline();
 const timelineStorageDir = process.env.TIMELINE_STORAGE_DIR?.trim();
-if (timelineStorageDir && (!path.isAbsolute(timelineStorageDir) || !existsSync(timelineStorageDir) || !statSync(timelineStorageDir).isDirectory())) {
-  throw new Error('TIMELINE_STORAGE_DIR must be an existing absolute directory on the persistent disk.');
+if (timelineStorageDir) {
+  if (!path.isAbsolute(timelineStorageDir)) {
+    throw new Error('TIMELINE_STORAGE_DIR must be an absolute directory path.');
+  }
+  try {
+    mkdirSync(timelineStorageDir, { recursive: true });
+    if (!statSync(timelineStorageDir).isDirectory()) {
+      throw new Error('TIMELINE_STORAGE_DIR path exists but is not a directory.');
+    }
+  } catch (error) {
+    throw new Error(`Failed to initialize TIMELINE_STORAGE_DIR at ${timelineStorageDir}: ${error.message}`);
+  }
 }
 const LOCAL_SNAPSHOTS_FALLBACK_PATH = path.join(timelineStorageDir || PRIVATE_UPLOAD_DIR, 'daily_telemetry_snapshots.json');
 let hasHydratedPersistedTimeline = false;
