@@ -6697,6 +6697,62 @@ const PUBLIC_FRONTEND_FILES = new Set([
 ]);
 
 const APP_THUMBNAIL_PATH = path.join(__dirname, 'public', 'assets', 'aistudio', 'Code_Generated_Image_eb225bc7.png');
+const ANDROID_APK_PATH = path.join(__dirname, 'public', 'downloads', 'kuvhura-observatory.apk');
+const ANDROID_APK_DOWNLOAD_NAME = 'KUVHURA-Observatory-v1.0.0.apk';
+let cachedApkMeta = null;
+
+function getAndroidApkMetadata() {
+  if (!existsSync(ANDROID_APK_PATH)) {
+    return null;
+  }
+  const stat = statSync(ANDROID_APK_PATH);
+  if (cachedApkMeta && cachedApkMeta.mtimeMs === stat.mtimeMs && cachedApkMeta.sizeBytes === stat.size) {
+    return cachedApkMeta;
+  }
+  const sha256 = createHash('sha256').update(readFileSync(ANDROID_APK_PATH)).digest('hex');
+  cachedApkMeta = {
+    available: true,
+    filename: ANDROID_APK_DOWNLOAD_NAME,
+    packageId: 'org.kuvhura.observatory',
+    versionName: '1.0.0',
+    versionCode: 1,
+    minSdkVersion: 21,
+    targetSdkVersion: 34,
+    sizeBytes: stat.size,
+    sizeLabel: `${Math.max(1, Math.round(stat.size / 1024))} KB`,
+    sha256,
+    updatedAt: stat.mtime.toISOString(),
+    mtimeMs: stat.mtimeMs,
+    downloadUrl: '/public/downloads/kuvhura-observatory.apk'
+  };
+  return cachedApkMeta;
+}
+
+app.get('/api/app/apk-info', (req, res) => {
+  const meta = getAndroidApkMetadata();
+  if (!meta) {
+    return res.status(404).json({ available: false, error: 'Android APK build is not available.' });
+  }
+  const { mtimeMs, ...publicMeta } = meta;
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  return res.json(publicMeta);
+});
+
+app.get([
+  '/public/downloads/kuvhura-observatory.apk',
+  '/downloads/kuvhura-observatory.apk',
+  '/kuvhura-observatory.apk',
+  '/api/download/apk'
+], (req, res) => {
+  if (!existsSync(ANDROID_APK_PATH)) {
+    return res.status(404).json({ error: 'Android APK build is not available.' });
+  }
+  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+  res.setHeader('Content-Disposition', `attachment; filename="${ANDROID_APK_DOWNLOAD_NAME}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  return res.sendFile(ANDROID_APK_PATH);
+});
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));

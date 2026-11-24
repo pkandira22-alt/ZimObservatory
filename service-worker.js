@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kuvhura-shell-v5';
+const CACHE_NAME = 'kuvhura-shell-v6';
 const APP_SHELL = [
   './',
   './index.html',
@@ -30,7 +30,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/api/') || url.pathname.endsWith('_cache.json')) return;
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/api/') || url.pathname.endsWith('_cache.json') || url.pathname.endsWith('.apk')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(

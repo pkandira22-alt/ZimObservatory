@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="KuvhuraTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/kuvhura_bg</item>
+        <item name="android:colorPrimary">@color/kuvhura_green</item>
+        <item name="android:colorPrimaryDark">@color/kuvhura_green</item>
+        <item name="android:colorAccent">@color/kuvhura_gold</item>
+        <item name="android:statusBarColor">@color/kuvhura_green</item>
+        <item name="android:navigationBarColor">@color/kuvhura_bg</item>
+    </style>
+
+    <color name="kuvhura_bg">#070B14</color>
+    <color name="kuvhura_green">#072B13</color>
+    <color name="kuvhura_gold">#F5C71A</color>
+</resources>

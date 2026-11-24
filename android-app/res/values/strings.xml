@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KUVHURA</string>
+    <string name="app_full_name">KUVHURA Observatory</string>
+    <string name="primary_url">https://zimobservatory-backend.onrender.com/</string>
+    <string name="fallback_url">https://ais-pre-fsejzx3v5zvxhqpgripvn4-744529076327.europe-west2.run.app/</string>
+</resources>
