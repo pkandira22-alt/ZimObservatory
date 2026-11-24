@@ -292,10 +292,31 @@
                 maxZoom: 18
             });
 
-            proxyTiles.once("tileerror", () => {
-                structuralMap.removeLayer(proxyTiles);
-                directFallbackTiles.addTo(structuralMap);
+            const openStreetMapFallback = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
+                maxZoom: 19,
+                subdomains: "abc"
             });
+
+            let tileLayerActive = proxyTiles;
+            let fallbackAttempts = 0;
+            const maxFallbackAttempts = 3;
+
+            const handleTileError = () => {
+                fallbackAttempts++;
+                if (fallbackAttempts === 1 && structuralMap.hasLayer(tileLayerActive)) {
+                    structuralMap.removeLayer(tileLayerActive);
+                    tileLayerActive = directFallbackTiles;
+                    tileLayerActive.addTo(structuralMap);
+                } else if (fallbackAttempts === 2 && structuralMap.hasLayer(tileLayerActive)) {
+                    structuralMap.removeLayer(tileLayerActive);
+                    tileLayerActive = openStreetMapFallback;
+                    tileLayerActive.addTo(structuralMap);
+                }
+            };
+
+            proxyTiles.once("tileerror", handleTileError);
+            directFallbackTiles.once("tileerror", handleTileError);
 
             provincialMarkersLayer = L.layerGroup().addTo(structuralMap);
 
