@@ -536,6 +536,8 @@ const X_PUBLIC_INDEX_RSS_URLS = [
   'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+stayaway+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+healthcare+OR+Starlink+OR+censorship)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en'
 ];
 const X_PUBLIC_INDEX_CACHE_MS = 15 * 60 * 1000;
+const X_API_V2_BLOCKED_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+let xApiV2BlockedUntil = 0;
 const SOCIAL_CACHE_MS = 60 * 1000;
 const YOUTUBE_MIN_FORCE_REFRESH_MS = 5 * 60 * 1000;
 const YOUTUBE_PUBLIC_FEEDS_CACHE_MS = 15 * 60 * 1000;
@@ -577,7 +579,8 @@ const EXCLUDED_HASHTAGS = new Set([
   '#photography', '#art', '#fashion', '#food', '#recipe', '#fitness', '#wellness', '#lifestyle',
   '#history', '#africanhistory', '#greatzimbabwe', '#chile', '#ireland', '#worldrugby', '#nationscup',
   '#majorshiftinzimbabweanfootball', '#brianbennett', '#miltonshumba', '#sikandarraza',
-  '#earthmovingequipment', '#constructionmachinery', '#miningequipment', '#miningmachinery', '#getthepicture'
+  '#earthmovingequipment', '#constructionmachinery', '#miningequipment', '#miningmachinery', '#getthepicture',
+  '#omnigaza'
 ]);
 
 const HASHTAG_NOISE_REGEX = /(cricket|rugby|football|soccer|sport|dance|music|amapiano|comedy|safari|travel|prophecy|recipe|shorts|viral|fyp|reels|tiktok|chile|ireland|shumba|bennett|raza|earthmoving|machinery|equipment)/i;
@@ -716,7 +719,7 @@ async function fetchYouTubePublicAtomFeeds({ signal, configured = false, fallbac
       if (seenVideoIds.has(item.videoId)) continue;
       seenVideoIds.add(item.videoId);
       const combinedText = `${item.title} ${item.description}`.trim();
-      if (!isModelRelevantSocialItem(combinedText)) continue;
+      if (!isModelRelevantSocialItem(combinedText, item.channelTitle || '')) continue;
       totalViews += item.viewCount;
       totalLikes += item.likeCount;
       if (item.channelTitle) uniqueChannels.add(item.channelTitle);
@@ -838,7 +841,7 @@ async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
       X_PUBLIC_INDEX_RSS_URLS.map(async rssUrl => {
         try {
           const res = await fetch(rssUrl, {
-            signal,
+            signal: signal || AbortSignal.timeout(10000),
             headers: {
               Accept: 'application/rss+xml, application/xml, text/xml',
               'User-Agent': 'KUVHURA-Observatory/1.0'
@@ -988,11 +991,11 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       throw err;
     }
 
-    // Zero-cost public X index RSS feed when X_BEARER_TOKEN is not set
-    if (feed.type === "x" && !xToken) {
+    // Zero-cost public X index RSS feed when X_BEARER_TOKEN is not set or X API v2 recently returned 402/401/403
+    if (feed.type === "x" && (!xToken || Date.now() < xApiV2BlockedUntil)) {
       const xFallback = await fetchXPublicIndexFeed({
         signal: controller.signal,
-        configured: false
+        configured: Boolean(xToken)
       });
       if (xFallback) {
         const result = {
@@ -1201,7 +1204,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
           ? snippet.tags.map(t => decodeXmlEntities(t).trim()).filter(Boolean)
           : [];
         const combinedText = `${title} ${description}`.trim();
-        if (!isModelRelevantSocialItem(combinedText)) {
+        if (!isModelRelevantSocialItem(combinedText, channelTitle)) {
           continue;
         }
         const extractedTags = [...new Set(combinedText.match(HASHTAG_REGEX) || [])]
@@ -1370,17 +1373,10 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       console.warn(`Feed ${feed.name} failed:`, safeErrorMessage);
     }
     const failureTtl = isExpectedAuthOrRateLimit ? Math.max(cacheTtl, 30 * 60 * 1000) : cacheTtl;
-    if (cached?.result && !cached.result.failed && Array.isArray(cached.result.posts) && cached.result.posts.length > 0) {
-      const staleResult = {
-        ...cached.result,
-        stale: true,
-        error: safeErrorMessage,
-        refreshIntervalSeconds: failureTtl / 1000
-      };
-      socialSourceCache.set(feed.name, { expiresAt: Date.now() + failureTtl, result: staleResult });
-      return staleResult;
+    if (feed.type === 'x' && [401, 402, 403].includes(err.httpStatus)) {
+      xApiV2BlockedUntil = Date.now() + X_API_V2_BLOCKED_COOLDOWN_MS;
     }
-    // Zero-quota Atom feed fallback if YouTube Data API v3 hits quota/auth limits
+    // Always attempt live zero-cost fallback feeds BEFORE downgrading to stale cache
     if (feed.type === 'youtube') {
       const publicFallback = await fetchYouTubePublicAtomFeeds({
         configured: Boolean(getYouTubeApiKey()),
@@ -1393,13 +1389,12 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
           posts: publicFallback.posts,
           youtubeMeta: publicFallback.youtubeMeta,
           updatedAt: new Date().toISOString(),
-          refreshIntervalSeconds: failureTtl / 1000
+          refreshIntervalSeconds: YOUTUBE_PUBLIC_FEEDS_CACHE_MS / 1000
         };
-        socialSourceCache.set(feed.name, { expiresAt: Date.now() + failureTtl, result });
+        socialSourceCache.set(feed.name, { expiresAt: Date.now() + YOUTUBE_PUBLIC_FEEDS_CACHE_MS, result });
         return result;
       }
     }
-    // Zero-cost X public index fallback when X API v2 requires paid credits (HTTP 402) or rejects token
     if (feed.type === 'x') {
       const xFallback = await fetchXPublicIndexFeed({
         configured: Boolean(getXBearerToken())
@@ -1411,11 +1406,21 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
           posts: xFallback.posts,
           xMeta: xFallback.xMeta,
           updatedAt: new Date().toISOString(),
-          refreshIntervalSeconds: failureTtl / 1000
+          refreshIntervalSeconds: X_PUBLIC_INDEX_CACHE_MS / 1000
         };
-        socialSourceCache.set(feed.name, { expiresAt: Date.now() + failureTtl, result });
+        socialSourceCache.set(feed.name, { expiresAt: Date.now() + X_PUBLIC_INDEX_CACHE_MS, result });
         return result;
       }
+    }
+    if (cached?.result && !cached.result.failed && Array.isArray(cached.result.posts) && cached.result.posts.length > 0) {
+      const staleResult = {
+        ...cached.result,
+        stale: true,
+        error: safeErrorMessage,
+        refreshIntervalSeconds: failureTtl / 1000
+      };
+      socialSourceCache.set(feed.name, { expiresAt: Date.now() + failureTtl, result: staleResult });
+      return staleResult;
     }
     const result = {
       name: feed.name,

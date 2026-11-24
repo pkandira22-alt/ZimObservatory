@@ -311,5 +311,22 @@ test('structural provincial telemetry maps all 10 Zimbabwe provinces and respond
   assert.ok(provincial.summary.adjustedPhi < provincial.summary.basePhi);
 });
 
+test('X feed refreshes via live public index before stale cache when X API v2 returns HTTP 402', () => {
+  const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const catchBlock = extract(
+    source,
+    'const failureTtl = isExpectedAuthOrRateLimit ? Math.max(cacheTtl, 30 * 60 * 1000) : cacheTtl;',
+    '\n  } finally {'
+  );
+  const xFallbackIdx = catchBlock.indexOf('fetchXPublicIndexFeed');
+  const staleCacheIdx = catchBlock.indexOf('const staleResult = {');
+  assert.ok(xFallbackIdx >= 0, 'Expected fetchXPublicIndexFeed fallback in catch block');
+  assert.ok(staleCacheIdx >= 0, 'Expected stale cache fallback in catch block');
+  assert.ok(
+    xFallbackIdx < staleCacheIdx,
+    'Live X public index fallback must execute BEFORE downgrading to stale cache'
+  );
+});
+
 
 
