@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Fetch public historical series and evaluate simple one-period-ahead forecasts."""
+"""Fetch public historical series and evaluate simple one-period-ahead forecasts.
+
+Data sources:
+- World Bank (GDP, Inflation): https://api.worldbank.org/v2
+- ZIMSTAT (CPI/Inflation): https://zimstat.co.zw/
+- ZIMSTAT NADA Microdata Catalog: https://nada.zimstat.co.zw/index.php/api/catalog
+- ZIMSTAT Data Portal: https://share.zimstat.co.zw/
+- Yahoo Finance (Gold futures): https://query1.finance.yahoo.com/
+"""
 
 import calendar
 import datetime as dt
@@ -35,6 +43,8 @@ ZIMSTAT_CPI_URL = (
     "https://www.zimstat.co.zw/wp-content/uploads/Macro/Prices/CPI/"
     "{year}/CPI_Weighted_{month:02d}_{year}.xls"
 )
+ZIMSTAT_NADA_API = "https://nada.zimstat.co.zw/index.php/api/catalog"
+ZIMSTAT_DATA_PORTAL = "https://share.zimstat.co.zw/"
 DATA_TIMEOUT_SECONDS = 30
 ANNUAL_HOLDOUT = 10
 MONTHLY_HOLDOUT = 24
@@ -112,6 +122,40 @@ def fetch_world_bank_telemetry():
     except Exception as error:
         print("Error fetching World Bank data, using fallback baseline:", error)
         return None
+
+
+def fetch_zimstat_nada_catalog(limit=20):
+    """Fetch available datasets from ZIMSTAT NADA (Microdata) Catalog.
+    
+    Returns a list of recent datasets from the ZIMSTAT data portal including
+    Labour Force Surveys, Agriculture Surveys, Poverty Surveys, and other
+    macroeconomic and social indicators.
+    """
+    try:
+        query = urllib.parse.urlencode({"ps": limit, "sk": 0})
+        url = f"{ZIMSTAT_NADA_API}/search?{query}"
+        payload = _request_json(url)
+        result = payload.get("result", {})
+        rows = result.get("rows", [])
+        
+        datasets = []
+        for row in rows:
+            datasets.append({
+                "id": row.get("id"),
+                "idno": row.get("idno"),
+                "title": row.get("title"),
+                "year_start": row.get("year_start"),
+                "year_end": row.get("year_end"),
+                "total_views": row.get("total_views"),
+                "total_downloads": row.get("total_downloads"),
+                "created": row.get("created"),
+                "changed": row.get("changed"),
+            })
+        
+        return datasets
+    except Exception as error:
+        print(f"Warning: Could not fetch ZIMSTAT NADA catalog: {error}")
+        return []
 
 
 def fetch_zimstat_monthly_inflation():
@@ -547,6 +591,13 @@ def build_forecast_report():
             "reason": "No custom target was specified.",
         },
     ])
+    
+    zimstat_datasets = []
+    try:
+        zimstat_datasets = fetch_zimstat_nada_catalog(limit=15)
+    except Exception as error:
+        print(f"Warning: Could not load ZIMSTAT datasets: {error}")
+    
     return {
         "type": "forecast_report",
         "generatedAt": now.isoformat(timespec="seconds"),
@@ -559,6 +610,12 @@ def build_forecast_report():
             "forecast is not described as validated skill."
         ),
         "targets": targets,
+        "zimstatDataCatalog": {
+            "source": ZIMSTAT_DATA_PORTAL,
+            "nada_api": ZIMSTAT_NADA_API,
+            "description": "Recent datasets from Zimbabwe National Statistics Agency (ZIMSTAT) NADA Microdata Catalog",
+            "datasets": zimstat_datasets,
+        },
     }
 
 
