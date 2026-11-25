@@ -6361,6 +6361,62 @@ app.get('/api/maps/tiles/:style/:z/:x/:y.png', async (req, res) => {
   });
 });
 
+app.get('/api/zimstat/spatial-telemetry', (req, res) => {
+  try {
+    const cachePath = path.join(__dirname, 'telemetry_cache.json');
+    if (!existsSync(cachePath)) {
+      return res.json({
+        status: 'pending',
+        message: 'ZIMSTAT telemetry cache not yet populated',
+        spatial_reports: [],
+        extraction_reports: [],
+      });
+    }
+    const cache = JSON.parse(readFileSync(cachePath, 'utf-8'));
+    res.json({
+      status: 'ok',
+      spatial_reports: cache.spatial_reports || [],
+      extraction_reports: cache.extraction_reports || [],
+      spatial_updated_at: cache.spatial_updated_at || null,
+    });
+  } catch (err) {
+    console.warn('Error reading ZIMSTAT telemetry cache:', err.message);
+    res.status(500).json({
+      error: 'Could not read ZIMSTAT telemetry cache',
+      message: err.message,
+    });
+  }
+});
+
+app.post('/api/zimstat/sync', (req, res) => {
+  const token = req.get('authorization');
+  const expectedToken = process.env.ZIMSTAT_SYNC_TOKEN || 'default-sync-token';
+  if (token !== `Bearer ${expectedToken}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const { execSync } = require('child_process');
+    const output = execSync('python3 zimstat_telemetry.py', {
+      cwd: __dirname,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 60000,
+    });
+    res.json({
+      status: 'ok',
+      message: 'ZIMSTAT telemetry sync completed',
+      output: output.split('\n').filter(Boolean),
+    });
+  } catch (err) {
+    console.error('ZIMSTAT sync error:', err);
+    res.status(500).json({
+      error: 'ZIMSTAT sync failed',
+      message: err.message,
+    });
+  }
+});
+
 app.get('/api/timeline/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
