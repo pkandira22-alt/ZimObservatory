@@ -286,21 +286,18 @@
                 maxZoom: 18
             }).addTo(structuralMap);
 
-            const directFallbackTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
-                attribution,
-                subdomains: "abcd",
-                maxZoom: 18
+            const directFallbackTiles = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+                attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+                maxZoom: 16
             });
 
-            const openStreetMapFallback = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            const openStreetMapFallback = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
-                maxZoom: 19,
-                subdomains: "abc"
+                maxZoom: 19
             });
 
             let tileLayerActive = proxyTiles;
             let fallbackAttempts = 0;
-            const maxFallbackAttempts = 3;
 
             const handleTileError = () => {
                 fallbackAttempts++;

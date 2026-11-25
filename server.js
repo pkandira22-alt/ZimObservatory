@@ -6219,7 +6219,13 @@ const CARTO_TILE_STYLE_TEMPLATES = Object.freeze({
   voyager: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`,
   dark_all: (z, x, y) => `https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`,
   light_all: (z, x, y) => `https://basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png`,
-  positron: (z, x, y) => `https://basemaps.cartocdn.com/rastertiles/positron/${z}/${x}/${y}.png`
+  positron: (z, x, y) => `https://basemaps.cartocdn.com/light_all/${z}/${x}/${y}.png`
+});
+const KEYLESS_FALLBACK_TILE_TEMPLATES = Object.freeze({
+  voyager: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`,
+  dark_all: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/${z}/${y}/${x}`,
+  light_all: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/${z}/${y}/${x}`,
+  positron: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/${z}/${y}/${x}`
 });
 const MAP_TILE_CACHE = new Map();
 const MAP_TILE_CACHE_MAX = 400;
@@ -6247,12 +6253,15 @@ function resolveCartoTileUpstreamUrl(styleRaw, zRaw, xRaw, yRaw, apiKey = null) 
   const maxIndex = 2 ** z;
   if (x < 0 || x >= maxIndex || y < 0 || y >= maxIndex) return null;
   const baseUrl = template(z, x, y);
+  const fallbackTemplate = KEYLESS_FALLBACK_TILE_TEMPLATES[style] || KEYLESS_FALLBACK_TILE_TEMPLATES.voyager;
+  const fallbackUrl = fallbackTemplate(z, x, y);
+  const osmUrl = KEYLESS_FALLBACK_TILE_TEMPLATES.voyager(z, x, y);
   const cleanKey = typeof apiKey === 'string' ? apiKey.trim() : '';
   const url = cleanKey ? `${baseUrl}?key=${encodeURIComponent(cleanKey)}` : baseUrl;
-  return { style, z, x, y, baseUrl, url };
+  return { style, z, x, y, baseUrl, url, fallbackUrl, osmUrl };
 }
 
-function cacheMapTile(cacheKey, buffer, contentType) {
+function cacheMapTile(cacheKey, buffer, contentType, provider = 'carto') {
   if (MAP_TILE_CACHE.size >= MAP_TILE_CACHE_MAX) {
     const oldestKey = MAP_TILE_CACHE.keys().next().value;
     if (oldestKey !== undefined) MAP_TILE_CACHE.delete(oldestKey);
@@ -6260,14 +6269,17 @@ function cacheMapTile(cacheKey, buffer, contentType) {
   MAP_TILE_CACHE.set(cacheKey, {
     buffer,
     contentType,
+    provider,
     expiresAt: Date.now() + MAP_TILE_CACHE_TTL_MS
   });
 }
 
 app.get('/api/maps/status', (req, res) => {
+  const keyConfigured = Boolean(getCartoMapsApiKey());
   res.json({
     provider: 'carto',
-    keyConfigured: Boolean(getCartoMapsApiKey()),
+    keyConfigured,
+    activeProvider: keyConfigured ? 'carto' : 'osm_esri_fallback',
     styles: Object.keys(CARTO_TILE_STYLE_TEMPLATES)
   });
 });
@@ -6285,23 +6297,36 @@ app.get('/api/maps/tiles/:style/:z/:x/:y.png', async (req, res) => {
     return res.status(400).json({ error: 'Invalid map tile style or coordinates.' });
   }
 
-  const cacheKey = `${resolved.style}/${resolved.z}/${resolved.x}/${resolved.y}`;
+  const providerScope = apiKey ? 'carto' : 'fallback';
+  const cacheKey = `${providerScope}/${resolved.style}/${resolved.z}/${resolved.x}/${resolved.y}`;
   const cached = MAP_TILE_CACHE.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     res.setHeader('Content-Type', cached.contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('X-Map-Provider', cached.provider || providerScope);
     return res.send(cached.buffer);
   }
 
-  const candidateUrls = apiKey ? [resolved.url, resolved.baseUrl] : [resolved.baseUrl];
+  // CARTO returns placeholder icon tiles with HTTP 200 when called without an API key,
+  // so only query CARTO when CARTO_MAPS_API_KEY is configured; otherwise use real OSM/Esri tiles.
+  const candidates = [];
+  if (apiKey) {
+    candidates.push({ url: resolved.url, provider: 'carto' });
+  }
+  candidates.push({ url: resolved.fallbackUrl, provider: resolved.fallbackUrl.includes('openstreetmap.org') ? 'osm' : 'esri' });
+  if (resolved.osmUrl !== resolved.fallbackUrl) {
+    candidates.push({ url: resolved.osmUrl, provider: 'osm' });
+  }
+
   let lastStatus = 502;
-  for (const upstreamUrl of candidateUrls) {
+  for (const candidate of candidates) {
     try {
-      const response = await fetch(upstreamUrl, {
+      const response = await fetch(candidate.url, {
         headers: {
-          'User-Agent': 'KUVHURA-Observatory/1.0',
-          Accept: 'image/png,image/*;q=0.8'
+          'User-Agent': 'KUVHURA-Observatory/1.0 (+https://zimobservatory-backend.onrender.com)',
+          Accept: 'image/png,image/jpeg,image/*;q=0.8'
         },
         signal: AbortSignal.timeout(8000)
       });
@@ -6319,10 +6344,12 @@ app.get('/api/maps/tiles/:style/:z/:x/:y.png', async (req, res) => {
         lastStatus = 502;
         continue;
       }
-      cacheMapTile(cacheKey, buffer, contentType);
+      cacheMapTile(cacheKey, buffer, contentType, candidate.provider);
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=86400');
       res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('X-Map-Provider', candidate.provider);
       return res.send(buffer);
     } catch (err) {
       console.warn(`Map tile proxy fetch failed for ${cacheKey}: ${redactSecretQueryParams(err?.message)}`);

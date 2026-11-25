@@ -118,6 +118,11 @@ test('CARTO map tile proxy enforces allowlisted styles, valid tile bounds, and s
 
   const keyless = helpers.resolveCartoTileUpstreamUrl('dark_all', '6', '37', '35', null);
   assert.equal(keyless.url, 'https://basemaps.cartocdn.com/dark_all/6/37/35.png');
+  assert.equal(keyless.fallbackUrl, 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/6/35/37');
+
+  const positron = helpers.resolveCartoTileUpstreamUrl('positron', '6', '37', '35', 'test_demo_key');
+  assert.equal(positron.baseUrl, 'https://basemaps.cartocdn.com/light_all/6/37/35.png');
+  assert.equal(positron.fallbackUrl, 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/6/35/37');
 
   assert.equal(helpers.resolveCartoTileUpstreamUrl('../evil', '6', '37', '35', 'k'), null);
   assert.equal(helpers.resolveCartoTileUpstreamUrl('voyager', '20', '0', '0', 'k'), null);
