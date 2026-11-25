@@ -5,4 +5,5 @@ __pycache__/
 android-app/build/
 *.jks
 *.keystore
+telemetry_cache.json
 
