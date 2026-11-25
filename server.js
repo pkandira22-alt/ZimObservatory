@@ -6,6 +6,7 @@ import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, ren
 import http from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
+import { execSync } from 'node:child_process';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -6396,7 +6397,6 @@ app.post('/api/zimstat/sync', (req, res) => {
   }
 
   try {
-    const { execSync } = require('child_process');
     const output = execSync('python3 zimstat_telemetry.py', {
       cwd: __dirname,
       encoding: 'utf-8',
