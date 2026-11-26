@@ -1445,6 +1445,34 @@ class AppHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if path == "/api/extraction-reports":
+            cache_path = os.environ.get("TELEMETRY_CACHE_PATH", os.path.join(BASE_DIR, "telemetry_cache.json"))
+            reports = []
+            updated_at = None
+            try:
+                if os.path.isfile(cache_path):
+                    with open(cache_path, "r", encoding="utf-8") as handle:
+                        raw_cache = json.load(handle)
+                    if isinstance(raw_cache, dict):
+                        raw_reports = raw_cache.get("extraction_reports")
+                        if isinstance(raw_reports, list):
+                            reports = raw_reports
+                        updated_at = raw_cache.get("extraction_reports_updated_at")
+                        if not updated_at and reports:
+                            updated_at = reports[0].get("updated_at") if reports else None
+            except Exception:
+                reports = []
+            measured = sum(1 for item in reports if isinstance(item, dict) and item.get("lineage") == "Measured Directly")
+            respond_json(self, 200, {
+                "available": len(reports) > 0,
+                "country": "Zimbabwe",
+                "count": len(reports),
+                "measuredCount": measured,
+                "updatedAt": updated_at,
+                "reports": reports,
+            })
+            return
+
         if path == "/api/ai/status":
             status_code, payload = check_gemini_status()
             respond_json(self, status_code, payload)

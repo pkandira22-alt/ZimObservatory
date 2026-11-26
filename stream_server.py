@@ -2634,6 +2634,36 @@ async def dual_engine_timeline(_request):
     )
 
 
+async def extraction_reports_stream(_request):
+    cache_path = os.environ.get("TELEMETRY_CACHE_PATH", os.path.join(os.path.dirname(__file__), "telemetry_cache.json"))
+    reports = []
+    updated_at = None
+    try:
+        if os.path.isfile(cache_path):
+            with open(cache_path, "r", encoding="utf-8") as handle:
+                raw_cache = json.load(handle)
+            if isinstance(raw_cache, dict):
+                raw_reports = raw_cache.get("extraction_reports")
+                if isinstance(raw_reports, list):
+                    reports = raw_reports
+                updated_at = raw_cache.get("extraction_reports_updated_at")
+                if not updated_at and reports:
+                    updated_at = reports[0].get("updated_at") if reports else None
+    except Exception:
+        reports = []
+    
+    response_text = "data: " + json.dumps({"reports": reports, "updatedAt": updated_at}) + "\n\n"
+    return web.Response(
+        text=response_text,
+        content_type="text/event-stream",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+
 async def live_endpoint(request):
     websocket = web.WebSocketResponse()
     if not websocket.can_prepare(request).ok:
@@ -2652,6 +2682,7 @@ async def live_endpoint(request):
 def create_app():
     app = web.Application()
     app.router.add_get("/api/timeline", dual_engine_timeline)
+    app.router.add_get("/api/extraction-reports/stream", extraction_reports_stream)
     app.router.add_route("*", "/", live_endpoint)
     app.router.add_route("*", "/health", health)
     return app
