@@ -912,8 +912,10 @@ async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
     );
     const seenKeys = new Set();
     const parsed = [];
+    const allItems = [];
     for (const batch of batches) {
       for (const item of batch) {
+        allItems.push(item);
         if (!isModelRelevantSocialItem(item.text)) continue;
         const dedupeKey = item.url || item.text.toLowerCase();
         if (seenKeys.has(dedupeKey)) continue;
@@ -924,21 +926,38 @@ async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
         });
       }
     }
-    if (parsed.length === 0) return null;
-    parsed.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    const topPosts = parsed.slice(0, 50).map(item => ({
+    
+    let finalPosts = parsed;
+    if (parsed.length === 0 && allItems.length > 0) {
+      for (const item of allItems) {
+        if (/zimbabwe|zw\b/i.test(item.text)) {
+          const dedupeKey = item.url || item.text.toLowerCase();
+          if (!seenKeys.has(dedupeKey)) {
+            seenKeys.add(dedupeKey);
+            finalPosts.push({
+              ...item,
+              hashtags: (item.hashtags || []).filter(isModelRelevantHashtag)
+            });
+          }
+        }
+      }
+    }
+    
+    if (finalPosts.length === 0) return null;
+    finalPosts.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    const topPosts = finalPosts.slice(0, 50).map(item => ({
       text: item.text.slice(0, 220),
       createdAt: item.createdAt,
       url: item.url,
       hashtags: item.hashtags || []
     }));
     return {
-      posts: parsed,
+      posts: finalPosts,
       xMeta: {
         configured,
         status: 'connected',
         transport: 'x_public_index',
-        postsSampled: parsed.length,
+        postsSampled: finalPosts.length,
         topPosts,
         updatedAt: new Date().toISOString(),
         refreshIntervalSeconds: X_PUBLIC_INDEX_CACHE_MS / 1000,
