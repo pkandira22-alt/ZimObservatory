@@ -103,6 +103,7 @@ const POLITICAL_TIME_SERIES = {
 let serverTimeSeriesObservations = [];
 let customTimeSeriesObservations = [];
 let timeSeriesChart = null;
+let timeSeriesChartMode = 'line';
 let timeSeriesCutoff = null;
 
 function getMergedTimeSeriesObservations() {
@@ -347,21 +348,42 @@ function renderPoliticalTimeSeries(resetCutoff = false) {
     grouped.get(key).set(observation.period, observation.value);
   }
 
+  const chartMode = document.getElementById('timeSeriesChartTypeSelect')?.value || 'line';
+  const isBar = chartMode === 'bar';
+  const isArea = chartMode === 'area';
+  const isStepped = chartMode === 'stepped';
+  const isPointsOnly = chartMode === 'scatter';
+
   const palette = [series.color, '#34D399', '#F472B6', '#60A5FA'];
   const datasets = [...grouped.entries()].map(([key, values], idx) => {
     const [metric, unit] = key.split('\u0000');
     const metricIndex = Object.keys(series.metrics).indexOf(metric);
     const color = palette[(metricIndex >= 0 ? metricIndex : idx) % palette.length];
+    const dataPoints = visiblePeriods.map(item => values.has(item.period) ? values.get(item.period) : null);
+    if (isBar) {
+      return {
+        label: `${series.metrics[metric] || metric} (${unit})`,
+        data: dataPoints,
+        borderColor: color,
+        backgroundColor: `${color}88`,
+        borderWidth: 1.5,
+        borderRadius: 3,
+        yAxisID: unitAxis.get(unit)
+      };
+    }
     return {
       label: `${series.metrics[metric] || metric} (${unit})`,
-      data: visiblePeriods.map(item => values.has(item.period) ? values.get(item.period) : null),
+      data: dataPoints,
       borderColor: color,
-      backgroundColor: `${color}22`,
+      backgroundColor: isArea ? `${color}30` : `${color}22`,
       pointBackgroundColor: color,
-      pointRadius: 3.5,
-      pointHoverRadius: 5.5,
+      pointRadius: isPointsOnly ? 5 : 3.5,
+      pointHoverRadius: isPointsOnly ? 7 : 5.5,
       borderWidth: 2,
-      tension: 0.2,
+      fill: isArea,
+      stepped: isStepped,
+      showLine: !isPointsOnly,
+      tension: isStepped ? 0 : 0.2,
       spanGaps: true,
       yAxisID: unitAxis.get(unit)
     };
@@ -385,24 +407,29 @@ function renderPoliticalTimeSeries(resetCutoff = false) {
 
   const canvas = document.getElementById('politicalTimeSeriesChart');
   if (canvas && typeof Chart !== 'undefined') {
+    const targetType = isBar ? 'bar' : 'line';
     const chartConfiguration = {
-      type: 'line',
+      type: targetType,
       data: { labels: visiblePeriods.map(item => item.period), datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: { intersect: false, mode: 'index' },
+        interaction: { intersect: isPointsOnly, mode: 'index' },
         plugins: {
           legend: { position: 'top', labels: { color: '#CBD5E1', boxWidth: 10, font: { size: 10 } } }
         },
         scales
       }
     };
-    if (timeSeriesChart) {
+    if (timeSeriesChart && timeSeriesChartMode === chartMode) {
       timeSeriesChart.data = chartConfiguration.data;
       timeSeriesChart.options = chartConfiguration.options;
       timeSeriesChart.update('none');
     } else {
+      if (timeSeriesChart) {
+        timeSeriesChart.destroy();
+      }
+      timeSeriesChartMode = chartMode;
       timeSeriesChart = new Chart(canvas.getContext('2d'), chartConfiguration);
     }
   }
@@ -579,6 +606,10 @@ async function initPoliticalEconomyTimeSeries() {
     timeSeriesCutoff = selected[Number(range.value)]?.[1] ?? null;
     renderPoliticalTimeSeries();
   });
+  const chartTypeSelect = document.getElementById('timeSeriesChartTypeSelect');
+  if (chartTypeSelect) {
+    chartTypeSelect.addEventListener('change', () => renderPoliticalTimeSeries(false));
+  }
   if (actionSelect) {
     actionSelect.addEventListener('change', () => handleTimeSeriesActionSelect(actionSelect));
   }

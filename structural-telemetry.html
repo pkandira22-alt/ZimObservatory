@@ -129,6 +129,20 @@
             border-radius: 8px;
             border: 1px solid var(--border-soft);
         }
+        .telemetry-select {
+            background: #070B14;
+            color: #e2e8f0;
+            border: 1px solid var(--border-panel);
+            border-radius: 6px;
+            padding: 5px 9px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .telemetry-select:focus {
+            outline: none;
+            border-color: #38bdf8;
+        }
     </style>
 </head>
 <body>
@@ -198,6 +212,25 @@
                     <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Security-parastatal footprint modulated by live ParlZim F_parl &amp; provincial coercion signals.</div>
                 </article>
             </div>
+            <div style="margin-top: 14px; background: #070B14; border: 1px solid var(--border-soft); border-radius: 8px; padding: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                    <div>
+                        <div style="font-size: 11px; font-weight: 700; color: #f8fafc; text-transform: uppercase; letter-spacing: 0.04em;">Provincial Structural Comparison (10 Provinces)</div>
+                        <div style="font-size: 10px; color: var(--text-muted);">Compare IEFR, RSR, and CLP indices across Zimbabwe's provinces</div>
+                    </div>
+                    <select id="structuralChartTypeSelect" class="telemetry-select" aria-label="Select provincial structural graph type">
+                        <option value="bar" selected>Graph: Grouped Bar</option>
+                        <option value="horizontalBar">Graph: Horizontal Bar</option>
+                        <option value="stackedBar">Graph: Stacked Bar</option>
+                        <option value="radar">Graph: Radar Profile</option>
+                        <option value="line">Graph: Line</option>
+                        <option value="area">Graph: Area</option>
+                    </select>
+                </div>
+                <div style="position: relative; height: 290px;">
+                    <canvas id="provincialTelemetryChart" role="img" aria-label="Provincial comparison of IEFR, RSR, and CLP structural telemetry"></canvas>
+                </div>
+            </div>
         </section>
 
         <!-- ZIMBABWE SPATIAL CONTEXT MAP MODULE -->
@@ -225,6 +258,7 @@
         </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         function escapeHtml(value) {
@@ -260,6 +294,8 @@
         let receivedLivePacket = false;
         let structuralMap = null;
         let provincialMarkersLayer = null;
+        let provincialChartInstance = null;
+        let lastProvincialList = [];
         const provincialMarkerById = new Map();
 
         function initZimbabweSpatialMap() {
@@ -327,6 +363,101 @@
             if (!Number.isFinite(Number(delta))) return "0.00";
             const n = Number(delta);
             return `${n >= 0 ? "+" : ""}${n.toFixed(2)}`;
+        }
+
+        function renderProvincialChart(provinces) {
+            if (Array.isArray(provinces) && provinces.length) {
+                lastProvincialList = provinces;
+            }
+            const list = Array.isArray(provinces) && provinces.length ? provinces : lastProvincialList;
+            const canvas = document.getElementById("provincialTelemetryChart");
+            if (!canvas || typeof Chart === "undefined" || !list.length) return;
+
+            const chartMode = document.getElementById("structuralChartTypeSelect")?.value || "bar";
+            if (provincialChartInstance) {
+                provincialChartInstance.destroy();
+                provincialChartInstance = null;
+            }
+
+            const labels = list.map(p => String(p.name || "").replace("Mashonaland ", "Mash. ").replace("Matabeleland ", "Mat. "));
+            const iefrData = list.map(p => Number(p.iefr || 0));
+            const rsrData = list.map(p => Number(p.rsr || 0));
+            const clpData = list.map(p => Number(p.clp || 0));
+
+            const isRadar = chartMode === "radar";
+            const isLine = chartMode === "line" || chartMode === "area";
+            const isArea = chartMode === "area";
+            const isHorizontal = chartMode === "horizontalBar";
+            const isStacked = chartMode === "stackedBar";
+
+            const defs = [
+                { label: "IEFR (Informal Extraction)", data: iefrData, color: "#f87171", barBg: "rgba(248, 113, 113, 0.72)", fillBg: "rgba(248, 113, 113, 0.18)" },
+                { label: "RSR (Resource Securitization)", data: rsrData, color: "#f59e0b", barBg: "rgba(245, 158, 11, 0.72)", fillBg: "rgba(245, 158, 11, 0.18)" },
+                { label: "CLP (Logistical Penetration)", data: clpData, color: "#38bdf8", barBg: "rgba(56, 189, 248, 0.72)", fillBg: "rgba(56, 189, 248, 0.18)" }
+            ];
+
+            const datasets = defs.map(d => {
+                if (isLine || isRadar) {
+                    return {
+                        label: d.label,
+                        data: d.data,
+                        borderColor: d.color,
+                        backgroundColor: (isArea || isRadar) ? d.fillBg : "transparent",
+                        pointBackgroundColor: d.color,
+                        borderWidth: 2,
+                        pointRadius: 3.5,
+                        fill: isArea || isRadar,
+                        tension: 0.25
+                    };
+                }
+                return {
+                    label: d.label,
+                    data: d.data,
+                    borderColor: d.color,
+                    backgroundColor: d.barBg,
+                    borderWidth: 1.5,
+                    borderRadius: 3
+                };
+            });
+
+            const scales = isRadar
+                ? {
+                    r: {
+                        beginAtZero: true,
+                        grid: { color: "rgba(51, 65, 85, 0.45)" },
+                        angleLines: { color: "rgba(51, 65, 85, 0.45)" },
+                        pointLabels: { color: "#cbd5e1", font: { size: 10 } },
+                        ticks: { color: "#94a3b8", backdropColor: "transparent", font: { size: 9 } }
+                    }
+                }
+                : {
+                    x: {
+                        stacked: isStacked,
+                        ticks: { color: "#94a3b8", font: { size: 10 }, maxRotation: isHorizontal ? 0 : 35, minRotation: 0 },
+                        grid: { color: "rgba(51, 65, 85, 0.35)" }
+                    },
+                    y: {
+                        stacked: isStacked,
+                        beginAtZero: true,
+                        ticks: { color: "#94a3b8", font: { size: 10 } },
+                        grid: { color: "rgba(51, 65, 85, 0.35)" }
+                    }
+                };
+
+            provincialChartInstance = new Chart(canvas.getContext("2d"), {
+                type: isRadar ? "radar" : (isLine ? "line" : "bar"),
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: isHorizontal ? "y" : "x",
+                    interaction: { intersect: false, mode: "index" },
+                    plugins: {
+                        legend: { position: "top", labels: { color: "#cbd5e1", boxWidth: 11, font: { size: 10 } } }
+                    },
+                    scales
+                }
+            });
         }
 
         function renderProvincialTelemetry(payload) {
@@ -466,6 +597,8 @@
                 });
             }
 
+            renderProvincialChart(provinces);
+
             updateForecastDisplay({
                 regimeDurability: s.basePhi,
                 updatedAt: payload.updatedAt,
@@ -581,6 +714,9 @@
 
         let provincialPollTimer = null;
         document.addEventListener("DOMContentLoaded", async () => {
+            document.getElementById("structuralChartTypeSelect")?.addEventListener("change", () => {
+                renderProvincialChart();
+            });
             initZimbabweSpatialMap();
             const ok = await fetchLiveProvincialTelemetry();
             initForecastStream();

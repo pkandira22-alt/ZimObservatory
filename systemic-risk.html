@@ -152,11 +152,23 @@
             <div class="lg:col-span-2 bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-lg flex flex-col">
                 <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
                     <h3 class="text-lg font-bold text-white">Longitudinal Risk &amp; Legislative Trajectory</h3>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <select id="srTimelineDataModeSelect" aria-label="Filter trajectory between live readings only and illustrative baseline" class="bg-slate-900 text-slate-200 text-xs font-medium border border-slate-700 rounded-md px-2.5 py-1 focus:outline-none focus:border-accent">
                             <option value="ALL" selected>All 30 Days (incl. Illustrative Baseline)</option>
                             <option value="LIVE">Live Readings Only</option>
                         </select>
+                        <select id="srChartTypeSelect" aria-label="Select trajectory graph type" class="bg-slate-900 text-slate-200 text-xs font-medium border border-slate-700 rounded-md px-2.5 py-1 focus:outline-none focus:border-accent">
+                            <option value="line" selected>Graph: Line</option>
+                            <option value="area">Graph: Area</option>
+                            <option value="stepped">Graph: Stepped Line</option>
+                            <option value="bar">Graph: Grouped Bar</option>
+                            <option value="scatter">Graph: Points Only</option>
+                            <option value="radar">Graph: Radar (Latest vs Mean)</option>
+                        </select>
+                        <label id="srConnectTrajectoryLabel" class="inline-flex items-center gap-1.5 bg-slate-900 text-slate-200 text-xs font-medium border border-slate-700 rounded-md px-2.5 py-1 cursor-pointer select-none hover:border-accent">
+                            <input id="srConnectTrajectoryToggle" type="checkbox" checked class="accent-blue-500 rounded cursor-pointer">
+                            <span>Connect Points</span>
+                        </label>
                         <span id="window-label" class="text-xs text-slate-400 font-mono">30-Day Rolling Window</span>
                     </div>
                 </div>
@@ -2393,24 +2405,136 @@
             const hansardData = timeline.map(item => Number.isFinite(item.hansard_friction) ? item.hansard_friction : null);
             const treasuryData = timeline.map(item => Number.isFinite(item.treasury_friction) ? item.treasury_friction : null);
 
+            const chartMode = document.getElementById('srChartTypeSelect')?.value || 'line';
+            const connectToggle = document.getElementById('srConnectTrajectoryToggle');
+            const connectLabel = document.getElementById('srConnectTrajectoryLabel');
+            const connectPoints = connectToggle?.checked ?? true;
+            const supportsConnect = chartMode === 'line' || chartMode === 'area' || chartMode === 'stepped';
+            if (connectToggle) connectToggle.disabled = !supportsConnect;
+            if (connectLabel) {
+                connectLabel.style.opacity = supportsConnect ? '1' : '0.45';
+                connectLabel.style.cursor = supportsConnect ? 'pointer' : 'not-allowed';
+            }
+
             const ctx = document.getElementById('timelineChart').getContext('2d');
             if (myChart) myChart.destroy();
 
+            if (chartMode === 'radar') {
+                const latestValid = arr => {
+                    for (let i = arr.length - 1; i >= 0; i--) {
+                        if (Number.isFinite(arr[i])) return arr[i];
+                    }
+                    return 0;
+                };
+                const meanValid = arr => {
+                    const nums = arr.filter(Number.isFinite);
+                    return nums.length ? Number((nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1)) : 0;
+                };
+                const latestItem = [...timeline].reverse().find(item =>
+                    Number.isFinite(item.phi) || Number.isFinite(item.fsi) || Number.isFinite(item.markov_crisis_prob)
+                );
+                const latestDate = latestItem?.date || 'Latest';
+
+                myChart = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: [
+                            'Regime Durability (Φ)',
+                            'Fragility State (FSI)',
+                            'Markov Crisis (%)',
+                            'Hansard Friction (Fparl)',
+                            'Treasury Risk (Ftreas)'
+                        ],
+                        datasets: [
+                            {
+                                label: `Latest Reading (${latestDate})`,
+                                data: [latestValid(phiData), latestValid(fsiData), latestValid(markovData), latestValid(hansardData), latestValid(treasuryData)],
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.22)',
+                                pointBackgroundColor: '#3b82f6',
+                                borderWidth: 2.5,
+                                pointRadius: 4
+                            },
+                            {
+                                label: 'Window Mean',
+                                data: [meanValid(phiData), meanValid(fsiData), meanValid(markovData), meanValid(hansardData), meanValid(treasuryData)],
+                                borderColor: '#f59e0b',
+                                backgroundColor: 'rgba(245, 158, 11, 0.14)',
+                                pointBackgroundColor: '#f59e0b',
+                                borderWidth: 2,
+                                borderDash: [4, 4],
+                                pointRadius: 3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                        scales: {
+                            r: {
+                                min: 0,
+                                max: 100,
+                                grid: { color: 'rgba(51, 65, 85, 0.45)' },
+                                angleLines: { color: 'rgba(51, 65, 85, 0.45)' },
+                                pointLabels: { color: '#cbd5e1', font: { size: 11 } },
+                                ticks: { color: '#94a3b8', backdropColor: 'transparent', stepSize: 20 }
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+            const isBar = chartMode === 'bar';
+            const isArea = chartMode === 'area';
+            const isStepped = chartMode === 'stepped';
+            const isPointsOnly = chartMode === 'scatter';
+
+            const seriesDefs = [
+                { label: 'Regime Durability (Φ)', data: phiData, color: '#3b82f6', fillBg: 'rgba(59, 130, 246, 0.18)', barBg: 'rgba(59, 130, 246, 0.65)', defaultFill: true, borderWidth: 2.5, pointRadius: 2.5, borderDash: [] },
+                { label: 'Fragility State Index (FSI)', data: fsiData, color: '#f59e0b', fillBg: 'rgba(245, 158, 11, 0.16)', barBg: 'rgba(245, 158, 11, 0.65)', defaultFill: false, borderWidth: 2, pointRadius: 2, borderDash: [5, 5] },
+                { label: 'Markov Crisis Prob (%)', data: markovData, color: '#ef4444', fillBg: 'rgba(239, 68, 68, 0.16)', barBg: 'rgba(239, 68, 68, 0.65)', defaultFill: false, borderWidth: 2, pointRadius: 2, borderDash: [] },
+                { label: 'Hansard Friction (Fparl)', data: hansardData, color: '#10b981', fillBg: 'rgba(16, 185, 129, 0.16)', barBg: 'rgba(16, 185, 129, 0.65)', defaultFill: false, borderWidth: 2, pointRadius: 3, borderDash: [] },
+                { label: 'Treasury Fiscal Risk (Ftreas)', data: treasuryData, color: '#d4af37', fillBg: 'rgba(212, 175, 55, 0.16)', barBg: 'rgba(212, 175, 55, 0.65)', defaultFill: false, borderWidth: 2, pointRadius: 3, borderDash: [3, 3] }
+            ];
+
+            const datasets = seriesDefs.map(s => {
+                if (isBar) {
+                    return {
+                        label: s.label,
+                        data: s.data,
+                        borderColor: s.color,
+                        backgroundColor: s.barBg,
+                        borderWidth: 1.5,
+                        borderRadius: 3
+                    };
+                }
+                return {
+                    label: s.label,
+                    data: s.data,
+                    borderColor: s.color,
+                    backgroundColor: isArea ? s.fillBg : (s.defaultFill && !isPointsOnly ? 'rgba(59, 130, 246, 0.08)' : 'transparent'),
+                    pointBackgroundColor: s.color,
+                    borderWidth: s.borderWidth,
+                    pointRadius: isPointsOnly ? 4.5 : s.pointRadius,
+                    pointHoverRadius: isPointsOnly ? 6.5 : 5,
+                    borderDash: isStepped || isPointsOnly ? [] : s.borderDash,
+                    fill: isArea ? true : (s.defaultFill && !isPointsOnly),
+                    stepped: isStepped,
+                    showLine: !isPointsOnly,
+                    tension: isStepped ? 0 : 0.3,
+                    spanGaps: connectPoints
+                };
+            });
+
             myChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'Regime Durability (Φ)', data: phiData, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.08)', borderWidth: 2.5, pointRadius: 2.5, pointHoverRadius: 5, fill: true, tension: 0.3 },
-                        { label: 'Fragility State Index (FSI)', data: fsiData, borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2, pointHoverRadius: 4.5, borderDash: [5, 5], tension: 0.3, spanGaps: false },
-                        { label: 'Markov Crisis Prob (%)', data: markovData, borderColor: '#ef4444', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2, pointHoverRadius: 4.5, tension: 0.3 },
-                        { label: 'Hansard Friction (Fparl)', data: hansardData, borderColor: '#10b981', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, tension: 0.3, spanGaps: false },
-                        { label: 'Treasury Fiscal Risk (Ftreas)', data: treasuryData, borderColor: '#d4af37', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, borderDash: [3, 3], tension: 0.3, spanGaps: false }
-                    ]
-                },
+                type: isBar ? 'bar' : 'line',
+                data: { labels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { intersect: isPointsOnly, mode: 'index' },
                     plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
                     scales: {
                         x: {
@@ -2424,6 +2548,8 @@
         }
 
         document.getElementById('srTimelineDataModeSelect')?.addEventListener('change', renderFilteredSystemicTimeline);
+        document.getElementById('srChartTypeSelect')?.addEventListener('change', renderFilteredSystemicTimeline);
+        document.getElementById('srConnectTrajectoryToggle')?.addEventListener('change', renderFilteredSystemicTimeline);
         document.getElementById('refreshFeedBtn').addEventListener('click', fetchTimelineData);
         window.addEventListener('load', fetchTimelineData);
     </script>
