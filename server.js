@@ -7095,6 +7095,16 @@ app.get('/api/audit/records', async (req, res) => {
       }
     );
 
+    // 4. Depth Telemetry records (mineral divergence, ZimLAC livelihoods, parliamentary bill friction)
+    const depthSnap = getDepthTelemetrySnapshot();
+    const seenIds = new Set(inputs.map(r => r.id));
+    for (const drec of (depthSnap.depth_records || [])) {
+      if (!seenIds.has(drec.id)) {
+        seenIds.add(drec.id);
+        inputs.push(drec);
+      }
+    }
+
     const partitioned = auditAndPartitionRecords(inputs);
     res.json({
       available: true,
@@ -7110,6 +7120,306 @@ app.get('/api/audit/records', async (req, res) => {
   } catch (err) {
     console.warn('Error building audited telemetry report:', err.message);
     res.status(500).json({ error: 'Could not build audited telemetry report.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DEPTH & STOCHASTIC TELEMETRY ENGINE (mirrors depth_telemetry_pipeline.py)
+// ---------------------------------------------------------------------------
+function depthSampleStd(values) {
+  const clean = (Array.isArray(values) ? values : [])
+    .filter(v => typeof v === 'number' && Number.isFinite(v));
+  if (clean.length < 2) return null;
+  const mean = clean.reduce((a, b) => a + b, 0) / clean.length;
+  const variance = clean.reduce((sum, x) => sum + ((x - mean) ** 2), 0) / (clean.length - 1);
+  return Number(Math.sqrt(variance).toFixed(4));
+}
+
+function depthRegimeBucket(smoothedVal, volatility) {
+  if (smoothedVal === null || smoothedVal === undefined || !Number.isFinite(Number(smoothedVal))) {
+    return 'Unclassified / Stale';
+  }
+  const s = Number(smoothedVal);
+  const vol = Number.isFinite(Number(volatility)) ? Number(volatility) : 0.0;
+  if (s >= 70.0 || (s >= 55.0 && vol >= 12.0)) return 'Acute Stress';
+  if (s >= 40.0 || vol >= 6.0) return 'Elevated Friction';
+  return 'Contained';
+}
+
+function buildVerifiedDepthBaselineRecords() {
+  const nowIso = new Date().toISOString();
+  const pdfUrl = ZIMSTAT_IMP_PDF_URL;
+  const zimlacUrl = 'https://www.fnc.org.zw/wp-content/uploads/2026/01/Masvingo-ZimLAC-2025-Rural-Livelihoods-Assessment-Factsheet.pdf';
+  const veritasUrl = 'https://www.veritaszim.net/node/8059';
+
+  const raw = [
+    {
+      id: 'zimstat-imp-overall-q1-2026',
+      label: 'ZIMSTAT Index of Mineral Production (Overall)',
+      domain: 'extraction',
+      value: 134.9,
+      unit: 'index_2019_100',
+      period: 'Q1 2026',
+      qoq_pct: -33.2,
+      yoy_pct: -5.3,
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
+      source_url: pdfUrl,
+      notes: 'Down 33.2% QoQ from 201.8 in Q4 2025 and down 5.3% YoY from 142.4 in Q1 2025.',
+      updated_at: nowIso,
+    },
+    {
+      id: 'zimstat-gold-q1-2026',
+      label: 'Gold Output (National)',
+      domain: 'extraction',
+      value: 9894,
+      unit: 'kg',
+      period: 'Q1 2026',
+      index_val: 142.1,
+      qoq_pct: -32.8,
+      yoy_pct: 10.2,
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
+      source_url: pdfUrl,
+      notes: 'Output fell from 14,731 kg in Q4 2025 (-32.8% index QoQ), while YoY index rose +10.2% vs Q1 2025.',
+      updated_at: nowIso,
+    },
+    {
+      id: 'zimstat-platinum-q1-2026',
+      label: 'Platinum Output (Great Dyke / National)',
+      domain: 'extraction',
+      value: 3807,
+      unit: 'kg',
+      period: 'Q1 2026',
+      index_val: 111.4,
+      qoq_pct: 2.5,
+      yoy_pct: -8.9,
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
+      source_url: pdfUrl,
+      notes: 'Q1 2026 output at 3,807 kg vs 3,716 kg in Q4 2025 (+2.5% index QoQ; -8.9% YoY vs Q1 2025).',
+      updated_at: nowIso,
+    },
+    {
+      id: 'zimstat-diamond-q1-2026',
+      label: 'Diamond Production Index',
+      domain: 'extraction',
+      value: 95.1,
+      unit: 'index_2019_100',
+      period: 'Q1 2026',
+      qoq_pct: -23.9,
+      yoy_pct: -43.9,
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
+      source_url: pdfUrl,
+      notes: 'Down 23.9% QoQ from 124.9 in Q4 2025 and down 43.9% YoY from 169.6 in Q1 2025.',
+      updated_at: nowIso,
+    },
+    {
+      id: 'zimstat-nickel-q1-2026',
+      label: 'Nickel Output',
+      domain: 'extraction',
+      value: 1486,
+      unit: 'metric tons',
+      period: 'Q1 2026',
+      index_val: 33.6,
+      qoq_pct: -63.8,
+      yoy_pct: -52.0,
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
+      source_url: pdfUrl,
+      notes: 'Dropped from 4,100 mt in Q4 2025 to 1,486 mt in Q1 2026 (-63.8% QoQ; -52.0% YoY).',
+      updated_at: nowIso,
+    },
+    {
+      id: 'gutu-north-spatial-context',
+      label: 'Gutu North, Masvingo — Spatial & Livelihood Context',
+      domain: 'spatial',
+      value: null,
+      unit: null,
+      period: '2025–2026',
+      lat: -19.43,
+      lon: 31.18,
+      lineage: 'Proxy / Estimate',
+      status: 'no_reported_quantity',
+      source_title: 'ZimLAC 2025 Masvingo Province Factsheet (FNC)',
+      source_url: zimlacUrl,
+      notes: 'No site-level mineral extraction quantity reported for Gutu North. Masvingo provincial projected cereal insecurity (Jan–Mar 2026): 15% (vs Zaka 35%, Mwenezi 25%); Gutu April 2025 avg monthly household income: USD 222 (vs Bikita USD 68); provincial income anchors: casual labour 48%, domestic remittances 29%, crop production 21%.',
+      updated_at: nowIso,
+    },
+    {
+      id: 'zimlac-masvingo-cereal-insecurity-2026',
+      label: 'Masvingo Projected Cereal Insecurity (Jan–Mar 2026)',
+      domain: 'livelihoods',
+      value: 15.0,
+      unit: 'pct',
+      period: 'Jan–Mar 2026',
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'ZimLAC 2025 Masvingo Province Factsheet (FNC)',
+      source_url: zimlacUrl,
+      notes: 'Provincial average masks higher projected district shares in Zaka (35%) and Mwenezi (25%).',
+      updated_at: nowIso,
+    },
+    {
+      id: 'zimlac-gutu-avg-income-2025',
+      label: 'Gutu District Avg Monthly Household Income (Apr 2025)',
+      domain: 'livelihoods',
+      value: 222.0,
+      unit: 'usd',
+      period: 'Apr 2025',
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'ZimLAC 2025 Masvingo Province Factsheet (FNC)',
+      source_url: zimlacUrl,
+      notes: 'Highest among surveyed Masvingo districts in April 2025 (compared to USD 68 in Bikita).',
+      updated_at: nowIso,
+    },
+    {
+      id: 'bill-hb1-2025-mines-minerals',
+      label: 'Legislative Stage Friction — Mines and Minerals Bill (H.B. 1, 2025)',
+      domain: 'governance',
+      value: 72.0,
+      unit: 'score_0_100',
+      period: 'Aug–Nov 2026',
+      lineage: 'Conceptual / Analytical Bucket',
+      status: 'cached',
+      source_title: 'Parliamentary Bill Status Tracker (Veritas / Parliament)',
+      source_url: veritasUrl,
+      notes: 'National Assembly considering adverse report from Parliamentary Legal Committee (PLC).',
+      updated_at: nowIso,
+    },
+    {
+      id: 'bill-hb5a-2025-climate-change',
+      label: 'Legislative Stage Friction — Climate Change Management Bill (H.B. 5A, 2025)',
+      domain: 'governance',
+      value: 35.0,
+      unit: 'score_0_100',
+      period: 'Aug–Nov 2026',
+      lineage: 'Conceptual / Analytical Bucket',
+      status: 'cached',
+      source_title: 'Parliamentary Bill Status Tracker (Veritas / Parliament)',
+      source_url: veritasUrl,
+      notes: 'Passed final reading in the Senate; lower residual stage friction than PLC-stalled bills.',
+      updated_at: nowIso,
+    },
+    {
+      id: 'bill-hb5-2026-ema-amendment',
+      label: 'Legislative Stage Friction — Environmental Management Amendment Bill (H.B. 5, 2026)',
+      domain: 'governance',
+      value: 45.0,
+      unit: 'score_0_100',
+      period: 'Aug–Nov 2026',
+      lineage: 'Conceptual / Analytical Bucket',
+      status: 'cached',
+      source_title: 'Parliamentary Bill Status Tracker (Veritas / Parliament)',
+      source_url: veritasUrl,
+      notes: 'Bill proofs sent to Attorney-General\'s Office; awaiting final enactment steps.',
+      updated_at: nowIso,
+    },
+  ];
+
+  return raw.map(item => ({
+    ...item,
+    explanation: explainAuditedRecord(item),
+  }));
+}
+
+function getDepthTelemetrySnapshot() {
+  const nowIso = new Date().toISOString();
+  let depthRecords = buildVerifiedDepthBaselineRecords();
+  let stochasticStreams = null;
+  let updatedAt = nowIso;
+  let source = 'verified_baseline';
+
+  try {
+    const cachePath = path.join(__dirname, 'telemetry_cache.json');
+    if (existsSync(cachePath)) {
+      const cache = JSON.parse(readFileSync(cachePath, 'utf-8'));
+      if (Array.isArray(cache.depth_records) && cache.depth_records.length > 0) {
+        depthRecords = cache.depth_records;
+        source = 'cache_synced';
+      }
+      if (cache.stochastic_streams && typeof cache.stochastic_streams === 'object') {
+        stochasticStreams = cache.stochastic_streams;
+      }
+      if (cache.depth_updated_at) {
+        updatedAt = cache.depth_updated_at;
+      }
+    }
+  } catch (err) {
+    console.warn(`[DEPTH] Could not read telemetry_cache.json, using verified baseline: ${err.message}`);
+  }
+
+  const mergedStreams = (stochasticStreams && typeof stochasticStreams === 'object')
+    ? { ...stochasticStreams }
+    : {};
+
+  if (!mergedStreams.mineral_qoq_dispersion || !mergedStreams.legislative_plc_friction) {
+    const minerals = depthRecords.filter(r => r.domain === 'extraction' && Number.isFinite(Number(r.qoq_pct)));
+    const qoqMagnitudes = minerals.map(m => Math.abs(Number(m.qoq_pct)));
+    const avgQoq = qoqMagnitudes.length
+      ? Number((qoqMagnitudes.reduce((a, b) => a + b, 0) / qoqMagnitudes.length).toFixed(2))
+      : null;
+    const bills = depthRecords.filter(r => r.domain === 'governance' && Number.isFinite(Number(r.value)));
+    const maxBill = bills.length ? Math.max(...bills.map(b => Number(b.value))) : null;
+
+    if (!mergedStreams.mineral_qoq_dispersion) {
+      const vol = depthSampleStd(qoqMagnitudes);
+      mergedStreams.mineral_qoq_dispersion = {
+        latest_raw: avgQoq,
+        history: avgQoq !== null ? [avgQoq] : [],
+        smoothed_value: avgQoq,
+        smoothed_history: avgQoq !== null ? [avgQoq] : [],
+        volatility_std_10: vol,
+        regime: depthRegimeBucket(avgQoq, vol),
+        lineage_smoothed: 'Proxy / Estimate',
+        lineage_regime: 'Conceptual / Analytical Bucket',
+        status: avgQoq !== null ? 'online' : 'stale_or_offline',
+        updated_at: updatedAt,
+      };
+    }
+    if (!mergedStreams.legislative_plc_friction) {
+      const vol = depthSampleStd(bills.map(b => Number(b.value)));
+      mergedStreams.legislative_plc_friction = {
+        latest_raw: maxBill,
+        history: maxBill !== null ? [maxBill] : [],
+        smoothed_value: maxBill,
+        smoothed_history: maxBill !== null ? [maxBill] : [],
+        volatility_std_10: vol,
+        regime: depthRegimeBucket(maxBill, vol),
+        lineage_smoothed: 'Proxy / Estimate',
+        lineage_regime: 'Conceptual / Analytical Bucket',
+        status: maxBill !== null ? 'online' : 'stale_or_offline',
+        updated_at: updatedAt,
+      };
+    }
+  }
+
+  return {
+    available: true,
+    source,
+    updatedAt,
+    depth_records: depthRecords,
+    minerals: depthRecords.filter(r => r.domain === 'extraction'),
+    livelihoods: depthRecords.filter(r => r.domain === 'livelihoods' || r.domain === 'spatial'),
+    legislative: depthRecords.filter(r => r.domain === 'governance'),
+    stochastic_streams: mergedStreams,
+    audited: auditAndPartitionRecords(depthRecords),
+  };
+}
+
+app.get('/api/depth-telemetry', (req, res) => {
+  try {
+    res.json(getDepthTelemetrySnapshot());
+  } catch (err) {
+    console.warn('Error serving depth telemetry:', err.message);
+    res.status(500).json({ error: 'Could not load depth telemetry.' });
   }
 });
 
