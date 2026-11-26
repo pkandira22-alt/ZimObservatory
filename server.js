@@ -4,7 +4,7 @@ import dns from 'node:dns';
 import { tmpdir } from 'node:os';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'url';
 import { execFile } from 'node:child_process';
 import multer from 'multer';
@@ -6443,28 +6443,36 @@ app.get('/api/zimstat/spatial-telemetry', (req, res) => {
   }
 });
 
+let zimstatSyncInFlight = false;
+let lastZimstatSyncAtMs = 0;
+const ZIMSTAT_SYNC_COOLDOWN_MS = 60 * 1000;
+
 app.post('/api/zimstat/sync', (req, res) => {
-  const expectedToken = String(process.env.ZIMSTAT_SYNC_TOKEN || '').trim();
-  if (!expectedToken) {
-    return res.status(503).json({ error: 'ZIMSTAT sync token is not configured on the server.' });
+  if (zimstatSyncInFlight) {
+    return res.status(429).json({ status: 'busy', message: 'ZIMSTAT telemetry sync is already in progress.' });
   }
-  const authHeader = String(req.get('authorization') || '');
-  const expectedHeader = `Bearer ${expectedToken}`;
-  const providedBuf = Buffer.from(authHeader, 'utf8');
-  const expectedBuf = Buffer.from(expectedHeader, 'utf8');
-  if (providedBuf.length !== expectedBuf.length || !timingSafeEqual(providedBuf, expectedBuf)) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  const now = Date.now();
+  if (lastZimstatSyncAtMs && (now - lastZimstatSyncAtMs) < ZIMSTAT_SYNC_COOLDOWN_MS) {
+    const retryAfterSec = Math.ceil((ZIMSTAT_SYNC_COOLDOWN_MS - (now - lastZimstatSyncAtMs)) / 1000);
+    return res.status(429).json({
+      status: 'cooldown',
+      message: `ZIMSTAT telemetry was synced recently. Retry in ${retryAfterSec}s.`,
+      retryAfterSec
+    });
   }
 
+  zimstatSyncInFlight = true;
   execFile(
     'python3',
     ['zimstat_telemetry.py'],
     { cwd: __dirname, encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024 },
     (err, stdout) => {
+      zimstatSyncInFlight = false;
       if (err) {
         console.error('ZIMSTAT sync error:', err.message);
         return res.status(500).json({ error: 'ZIMSTAT sync failed.' });
       }
+      lastZimstatSyncAtMs = Date.now();
       loadInitialExtractionReports();
       return res.json({
         status: 'ok',
