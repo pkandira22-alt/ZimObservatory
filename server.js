@@ -183,6 +183,24 @@ function getXBearerToken() {
   return null;
 }
 
+function getRedditApiKey() {
+  const keyNames = ['REDDIT_API_KEY', 'REDDITAPIS_KEY', 'REDDIT_API_TOKEN'];
+  for (const name of keyNames) {
+    const procKey = normalizeBearerToken(process.env[name]);
+    if (procKey && !isPlaceholderKey(procKey)) {
+      return procKey;
+    }
+  }
+  const envFile = loadEnvFile();
+  for (const name of keyNames) {
+    const fileKey = normalizeBearerToken(envFile[name]);
+    if (fileKey && !isPlaceholderKey(fileKey)) {
+      return fileKey;
+    }
+  }
+  return null;
+}
+
 const GEMINI_MODEL = 'gemini-3.8-flash';
 const MAX_GEMINI_CHAT_REQUESTS = 10;
 const GEMINI_CHAT_WINDOW_MS = 10 * 60 * 1000;
@@ -725,7 +743,7 @@ const YOUTUBE_PUBLIC_FEEDS_CACHE_MS = 15 * 60 * 1000;
 let lastYouTubeForceRefreshAt = 0;
 const SOCIAL_SOURCE_CACHE_MS = {
   default: 60 * 1000,
-  reddit: 15 * 60 * 1000,
+  reddit: 30 * 60 * 1000,
   x: 30 * 60 * 1000,
   youtube: 30 * 60 * 1000
 };
@@ -1126,8 +1144,13 @@ function formatSocialFeedHttpError(feed, statusCode, rawBody = '') {
     }
     return `X API v2 error (HTTP ${statusCode})${suffix}.`;
   }
-  if (feed.type === 'reddit' && (statusCode === 403 || statusCode === 429)) {
-    return `Reddit blocked or rate-limited automated fetch from this host (HTTP ${statusCode}).`;
+  if (feed.type === 'reddit') {
+    if (statusCode === 401 || statusCode === 402) {
+      return `Reddit API authentication or quota error (HTTP ${statusCode}); verify REDDIT_API_KEY.`;
+    }
+    if (statusCode === 403 || statusCode === 429) {
+      return `Reddit blocked or rate-limited automated fetch from this host (HTTP ${statusCode}).`;
+    }
   }
   if (feed.type === 'youtube') {
     let reason = '';
@@ -1194,6 +1217,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
   try {
     const youtubeKey = feed.type === "youtube" ? getYouTubeApiKey() : null;
     const xToken = feed.type === "x" ? getXBearerToken() : null;
+    const redditApiKey = feed.type === "reddit" ? getRedditApiKey() : null;
 
     // Zero-quota public Zimbabwe channel Atom feeds when YOUTUBE_API_KEY is not set
     if (feed.type === "youtube" && !youtubeKey) {
@@ -1241,6 +1265,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
     const posts = [];
     let youtubeMeta = null;
     let xMeta = null;
+    let redditMeta = null;
 
     if (feed.type === 'x') {
       const xHeaders = {
@@ -1513,6 +1538,87 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
         refreshIntervalSeconds: cacheTtl / 1000,
         message: null
       };
+    } else if (feed.type === 'reddit' && redditApiKey) {
+      const redditHeaders = {
+        Accept: 'application/json',
+        Authorization: `Bearer ${redditApiKey}`,
+        'User-Agent': 'KUVHURA-Observatory/1.0'
+      };
+      const endpoints = [
+        'https://api.redditapis.com/api/reddit/posts?subreddit=Zimbabwe&limit=50&sort=new',
+        'https://api.redditapis.com/api/reddit/search?q=Zimbabwe&limit=25&sort=new'
+      ];
+      let lastStatus = null;
+      let lastErrorMessage = null;
+      let succeededEndpoints = 0;
+
+      const batches = await Promise.all(
+        endpoints.map(async endpoint => {
+          try {
+            const res = await fetch(endpoint, { signal: controller.signal, headers: redditHeaders });
+            const rawText = await res.text();
+            if (!res.ok) {
+              lastStatus = res.status;
+              lastErrorMessage = formatSocialFeedHttpError(feed, res.status, rawText);
+              return [];
+            }
+            succeededEndpoints += 1;
+            const parsed = JSON.parse(rawText);
+            return Array.isArray(parsed?.posts) ? parsed.posts : [];
+          } catch (err) {
+            if (!lastErrorMessage) lastErrorMessage = err.message;
+            return [];
+          }
+        })
+      );
+
+      if (succeededEndpoints === 0) {
+        const err = new Error(lastErrorMessage || (lastStatus ? `Status ${lastStatus}` : 'Upstream feed unavailable'));
+        err.httpStatus = lastStatus;
+        throw err;
+      }
+
+      const seenRedditIds = new Set();
+      for (const batch of batches) {
+        for (const item of batch) {
+          if (!item) continue;
+          const dedupeKey = String(item.id || item.permalink || item.url || '').trim();
+          if (dedupeKey && seenRedditIds.has(dedupeKey)) continue;
+          const rawTitle = String(item.title || '');
+          const rawBody = String(item.text || item.selftext || item.body || '');
+          const flair = String(item.link_flair_text || '');
+          const text = decodeXmlEntities(`${rawTitle} ${rawBody}`).replace(/\s+/g, ' ').trim();
+          if (!isModelRelevantSocialItem(text, flair)) continue;
+          if (dedupeKey) seenRedditIds.add(dedupeKey);
+          const createdAt = item.created
+            ? String(item.created)
+            : (item.created_utc ? new Date(Number(item.created_utc) * 1000).toISOString() : '');
+          const rawUrl = item.permalink
+            ? `https://www.reddit.com${item.permalink}`
+            : String(item.url || '');
+          posts.push({
+            text,
+            createdAt,
+            url: rawUrl,
+            platform: feed.platform,
+            subreddit: String(item.subreddit || 'Zimbabwe'),
+            author: String(item.author || ''),
+            upvotes: parseNonNegativeInt(item.upvotes ?? item.score ?? 0),
+            comments: parseNonNegativeInt(item.comments ?? item.num_comments ?? 0)
+          });
+        }
+      }
+
+      posts.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+      redditMeta = {
+        configured: true,
+        status: 'connected',
+        transport: 'redditapis_v1',
+        postsSampled: posts.length,
+        updatedAt: new Date().toISOString(),
+        refreshIntervalSeconds: cacheTtl / 1000,
+        message: null
+      };
     } else {
       const candidateUrls = [feed.url, ...(Array.isArray(feed.fallbackUrls) ? feed.fallbackUrls : [])];
       const headers = {
@@ -1606,6 +1712,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       posts,
       ...(youtubeMeta ? { youtubeMeta } : {}),
       ...(xMeta ? { xMeta } : {}),
+      ...(redditMeta ? { redditMeta } : {}),
       updatedAt: new Date().toISOString(),
       refreshIntervalSeconds: cacheTtl / 1000
     };
@@ -1787,6 +1894,7 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
     refreshIntervalSeconds: result.refreshIntervalSeconds,
     ...(result.youtubeMeta?.transport ? { transport: result.youtubeMeta.transport } : {}),
     ...(result.xMeta?.transport ? { transport: result.xMeta.transport } : {}),
+    ...(result.redditMeta?.transport ? { transport: result.redditMeta.transport } : {}),
     ...(result.failed || result.stale ? { message: result.error } : {})
   }));
 

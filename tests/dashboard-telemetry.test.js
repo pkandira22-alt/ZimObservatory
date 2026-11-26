@@ -378,6 +378,20 @@ test('getXBearerToken normalizes quotes and Bearer prefix and supports env alias
   assert.equal(runWithEnv({ TWITTER_BEARER_TOKEN: 'BBBB_alias_token' }), 'BBBB_alias_token');
   assert.equal(runWithEnv({}, { X_BEARER_TOKEN: 'CCCC_file_token' }), 'CCCC_file_token');
   assert.equal(runWithEnv({ X_BEARER_TOKEN: 'your_x_token' }), null);
+
+  const runReddit = (env, envFile = {}) => runInNewContext(
+    `${code}; getRedditApiKey()`,
+    {
+      process: { env },
+      loadEnvFile: () => envFile,
+      isPlaceholderKey: v => !v || /^your_/i.test(v),
+      String
+    }
+  );
+  assert.equal(runReddit({ REDDIT_API_KEY: 'Bearer reddit-api-demo123' }), 'reddit-api-demo123');
+  assert.equal(runReddit({ REDDITAPIS_KEY: '"reddit-api-demo456"' }), 'reddit-api-demo456');
+  assert.equal(runReddit({}, { REDDIT_API_KEY: 'reddit-api-file789' }), 'reddit-api-file789');
+  assert.equal(runReddit({ REDDIT_API_KEY: 'your_reddit_key' }), null);
 });
 
 
