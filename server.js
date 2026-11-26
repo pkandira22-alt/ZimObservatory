@@ -404,7 +404,10 @@ let attachmentUploadActive = false;
 
 const extractionSites = new Map([
   ['great-dyke', 'Great Dyke corridor near Kwekwe, Midlands'],
-  ['marange', 'Marange / Chiadzwa area, Manicaland']
+  ['great_dyke', 'Great Dyke Corridor'],
+  ['midlands_gold', 'Midlands / Gold Corridors'],
+  ['marange', 'Marange / Chiadzwa area, Manicaland'],
+  ['gutu_north', 'Gutu North, Masvingo']
 ]);
 const extractionReports = [];
 const extractionClients = new Set();
@@ -414,6 +417,57 @@ function broadcastExtractionReport(report) {
   const message = `event: report\ndata: ${JSON.stringify(report)}\n\n`;
   for (const client of extractionClients) {
     client.write(message);
+  }
+}
+
+function convertZimstatReportToExtraction(zimstatReport) {
+  if (!zimstatReport) return null;
+  return {
+    id: zimstatReport.id || `zimstat-${zimstatReport.location_key}-${Date.now()}`,
+    siteId: zimstatReport.location_key,
+    site: zimstatReport.location_name,
+    location: zimstatReport.location || zimstatReport.location_name,
+    resource: zimstatReport.commodity,
+    quantity: zimstatReport.quantity,
+    unit: zimstatReport.unit,
+    period: zimstatReport.period,
+    source: zimstatReport.source_title || 'ZIMSTAT',
+    sourceUrl: zimstatReport.source_url || 'https://www.zimstat.co.zw/',
+    source_title: zimstatReport.source_title || 'ZIMSTAT',
+    source_url: zimstatReport.source_url || 'https://www.zimstat.co.zw/',
+    commodity: zimstatReport.commodity,
+    reportedAt: zimstatReport.updated_at || new Date().toISOString(),
+    receivedAt: zimstatReport.updated_at || new Date().toISOString(),
+    updated_at: zimstatReport.updated_at || new Date().toISOString(),
+    lat: zimstatReport.lat,
+    lon: zimstatReport.lon
+  };
+}
+
+function loadInitialExtractionReports() {
+  try {
+    const cachePath = path.join(__dirname, 'telemetry_cache.json');
+    if (!existsSync(cachePath)) {
+      console.log('[EXTRACTION] No telemetry cache found');
+      return;
+    }
+    const cache = JSON.parse(readFileSync(cachePath, 'utf-8'));
+    if (!cache.extraction_reports || !Array.isArray(cache.extraction_reports)) {
+      console.log('[EXTRACTION] No extraction reports in cache');
+      return;
+    }
+    
+    for (const zimstatReport of cache.extraction_reports) {
+      const converted = convertZimstatReportToExtraction(zimstatReport);
+      if (converted && !extractionReports.some(r => r.id === converted.id)) {
+        extractionReports.unshift(converted);
+      }
+    }
+    
+    extractionReports.length = Math.min(extractionReports.length, MAX_EXTRACTION_REPORTS);
+    console.log(`[EXTRACTION] Loaded ${extractionReports.length} reports from ZIMSTAT cache`);
+  } catch (err) {
+    console.warn(`[EXTRACTION] Failed to load initial reports: ${err.message}`);
   }
 }
 
@@ -6990,6 +7044,7 @@ if (process.argv.includes('--update-treasury-cache')) {
   if (initialTreasuryCache) {
     latestTreasuryStatus = { ...initialTreasuryCache };
   }
+  loadInitialExtractionReports();
   server.listen(PORT, HOST, () => {
     console.log(`KUVHURA Observatory running on http://${HOST}:${PORT}`);
     setTimeout(() => {
