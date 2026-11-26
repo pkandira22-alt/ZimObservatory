@@ -4,9 +4,9 @@ import dns from 'node:dns';
 import { tmpdir } from 'node:os';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'url';
-import { execSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -6444,31 +6444,35 @@ app.get('/api/zimstat/spatial-telemetry', (req, res) => {
 });
 
 app.post('/api/zimstat/sync', (req, res) => {
-  const token = req.get('authorization');
-  const expectedToken = process.env.ZIMSTAT_SYNC_TOKEN || 'default-sync-token';
-  if (token !== `Bearer ${expectedToken}`) {
+  const expectedToken = String(process.env.ZIMSTAT_SYNC_TOKEN || '').trim();
+  if (!expectedToken) {
+    return res.status(503).json({ error: 'ZIMSTAT sync token is not configured on the server.' });
+  }
+  const authHeader = String(req.get('authorization') || '');
+  const expectedHeader = `Bearer ${expectedToken}`;
+  const providedBuf = Buffer.from(authHeader, 'utf8');
+  const expectedBuf = Buffer.from(expectedHeader, 'utf8');
+  if (providedBuf.length !== expectedBuf.length || !timingSafeEqual(providedBuf, expectedBuf)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  try {
-    const output = execSync('python3 zimstat_telemetry.py', {
-      cwd: __dirname,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 60000,
-    });
-    res.json({
-      status: 'ok',
-      message: 'ZIMSTAT telemetry sync completed',
-      output: output.split('\n').filter(Boolean),
-    });
-  } catch (err) {
-    console.error('ZIMSTAT sync error:', err);
-    res.status(500).json({
-      error: 'ZIMSTAT sync failed',
-      message: err.message,
-    });
-  }
+  execFile(
+    'python3',
+    ['zimstat_telemetry.py'],
+    { cwd: __dirname, encoding: 'utf8', timeout: 60000, maxBuffer: 1024 * 1024 },
+    (err, stdout) => {
+      if (err) {
+        console.error('ZIMSTAT sync error:', err.message);
+        return res.status(500).json({ error: 'ZIMSTAT sync failed.' });
+      }
+      loadInitialExtractionReports();
+      return res.json({
+        status: 'ok',
+        message: 'ZIMSTAT telemetry sync completed',
+        output: String(stdout || '').split('\n').filter(Boolean),
+      });
+    }
+  );
 });
 
 app.get('/api/timeline/stream', async (req, res) => {

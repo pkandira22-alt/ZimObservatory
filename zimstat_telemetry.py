@@ -10,12 +10,18 @@ import io
 import json
 import os
 import re
+import urllib.request
 from datetime import datetime, timezone
 
 try:
-    from curl_cffi import requests as cureq
+    from curl_cffi import requests as _curl_requests
 except ImportError:
-    import requests as cureq
+    _curl_requests = None
+
+try:
+    import requests as _std_requests
+except ImportError:
+    _std_requests = None
 
 try:
     from pypdf import PdfReader
@@ -59,21 +65,41 @@ def _parse_int(num_str):
         return None
 
 
+def _http_get_bytes(url, timeout=10):
+    """Fetch raw response bytes using curl_cffi, requests, or stdlib urllib."""
+    if _curl_requests is not None:
+        resp = _curl_requests.get(url, impersonate="chrome", timeout=timeout)
+        return resp.status_code, resp.content
+    if _std_requests is not None:
+        resp = _std_requests.get(
+            url,
+            headers={"User-Agent": "KUVHURA-Observatory/1.0"},
+            timeout=timeout,
+        )
+        return resp.status_code, resp.content
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "KUVHURA-Observatory/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return getattr(resp, "status", 200), resp.read()
+
+
 def fetch_zimstat_imp_reports(pdf_url=ZIMSTAT_IMP_PDF_URL):
     """Stream ZIMSTAT IMP PDF in memory and extract cited output figures."""
     now_iso = datetime.now(timezone.utc).isoformat()
     extracted = []
 
+    if not PdfReader:
+        print("Warning: pypdf not installed, skipping PDF extraction")
+        return extracted
+
     try:
-        resp = cureq.get(pdf_url, impersonate="chrome", timeout=25)
-        if resp.status_code != 200:
+        status_code, content = _http_get_bytes(pdf_url, timeout=6)
+        if status_code != 200 or not content:
             return extracted
 
-        if not PdfReader:
-            print("Warning: pypdf not installed, skipping PDF extraction")
-            return extracted
-
-        reader = PdfReader(io.BytesIO(resp.content))
+        reader = PdfReader(io.BytesIO(content))
         raw_text = "\n".join((page.extract_text() or "") for page in reader.pages)
         clean_text = re.sub(r"\s+", " ", raw_text)
 
