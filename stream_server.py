@@ -1,5 +1,6 @@
 import asyncio
 from collections import Counter
+import hashlib
 import html as html_lib
 from io import BytesIO
 import json
@@ -167,6 +168,9 @@ TELEMETRY_CACHE_PATH = os.environ.get(
     "TELEMETRY_CACHE_PATH",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "telemetry_cache.json"),
 )
+EXTRACTION_REPORTS_SUBSCRIBERS = []
+LAST_EXTRACTION_REPORTS_STATE = None
+EXTRACTION_REPORTS_POLL_SECONDS = 2
 HANSARD_PORTAL_URL = os.environ.get("HANSARD_PORTAL_URL", "https://e-portal.parlzim.gov.zw/")
 FLARESOLVERR_URL = os.environ.get("FLARESOLVERR_URL", "").strip()
 SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY", "").strip()
@@ -2634,13 +2638,13 @@ async def dual_engine_timeline(_request):
     )
 
 
-async def extraction_reports_stream(_request):
-    cache_path = os.environ.get("TELEMETRY_CACHE_PATH", os.path.join(os.path.dirname(__file__), "telemetry_cache.json"))
+def _load_extraction_reports_from_cache():
+    """Load extraction reports from telemetry_cache.json"""
     reports = []
     updated_at = None
     try:
-        if os.path.isfile(cache_path):
-            with open(cache_path, "r", encoding="utf-8") as handle:
+        if os.path.isfile(TELEMETRY_CACHE_PATH):
+            with open(TELEMETRY_CACHE_PATH, "r", encoding="utf-8") as handle:
                 raw_cache = json.load(handle)
             if isinstance(raw_cache, dict):
                 raw_reports = raw_cache.get("extraction_reports")
@@ -2649,19 +2653,118 @@ async def extraction_reports_stream(_request):
                 updated_at = raw_cache.get("extraction_reports_updated_at")
                 if not updated_at and reports:
                     updated_at = reports[0].get("updated_at") if reports else None
-    except Exception:
+    except Exception as e:
+        logging.error(f"[EXTRACTION] Failed to load reports from cache: {e}")
         reports = []
     
-    response_text = "data: " + json.dumps({"reports": reports, "updatedAt": updated_at}) + "\n\n"
-    return web.Response(
-        text=response_text,
-        content_type="text/event-stream",
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        }
-    )
+    return reports, updated_at
+
+
+def _get_extraction_reports_state_hash():
+    """Get hash of current extraction reports state"""
+    try:
+        reports, updated_at = _load_extraction_reports_from_cache()
+        state_str = json.dumps({"reports": reports, "updatedAt": updated_at}, sort_keys=True)
+        return hashlib.md5(state_str.encode()).hexdigest()
+    except Exception:
+        return None
+
+
+async def _broadcast_extraction_reports_update():
+    """Broadcast extraction reports update to all connected SSE clients"""
+    global LAST_EXTRACTION_REPORTS_STATE
+    
+    new_hash = _get_extraction_reports_state_hash()
+    if new_hash == LAST_EXTRACTION_REPORTS_STATE:
+        return
+    
+    LAST_EXTRACTION_REPORTS_STATE = new_hash
+    reports, updated_at = _load_extraction_reports_from_cache()
+    
+    event_data = json.dumps({
+        "type": "snapshot",
+        "reports": reports,
+        "count": len(reports),
+        "available": len(reports) > 0,
+        "updatedAt": updated_at,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+    
+    dead_subscribers = []
+    for response in EXTRACTION_REPORTS_SUBSCRIBERS:
+        try:
+            response.write(f"data: {event_data}\n\n".encode())
+            await response.drain()
+        except Exception as e:
+            logging.debug(f"[EXTRACTION] Subscriber disconnected: {e}")
+            dead_subscribers.append(response)
+    
+    for response in dead_subscribers:
+        try:
+            EXTRACTION_REPORTS_SUBSCRIBERS.remove(response)
+        except ValueError:
+            pass
+
+
+async def _extraction_reports_monitor():
+    """Background task to monitor cache and broadcast changes"""
+    while True:
+        try:
+            await _broadcast_extraction_reports_update()
+            await asyncio.sleep(EXTRACTION_REPORTS_POLL_SECONDS)
+        except Exception as e:
+            logging.error(f"[EXTRACTION] Monitor error: {e}")
+            await asyncio.sleep(5)
+
+
+async def extraction_reports_stream(request):
+    """
+    Real-time SSE stream for extraction reports.
+    Connection stays open and sends updates when cache changes.
+    """
+    response = web.StreamResponse()
+    response.content_type = "text/event-stream"
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Connection"] = "keep-alive"
+    response.headers["X-Accel-Buffering"] = "no"
+    
+    await response.prepare(request)
+    
+    EXTRACTION_REPORTS_SUBSCRIBERS.append(response)
+    logging.info(f"[EXTRACTION] New subscriber connected. Total: {len(EXTRACTION_REPORTS_SUBSCRIBERS)}")
+    
+    try:
+        reports, updated_at = _load_extraction_reports_from_cache()
+        initial_data = json.dumps({
+            "type": "snapshot",
+            "reports": reports,
+            "count": len(reports),
+            "available": len(reports) > 0,
+            "updatedAt": updated_at,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        await response.write(f"data: {initial_data}\n\n".encode())
+        
+        await response.write(b":heartbeat\n\n")
+        
+        while True:
+            await asyncio.sleep(EXTRACTION_REPORTS_POLL_SECONDS)
+            if response.is_connected():
+                await response.write(b":heartbeat\n\n")
+            else:
+                break
+    except Exception as e:
+        logging.debug(f"[EXTRACTION] Stream error: {e}")
+    finally:
+        try:
+            EXTRACTION_REPORTS_SUBSCRIBERS.remove(response)
+            logging.info(f"[EXTRACTION] Subscriber disconnected. Total: {len(EXTRACTION_REPORTS_SUBSCRIBERS)}")
+        except ValueError:
+            pass
+        await response.write_eof()
+    
+    return response
 
 
 async def live_endpoint(request):
@@ -2700,12 +2803,15 @@ async def main():
     site = web.TCPSite(runner, host, port)
     await site.start()
     trends_task = asyncio.create_task(refresh_trending_telemetry())
+    extraction_monitor_task = asyncio.create_task(_extraction_reports_monitor())
     try:
         print(f"KUVHURA telemetry and health server listening on {host}:{port}")
-        await trends_task
+        print(f"[EXTRACTION] Real-time extraction reports monitor started")
+        await asyncio.gather(trends_task, extraction_monitor_task)
     finally:
         trends_task.cancel()
-        await asyncio.gather(trends_task, return_exceptions=True)
+        extraction_monitor_task.cancel()
+        await asyncio.gather(trends_task, extraction_monitor_task, return_exceptions=True)
         await runner.cleanup()
 
 
