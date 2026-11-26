@@ -357,39 +357,27 @@ test('ZIMSTAT spatial telemetry falls back to verified baseline when telemetry_c
   assert.ok(snapshot.extraction_reports.some(r => r.commodity === 'Gold' && r.quantity === 9894));
 });
 
-test('fetchXPublicIndexFeed falls back to public X status syndication when Google News RSS returns empty', async () => {
+test('getXBearerToken normalizes quotes and Bearer prefix and supports env aliases', () => {
   const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
   const code = extract(
     source,
-    'async function fetchXPublicIndexFeed(',
-    '\nfunction formatSocialFeedHttpError('
+    'function normalizeBearerToken(',
+    '\nconst GEMINI_MODEL ='
   );
-  const fetchX = runInNewContext(`${code}; fetchXPublicIndexFeed`, {
-    X_PUBLIC_INDEX_RSS_URLS: ['https://news.google.com/rss/search?q=1', 'https://news.google.com/rss/search?q=2'],
-    X_PUBLIC_INDEX_CACHE_MS: 900000,
-    SOCIAL_NOISE_EXCLUDE_REGEX: /cricket/i,
-    AbortSignal,
-    Date, Set, String, Promise,
-    fetch: async () => ({ ok: false, status: 429, text: async () => '' }),
-    parseXPublicRssFeed: () => [],
-    isModelRelevantSocialItem: text => /zimbabwe/i.test(text),
-    isModelRelevantHashtag: () => true,
-    fetchXViaPublicStatusIndex: async () => ([
-      {
-        text: 'Zimbabwe parliament debates 2027 budget and ZiG monetary framework #Zimbabwe',
-        createdAt: '2026-11-25T10:00:00.000Z',
-        url: 'https://x.com/Reuters/status/2124849193592447197',
-        platform: 'X',
-        hashtags: ['#Zimbabwe']
-      }
-    ])
-  });
-  const res = await fetchX({ configured: true });
-  assert.ok(res && res.xMeta);
-  assert.equal(res.xMeta.status, 'connected');
-  assert.equal(res.xMeta.transport, 'x_public_syndication');
-  assert.equal(res.xMeta.postsSampled, 1);
-  assert.equal(res.xMeta.topPosts.length, 1);
+  const runWithEnv = (env, envFile = {}) => runInNewContext(
+    `${code}; getXBearerToken()`,
+    {
+      process: { env },
+      loadEnvFile: () => envFile,
+      isPlaceholderKey: v => !v || /^your_/i.test(v),
+      String
+    }
+  );
+  assert.equal(runWithEnv({ X_BEARER_TOKEN: 'Bearer AAAA%2Btoken%3D' }), 'AAAA%2Btoken%3D');
+  assert.equal(runWithEnv({ X_BEARER_TOKEN: '"AAAA_quoted_token"' }), 'AAAA_quoted_token');
+  assert.equal(runWithEnv({ TWITTER_BEARER_TOKEN: 'BBBB_alias_token' }), 'BBBB_alias_token');
+  assert.equal(runWithEnv({}, { X_BEARER_TOKEN: 'CCCC_file_token' }), 'CCCC_file_token');
+  assert.equal(runWithEnv({ X_BEARER_TOKEN: 'your_x_token' }), null);
 });
 
 

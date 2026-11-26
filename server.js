@@ -156,15 +156,29 @@ function getYouTubeApiKey() {
   return null;
 }
 
+function normalizeBearerToken(raw) {
+  let token = String(raw || '').trim();
+  if ((token.startsWith('"') && token.endsWith('"')) || (token.startsWith("'") && token.endsWith("'"))) {
+    token = token.slice(1, -1).trim();
+  }
+  token = token.replace(/^Bearer\s+/i, '').trim();
+  return token;
+}
+
 function getXBearerToken() {
-  const procKey = (process.env.X_BEARER_TOKEN || '').trim();
-  if (procKey && !isPlaceholderKey(procKey)) {
-    return procKey;
+  const keyNames = ['X_BEARER_TOKEN', 'TWITTER_BEARER_TOKEN', 'X_API_BEARER_TOKEN'];
+  for (const name of keyNames) {
+    const procKey = normalizeBearerToken(process.env[name]);
+    if (procKey && !isPlaceholderKey(procKey)) {
+      return procKey;
+    }
   }
   const envFile = loadEnvFile();
-  const fileKey = (envFile.X_BEARER_TOKEN || '').trim();
-  if (fileKey && !isPlaceholderKey(fileKey)) {
-    return fileKey;
+  for (const name of keyNames) {
+    const fileKey = normalizeBearerToken(envFile[name]);
+    if (fileKey && !isPlaceholderKey(fileKey)) {
+      return fileKey;
+    }
   }
   return null;
 }
@@ -702,22 +716,8 @@ const X_PUBLIC_INDEX_RSS_URLS = [
   'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(diaspora+OR+remittances+OR+wages+OR+salaries+OR+unemployment+OR+informal+sector+OR+vendors+OR+civil+servants+OR+pension+OR+cost+of+living+OR+fuel+OR+agriculture+OR+tobacco+OR+drought)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
   'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+stayaway+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+healthcare+OR+Starlink+OR+censorship)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en'
 ];
-const X_PUBLIC_DISCOVERY_QUERIES = [
-  'x.com Zimbabwe',
-  'x.com Zimbabwe politics',
-  'x.com Zimbabwe economy',
-  'x.com Zimbabwe government',
-  'x.com Harare',
-  'x.com Mnangagwa',
-  'x.com ZANU',
-  'x.com Zimbabwe parliament',
-  'x.com Zimbabwe mining',
-  'x.com Zimbabwe sanctions',
-  'x.com Bulawayo',
-  'twitter.com Zimbabwe'
-];
 const X_PUBLIC_INDEX_CACHE_MS = 15 * 60 * 1000;
-const X_API_V2_BLOCKED_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const X_API_V2_BLOCKED_COOLDOWN_MS = 15 * 60 * 1000;
 let xApiV2BlockedUntil = 0;
 const SOCIAL_CACHE_MS = 60 * 1000;
 const YOUTUBE_MIN_FORCE_REFRESH_MS = 5 * 60 * 1000;
@@ -726,7 +726,7 @@ let lastYouTubeForceRefreshAt = 0;
 const SOCIAL_SOURCE_CACHE_MS = {
   default: 60 * 1000,
   reddit: 15 * 60 * 1000,
-  x: 15 * 60 * 1000,
+  x: 30 * 60 * 1000,
   youtube: 30 * 60 * 1000
 };
 
@@ -739,12 +739,9 @@ const YOUTUBE_MODEL_QUERIES = [
 ];
 
 const X_MODEL_QUERIES = [
-  'Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR CAB3 OR 2030 OR succession OR judiciary OR SADC OR election OR opposition) -cricket -rugby -football -is:retweet',
-  'Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR dollarization OR forex OR "exchange rate" OR "parallel market" OR liquidity OR banking OR ZSE OR VFEX) -cricket -rugby -football -is:retweet',
-  'Zimbabwe (Treasury OR budget OR Mthuli OR ZIMRA OR tax OR VAT OR IMTT OR debt OR arrears OR IMF OR austerity OR fiscal OR tariff OR subsidy) -cricket -rugby -football -is:retweet',
-  'Zimbabwe (corruption OR ZACC OR Auditor-General OR tender OR procurement OR PRAZ OR Mutapa OR ZINARA OR ZESA OR Tagwirei OR Chivayo OR mining OR lithium OR gold OR "land reform" OR cartel) -cricket -rugby -football -is:retweet',
-  'Zimbabwe (diaspora OR remittances OR wages OR salaries OR unemployment OR "informal sector" OR vendors OR "civil servants" OR pension OR "cost of living" OR fuel OR drought OR agriculture) -cricket -rugby -football -is:retweet',
-  'Zimbabwe (protest OR strike OR stayaway OR resistance OR "human rights" OR PVO OR ZCTU OR teachers OR nurses OR doctors OR "water crisis" OR "load shedding" OR demolitions OR healthcare OR Starlink OR censorship) -cricket -rugby -football -is:retweet'
+  'Zimbabwe (politics OR parliament OR ZANU OR Mnangagwa OR Chiwenga OR Chamisa OR constitution OR 2030 OR judiciary OR SADC OR election OR opposition) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (economy OR inflation OR ZiG OR ZWG OR RBZ OR Treasury OR budget OR Mthuli OR ZIMRA OR tax OR debt OR IMF OR forex OR dollarization) -cricket -rugby -football -is:retweet',
+  'Zimbabwe (corruption OR ZACC OR tender OR Mutapa OR ZESA OR mining OR lithium OR gold OR diaspora OR remittances OR protest OR strike OR PVO) -cricket -rugby -football -is:retweet'
 ];
 
 const SOCIAL_NOISE_EXCLUDE_REGEX = /\b(cricket|rugby|football|soccer|chevrons|sables|warriors\s+fc|dynamos|highlanders|caps\s+united|premier\s+soccer|castle\s+lager|world\s+cup|nations\s+cup|one\s+day\s+match|t20|odi|test\s+match|wickets?|innings|overs|balls\s+left|runs\s+off|century\s+for|batting|bowling|match\s+highlights|extended\s+highlights|live\s+fan\s+chat|audio\s+commentar|milton\s+shumba|sikandar\s+raza|brian\s+bennett|blessing\s+muzarabani|sean\s+williams|zimdancehall|sungura|amapiano|official\s+music\s+video|lyric\s+video|gospel\s+song|prophecy|prophet\s+says|sermon|pastor\s+predicts|comedy\s+skit|standup\s+comedy|cooking\s+vlog|travel\s+vlog|backpacking|kino\s+yves|how\s+to\s+buy\s+crypto|buy\s+crypto\s+in\s+zimbabwe|buy\s+usdt|recipe|safari\s+tour|victoria\s+falls\s+hotel|wildlife\s+photography|road\s+traffic\s+accident|fatal\s+road\s+accident|accident\s+update|accident\s+scene|fatal\s+crash|wellness\s+and\s+cancer\s+campaign|prize-winning\s+story|earthmoving\s+equipment|construction\s+machinery|mining\s+equipment|mining\s+machinery|excavators?\s+for\s+sale|bulldozer|heavy\s+machinery\s+supplier)\b/i;
@@ -1016,176 +1013,8 @@ function parseXPublicRssFeed(xmlText) {
   return posts;
 }
 
-function xSnowflakeToTimestampMs(statusId) {
-  try {
-    return Number((BigInt(statusId) >> 22n) + 1288834974657n);
-  } catch {
-    return 0;
-  }
-}
-
-async function fetchSinglePublicXPost(user, statusId) {
-  const canonicalUrl = `https://x.com/${encodeURIComponent(user)}/status/${encodeURIComponent(statusId)}`;
-  const headers = {
-    Accept: 'application/json',
-    'User-Agent': 'KUVHURA-Observatory/1.0'
-  };
-
-  try {
-    const fxRes = await fetch(`https://api.fxtwitter.com/${encodeURIComponent(user)}/status/${encodeURIComponent(statusId)}`, {
-      headers,
-      signal: AbortSignal.timeout(4500)
-    });
-    if (fxRes.ok) {
-      const data = await fxRes.json();
-      const tweet = data?.tweet;
-      if (tweet?.text) {
-        const text = decodeXmlEntities(String(tweet.text)).replace(/\s+/g, ' ').trim();
-        const tsMs = tweet.created_timestamp
-          ? Number(tweet.created_timestamp) * 1000
-          : xSnowflakeToTimestampMs(statusId);
-        const createdAt = tsMs > 0 ? new Date(tsMs).toISOString() : new Date().toISOString();
-        const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])].slice(0, 6);
-        return {
-          text,
-          createdAt,
-          url: sanitizeSafeExternalHttpsUrl(tweet.url || canonicalUrl),
-          platform: 'X',
-          hashtags
-        };
-      }
-    }
-  } catch {
-    // Fall through to VxTwitter / X oEmbed
-  }
-
-  try {
-    const vxRes = await fetch(`https://api.vxtwitter.com/${encodeURIComponent(user)}/status/${encodeURIComponent(statusId)}`, {
-      headers,
-      signal: AbortSignal.timeout(4500)
-    });
-    if (vxRes.ok) {
-      const data = await vxRes.json();
-      if (data?.text) {
-        const text = decodeXmlEntities(String(data.text)).replace(/\s+/g, ' ').trim();
-        const tsMs = data.date_epoch
-          ? Number(data.date_epoch) * 1000
-          : xSnowflakeToTimestampMs(statusId);
-        const createdAt = tsMs > 0 ? new Date(tsMs).toISOString() : new Date().toISOString();
-        const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])].slice(0, 6);
-        return {
-          text,
-          createdAt,
-          url: sanitizeSafeExternalHttpsUrl(data.tweetURL || canonicalUrl),
-          platform: 'X',
-          hashtags
-        };
-      }
-    }
-  } catch {
-    // Fall through to official X oEmbed
-  }
-
-  try {
-    const oembedUrl = `https://publish.twitter.com/oembed?${new URLSearchParams({ url: canonicalUrl, omit_script: 'true' })}`;
-    const oeRes = await fetch(oembedUrl, {
-      headers,
-      signal: AbortSignal.timeout(4500)
-    });
-    if (oeRes.ok) {
-      const data = await oeRes.json();
-      const pMatch = String(data?.html || '').match(/<p[^>]*>([\s\S]*?)<\/p>/i);
-      const rawText = pMatch ? pMatch[1].replace(/<[^>]+>/g, ' ') : '';
-      const text = decodeXmlEntities(rawText).replace(/\s+/g, ' ').trim();
-      if (text) {
-        const tsMs = xSnowflakeToTimestampMs(statusId);
-        const createdAt = tsMs > 0 ? new Date(tsMs).toISOString() : new Date().toISOString();
-        const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])].slice(0, 6);
-        return {
-          text,
-          createdAt,
-          url: sanitizeSafeExternalHttpsUrl(data.url || canonicalUrl),
-          platform: 'X',
-          hashtags
-        };
-      }
-    }
-  } catch {
-    // Unreachable status
-  }
-
-  return null;
-}
-
-async function fetchXViaPublicStatusIndex() {
-  const statusMap = new Map();
-  const statusRegex = /https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,20})\/status\/(\d{10,22})/gi;
-
-  const extractLinksFromText = (raw) => {
-    let match;
-    statusRegex.lastIndex = 0;
-    while ((match = statusRegex.exec(raw)) !== null) {
-      const user = match[1];
-      const id = match[2];
-      if (!statusMap.has(id)) {
-        statusMap.set(id, { user, id, ts: xSnowflakeToTimestampMs(id) });
-      }
-    }
-  };
-
-  await Promise.all([
-    ...X_PUBLIC_DISCOVERY_QUERIES.map(async query => {
-      try {
-        const url = `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?${new URLSearchParams({ q: query, sort: 'latest', limit: '40' })}`;
-        const res = await fetch(url, {
-          headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' },
-          signal: AbortSignal.timeout(5500)
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        for (const post of (data?.posts || [])) {
-          extractLinksFromText(JSON.stringify(post));
-        }
-      } catch {
-        // Ignore single discovery query error
-      }
-    }),
-    ...['mastodon.social', 'mas.to'].map(async instance => {
-      try {
-        const res = await fetch(`https://${instance}/api/v1/timelines/tag/Zimbabwe?limit=40`, {
-          headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' },
-          signal: AbortSignal.timeout(5500)
-        });
-        if (!res.ok) return;
-        const items = await res.json();
-        if (Array.isArray(items)) {
-          for (const item of items) {
-            extractLinksFromText(String(item?.content || ''));
-          }
-        }
-      } catch {
-        // Ignore single instance error
-      }
-    })
-  ]);
-
-  if (statusMap.size === 0) return [];
-
-  const newestCandidates = [...statusMap.values()]
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 30);
-
-  const enriched = await Promise.all(
-    newestCandidates.map(item => fetchSinglePublicXPost(item.user, item.id))
-  );
-
-  return enriched.filter(Boolean);
-}
-
 async function fetchXPublicIndexFeed({ configured = false } = {}) {
   try {
-    // Wave 1 & Wave 2: staggered 3-at-a-time Google News RSS fetches with strict 5.5s per-request timeout
-    // so cloud datacenter IPs (e.g. Render) never stall the whole feed or trigger burst rate limits.
     const fetchRssWave = async (urls) => Promise.all(
       urls.map(async rssUrl => {
         try {
@@ -1215,8 +1044,8 @@ async function fetchXPublicIndexFeed({ configured = false } = {}) {
     const parsed = [];
     const allItems = [];
 
-    const collectItems = (items) => {
-      for (const item of items) {
+    for (const batch of batches) {
+      for (const item of batch) {
         if (!item?.text) continue;
         allItems.push(item);
         if (!isModelRelevantSocialItem(item.text)) continue;
@@ -1229,21 +1058,6 @@ async function fetchXPublicIndexFeed({ configured = false } = {}) {
           ...item,
           hashtags: (item.hashtags || []).filter(isModelRelevantHashtag)
         });
-      }
-    };
-
-    for (const batch of batches) {
-      collectItems(batch);
-    }
-
-    // Tier 3 cloud-resilient fallback: if Google News RSS returned no relevant items (e.g. blocked/tarpitted on Render),
-    // discover real X status URLs via public social indexes and enrich directly via FxTwitter / VxTwitter / X oEmbed.
-    let transport = 'x_public_index';
-    if (parsed.length === 0) {
-      const statusItems = await fetchXViaPublicStatusIndex();
-      collectItems(statusItems);
-      if (parsed.length > 0 || statusItems.length > 0) {
-        transport = 'x_public_syndication';
       }
     }
 
@@ -1278,7 +1092,7 @@ async function fetchXPublicIndexFeed({ configured = false } = {}) {
       xMeta: {
         configured,
         status: 'connected',
-        transport,
+        transport: 'x_public_index',
         postsSampled: finalPosts.length,
         topPosts,
         updatedAt: new Date().toISOString(),
@@ -1292,11 +1106,25 @@ async function fetchXPublicIndexFeed({ configured = false } = {}) {
 }
 
 function formatSocialFeedHttpError(feed, statusCode, rawBody = '') {
-  if (feed.type === 'x' && statusCode === 402) {
-    return 'X API recent search requires paid tier or credits (HTTP 402).';
-  }
-  if (feed.type === 'x' && (statusCode === 401 || statusCode === 403)) {
-    return `X API access denied (HTTP ${statusCode}); verify X_BEARER_TOKEN permissions.`;
+  if (feed.type === 'x') {
+    let apiDetail = '';
+    try {
+      const parsed = rawBody ? JSON.parse(rawBody) : null;
+      apiDetail = String(parsed?.detail || parsed?.title || parsed?.errors?.[0]?.message || '').trim();
+    } catch {
+      apiDetail = '';
+    }
+    const suffix = apiDetail ? ` (${apiDetail.slice(0, 140)})` : '';
+    if (statusCode === 402) {
+      return `X API recent search requires paid tier or credits (HTTP 402)${suffix}.`;
+    }
+    if (statusCode === 401 || statusCode === 403) {
+      return `X API access denied (HTTP ${statusCode}); verify X_BEARER_TOKEN permissions${suffix}.`;
+    }
+    if (statusCode === 429) {
+      return `X API rate limit reached (HTTP 429)${suffix}.`;
+    }
+    return `X API v2 error (HTTP ${statusCode})${suffix}.`;
   }
   if (feed.type === 'reddit' && (statusCode === 403 || statusCode === 429)) {
     return `Reddit blocked or rate-limited automated fetch from this host (HTTP ${statusCode}).`;
@@ -1348,6 +1176,9 @@ async function fetchSocialSource(feed, { forceRefresh = false } = {}) {
   }
   if (allowBypass && feed.type === 'youtube') {
     lastYouTubeForceRefreshAt = Date.now();
+  }
+  if (allowBypass && feed.type === 'x') {
+    xApiV2BlockedUntil = 0;
   }
 
   const runPromise = fetchSocialSourceInternal(feed, { cacheTtl, cached }).finally(() => {
@@ -1420,14 +1251,18 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
       let lastStatus = null;
       let lastErrorMessage = null;
       let succeededQueries = 0;
+      const usersById = new Map();
 
       const queryResults = await Promise.all(
         X_MODEL_QUERIES.map(async query => {
-          const url = `https://api.x.com/2/tweets/search/recent?${new URLSearchParams({
+          const searchParams = new URLSearchParams({
             query,
-            max_results: "100",
-            "tweet.fields": "created_at,entities"
-          })}`;
+            max_results: "50",
+            "tweet.fields": "created_at,entities,public_metrics",
+            expansions: "author_id",
+            "user.fields": "username,name"
+          });
+          const url = `https://api.x.com/2/tweets/search/recent?${searchParams}`;
           try {
             const res = await fetch(url, { signal: controller.signal, headers: xHeaders });
             const rawText = await res.text();
@@ -1438,6 +1273,11 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
             }
             succeededQueries += 1;
             const parsed = JSON.parse(rawText);
+            for (const user of (parsed?.includes?.users || [])) {
+              if (user?.id && user?.username) {
+                usersById.set(String(user.id), String(user.username));
+              }
+            }
             return Array.isArray(parsed?.data) ? parsed.data : [];
           } catch (err) {
             if (!lastErrorMessage) lastErrorMessage = err.message;
@@ -1460,15 +1300,24 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
           const dedupeKey = item.id ? String(item.id) : text.toLowerCase();
           if (seenIds.has(dedupeKey)) continue;
           seenIds.add(dedupeKey);
-          const url = item.id ? `https://x.com/i/status/${encodeURIComponent(String(item.id))}` : '';
+          const authorUsername = item.author_id ? (usersById.get(String(item.author_id)) || '') : '';
+          const url = item.id
+            ? (authorUsername
+              ? `https://x.com/${encodeURIComponent(authorUsername)}/status/${encodeURIComponent(String(item.id))}`
+              : `https://x.com/i/status/${encodeURIComponent(String(item.id))}`)
+            : '';
           const createdAt = item.created_at || '';
-          const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])]
+          const entityTags = Array.isArray(item.entities?.hashtags)
+            ? item.entities.hashtags.map(h => (h?.tag ? `#${h.tag}` : '')).filter(Boolean)
+            : [];
+          const hashtags = [...new Set([...entityTags, ...(text.match(HASHTAG_REGEX) || [])])]
             .filter(isModelRelevantHashtag)
             .slice(0, 6);
           posts.push({
             text,
             createdAt,
             url,
+            authorUsername,
             platform: feed.platform,
             hashtags
           });
@@ -1480,6 +1329,7 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
         text: item.text.slice(0, 220),
         createdAt: item.createdAt,
         url: item.url,
+        ...(item.authorUsername ? { authorUsername: item.authorUsername } : {}),
         hashtags: item.hashtags || []
       }));
       xMeta = {
