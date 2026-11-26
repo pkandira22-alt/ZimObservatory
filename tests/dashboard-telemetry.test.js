@@ -472,6 +472,79 @@ test('data-lineage auditor enforces honesty downgrade, OCR bounds, URL validatio
   assert.match(partitioned.proxy_and_buckets[0].explanation, /\[Conceptual \/ Analytical Bucket\]/);
 });
 
+test('buildExportNarrativeSections formats technical and layman briefings cleanly', () => {
+  const serverSrc = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const auditFn = extract(
+    serverSrc,
+    'const AUDIT_VALID_LINEAGES =',
+    "\napp.get('/api/audit/records',"
+  );
+  const narrativeFn = extract(
+    serverSrc,
+    'function buildExportNarrativeSections(',
+    '\nfunction generateExportPdfBuffer('
+  );
+
+  const { buildExportNarrativeSections } = runInNewContext(
+    `${auditFn}\n${narrativeFn}\n({ buildExportNarrativeSections })`,
+    { Set, Map, URL, Object, Array, Number, String, Date, Boolean }
+  );
+
+  const mockSnapshot = {
+    updatedAt: '2026-11-26T00:00:00Z',
+    depth_records: [
+      {
+        id: 'gold-q1',
+        domain: 'extraction',
+        label: 'Gold Production (ZIMSTAT Q1 2026)',
+        value: 8420,
+        unit: 'kg',
+        period: 'Q1 2026',
+        lineage: 'Measured Directly',
+        status: 'live',
+        source_title: 'ZIMSTAT IMP Q1 2026',
+        source_url: 'https://www.zimstat.co.zw/imp.pdf',
+      },
+      {
+        id: 'bill-friction',
+        domain: 'governance',
+        label: 'PVO Amendment Bill PLC Friction',
+        value: 72,
+        unit: 'score_0_100',
+        period: '2026',
+        lineage: 'Conceptual / Analytical Bucket',
+        status: 'cached',
+        source_title: 'Veritas Tracker',
+        source_url: 'https://www.veritaszim.net/node/8059',
+      },
+    ],
+    stochastic_streams: {
+      legislative_plc_friction: {
+        latest_raw: 72,
+        smoothed_value: 72,
+        volatility_std_10: 14.5,
+        regime: 'Acute Stress',
+      },
+    },
+  };
+
+  const tech = buildExportNarrativeSections(mockSnapshot, 'technical');
+  assert.match(tech.title, /Technical Telemetry/);
+  assert.equal(tech.audience, 'technical');
+  assert.equal(tech.items.length, 2);
+  assert.match(tech.items[0].body, /\[Measured Directly \| Status: live \| Period: Q1 2026\]/);
+  assert.match(tech.stream_notes[0], /rolling_std_10=14\.5, regime=Acute Stress/);
+
+  const layman = buildExportNarrativeSections(mockSnapshot, 'layman');
+  assert.match(layman.title, /Public Briefing/);
+  assert.equal(layman.audience, 'layman');
+  assert.match(layman.items[0].body, /Category: Measured Directly \(Q1 2026\)/);
+  assert.match(layman.stream_notes[0], /Legislative Plc Friction: Currently assessed as 'Acute Stress'/);
+
+  const fallback = buildExportNarrativeSections(mockSnapshot, 'invalid_mode');
+  assert.equal(fallback.audience, 'layman');
+});
+
 
 
 

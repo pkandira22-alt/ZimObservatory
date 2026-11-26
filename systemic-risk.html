@@ -374,13 +374,92 @@
 
     </main>
 
+    <!-- Observatory Briefing & Data Export Bar -->
+    <section id="kuvhura-export-bar" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+        <div class="rounded-xl border border-slate-700/80 border-t-2 border-t-sky-400 bg-cardbg/90 p-4 flex flex-wrap gap-3 items-center justify-between">
+            <div>
+                <strong class="text-sm text-slate-100">Download Observatory Briefing &amp; Data</strong>
+                <div class="text-xs text-slate-400 mt-0.5">Includes lineage labels ([Measured Directly] vs. [Proxy / Estimate]) and audit notes.</div>
+                <div id="kuvhura-export-status" role="status" aria-live="polite" class="text-[11px] text-sky-300 mt-1 min-h-[1rem]"></div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 items-center">
+                <select id="export-audience" aria-label="Report version" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-md px-2.5 py-2">
+                    <option value="layman" selected>Layman Version (Plain Language)</option>
+                    <option value="technical">Technical Version (Methodology &amp; Audit)</option>
+                </select>
+                <button type="button" onclick="downloadKuvhuraExport('pdf')" class="bg-slate-900 hover:bg-slate-800 border border-rose-400/50 text-rose-300 text-xs font-semibold rounded-md px-3 py-2 cursor-pointer">
+                    Download PDF
+                </button>
+                <button type="button" onclick="downloadKuvhuraExport('docx')" class="bg-slate-900 hover:bg-slate-800 border border-blue-400/50 text-blue-300 text-xs font-semibold rounded-md px-3 py-2 cursor-pointer">
+                    Download Word (.docx)
+                </button>
+                <button type="button" onclick="downloadKuvhuraExport('xlsx')" class="bg-slate-900 hover:bg-slate-800 border border-emerald-400/50 text-emerald-300 text-xs font-semibold rounded-md px-3 py-2 cursor-pointer">
+                    Download Excel (.xlsx)
+                </button>
+            </div>
+        </div>
+    </section>
+
     <!-- Footer -->
-    <footer class="border-t border-slate-800 bg-cardbg/50 py-6 mt-12 text-center text-xs text-slate-500">
+    <footer class="border-t border-slate-800 bg-cardbg/50 py-6 mt-8 text-center text-xs text-slate-500">
         <p>KUVHURA Observatory &bull; Scientific Political Economy &amp; Systemic Risk Monitoring System</p>
     </footer>
 
     <!-- Frontend Script -->
     <script>
+        async function downloadKuvhuraExport(format) {
+            const statusEl = document.getElementById('kuvhura-export-status');
+            const audience = document.getElementById('export-audience')?.value === 'technical' ? 'technical' : 'layman';
+            const fmt = ['pdf', 'docx', 'xlsx'].includes(format) ? format : 'pdf';
+            if (statusEl) statusEl.textContent = `Generating ${fmt.toUpperCase()} (${audience})…`;
+
+            const query = `/api/export?format=${encodeURIComponent(fmt)}&audience=${encodeURIComponent(audience)}`;
+            const configuredBase = (window.KUVHURA_API_URL || window.KUVHURA_API_BASE_URL || '').replace(/\/+$/, '');
+            const isGithubPages = window.location.hostname.endsWith('.github.io');
+            const candidates = [];
+            if (!isGithubPages) candidates.push(query);
+            if (configuredBase) candidates.push(`${configuredBase}${query}`);
+            const renderUrl = `https://zimobservatory-backend.onrender.com${query}`;
+            if (!candidates.includes(renderUrl)) candidates.push(renderUrl);
+
+            try {
+                let res = null;
+                for (const url of candidates) {
+                    try {
+                        const attempt = await fetch(url, { cache: 'no-store' });
+                        if (attempt.ok) {
+                            res = attempt;
+                            break;
+                        }
+                    } catch {}
+                }
+                if (!res || !res.ok) throw new Error('Export endpoint unavailable');
+                const blob = await res.blob();
+                const disposition = res.headers.get('content-disposition') || '';
+                const match = disposition.match(/filename="?([^";]+)"?/i);
+                const stampDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                const fallbackName = fmt === 'xlsx'
+                    ? `kuvhura_telemetry_data_${stampDate}.xlsx`
+                    : `kuvhura_report_${audience}_${stampDate}.${fmt}`;
+                const filename = match ? match[1] : fallbackName;
+
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = filename;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+                if (statusEl) statusEl.textContent = `Downloaded ${filename}`;
+            } catch (err) {
+                console.warn('[KUVHURA] Export download failed:', err);
+                if (statusEl) statusEl.textContent = `Export failed (${fmt.toUpperCase()}) — please retry shortly.`;
+            }
+        }
+
         document.getElementById('current-date').innerText = new Date().toISOString().split('T')[0];
         let myChart = null;
 

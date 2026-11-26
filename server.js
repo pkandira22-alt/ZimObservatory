@@ -10,6 +10,9 @@ import { execFile } from 'node:child_process';
 import multer from 'multer';
 import { unlink } from 'node:fs/promises';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import PDFDocument from 'pdfkit';
+import { Document as DocxDocument, Packer as DocxPacker, Paragraph as DocxParagraph, HeadingLevel as DocxHeadingLevel } from 'docx';
+import ExcelJS from 'exceljs';
 import 'dotenv/config';
 import { requireAuth } from './src/middleware/auth.ts';
 
@@ -7420,6 +7423,332 @@ app.get('/api/depth-telemetry', (req, res) => {
   } catch (err) {
     console.warn('Error serving depth telemetry:', err.message);
     res.status(500).json({ error: 'Could not load depth telemetry.' });
+  }
+});
+
+function buildExportNarrativeSections(snapshot, audience = 'layman') {
+  const normAudience = String(audience || '').trim().toLowerCase() === 'technical' ? 'technical' : 'layman';
+  const rawRecords = Array.isArray(snapshot?.depth_records) && snapshot.depth_records.length > 0
+    ? snapshot.depth_records
+    : (Array.isArray(snapshot?.spatial_reports) ? snapshot.spatial_reports : []);
+
+  const audited = snapshot?.audited || auditAndPartitionRecords(rawRecords);
+  const auditedById = new Map();
+  for (const bucket of [audited.measured_directly, audited.proxy_and_buckets, audited.flagged_for_review]) {
+    if (!Array.isArray(bucket)) continue;
+    for (const rec of bucket) {
+      if (rec?.id) auditedById.set(rec.id, rec);
+    }
+  }
+
+  const records = rawRecords.map(r => {
+    const auditedRec = r?.id ? auditedById.get(r.id) : null;
+    return {
+      ...r,
+      explanation: r.explanation || auditedRec?.explanation || r.notes || '',
+      lineage: auditedRec?.lineage || r.lineage || 'Proxy / Estimate',
+      status: auditedRec?.status || r.status || 'cached',
+    };
+  });
+
+  const streams = (snapshot?.stochastic_streams && typeof snapshot.stochastic_streams === 'object')
+    ? snapshot.stochastic_streams
+    : {};
+  const updated = snapshot?.depth_updated_at || snapshot?.updatedAt || snapshot?.timestamp || new Date().toISOString();
+
+  const directCount = records.filter(r => r.lineage === 'Measured Directly').length;
+  const proxyCount = records.filter(r => r.lineage === 'Proxy / Estimate').length;
+  const bucketCount = records.filter(r => r.lineage === 'Conceptual / Analytical Bucket').length;
+
+  const title = normAudience === 'technical'
+    ? 'KUVHURA Technical Telemetry & Methodological Audit Report'
+    : 'KUVHURA Public Briefing: Zimbabwe Political Economy & Livelihoods';
+
+  const intro = normAudience === 'technical'
+    ? `Generated ${updated}. This technical briefing details observed primary indicators, derived proxies, analytical regime classifications, and stochastic dispersion parameters from KUVHURA's rolling telemetry cache (${directCount} Measured Directly, ${proxyCount} Proxy / Estimate, ${bucketCount} Conceptual / Analytical Bucket).`
+    : `Report date: ${updated}. This plain-language briefing summarizes what official statistics, parliamentary tracking, and household vulnerability surveys currently show across Zimbabwe. Every figure is labeled clearly to show whether it is an official measurement (${directCount}), a tracked estimate (${proxyCount}), or an analytical risk classification (${bucketCount}).`;
+
+  const methodology = normAudience === 'technical'
+    ? 'Epistemic Governance & Stochastic Layer: Primary figures are validated against source URLs and unit sanity bounds before ingestion. Exponential smoothing (alpha=0.2) and rolling 10-period sample standard deviations classify systemic stress regimes (Contained, Elevated Friction, Acute Stress) without altering raw reported values.'
+    : 'How to Read This Briefing: Direct measurements come straight from official statistical bulletins and published surveys. Estimates and risk labels help highlight where prices, mining output, food security, or new laws are shifting quickly, while separating hard data from analysis.';
+
+  const items = records.map(r => {
+    const label = r.label || r.title || r.id || 'Unnamed Indicator';
+    const lineage = r.lineage || 'Proxy / Estimate';
+    const val = r.value;
+    const unit = r.unit || '';
+    const period = r.period || 'Current';
+    const status = r.status || 'cached';
+    const srcTitle = r.source_title || r.source || 'KUVHURA Registry';
+    const srcUrl = r.source_url || '';
+    const explanation = r.explanation || '';
+
+    let detail;
+    if (normAudience === 'technical') {
+      const valStr = val !== null && val !== undefined ? `${val} ${unit}`.trim() : 'No numeric quantity reported';
+      detail = `[${lineage} | Status: ${status} | Period: ${period}] Value: ${valStr}. Source: ${srcTitle}${srcUrl ? ` (${srcUrl})` : ''}. ${explanation}`.trim();
+    } else {
+      const valStr = val !== null && val !== undefined ? `${val} ${unit}`.trim() : 'Qualitative / tracked update';
+      detail = `Category: ${lineage} (${period}). Current reading: ${valStr}. ${explanation} Source: ${srcTitle}.`.trim();
+    }
+
+    return { heading: String(label), body: detail, raw: r };
+  });
+
+  const streamNotes = [];
+  for (const [key, s] of Object.entries(streams)) {
+    if (!s || typeof s !== 'object') continue;
+    const regime = s.regime || 'Unclassified';
+    const smoothed = s.smoothed_value ?? 'N/A';
+    const vol = s.volatility_std_10 ?? 'N/A';
+    const rawV = s.latest_raw ?? 'N/A';
+    if (normAudience === 'technical') {
+      streamNotes.push(`${key}: raw=${rawV}, smoothed(a=0.2)=${smoothed}, rolling_std_10=${vol}, regime=${regime}.`);
+    } else {
+      const niceKey = key.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+      streamNotes.push(`${niceKey}: Currently assessed as '${regime}' (smoothed index: ${smoothed}; volatility band: ${vol}).`);
+    }
+  }
+
+  return {
+    title,
+    updated,
+    audience: normAudience,
+    intro,
+    methodology,
+    items,
+    stream_notes: streamNotes,
+    records,
+    streams,
+  };
+}
+
+function generateExportPdfBuffer(report) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 42 });
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+    // Header Banner
+    doc.rect(doc.page.margins.left, doc.y, pageWidth, 4).fill('#1F2937');
+    doc.moveDown(0.6);
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(17).text(report.title, { width: pageWidth });
+    doc.moveDown(0.4);
+    doc.fillColor('#334155').font('Helvetica').fontSize(9.5).text(report.intro, { width: pageWidth, lineGap: 2 });
+    doc.moveDown(0.9);
+
+    // Section 1
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(12.5).text('1. Methodology & Data Lineage', { width: pageWidth });
+    doc.moveDown(0.3);
+    doc.fillColor('#334155').font('Helvetica').fontSize(9.5).text(report.methodology, { width: pageWidth, lineGap: 2 });
+    doc.moveDown(0.9);
+
+    // Section 2
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(12.5).text('2. Recorded Signals & Explanations', { width: pageWidth });
+    doc.moveDown(0.4);
+
+    for (const item of report.items) {
+      if (doc.y > doc.page.height - 110) doc.addPage();
+      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10).text(item.heading, { width: pageWidth });
+      doc.moveDown(0.15);
+      doc.fillColor('#334155').font('Helvetica').fontSize(9).text(item.body, { width: pageWidth, lineGap: 1.5 });
+      doc.moveDown(0.5);
+    }
+
+    // Section 3: Volatility & Regime Summary Table
+    if (report.stream_notes.length > 0) {
+      if (doc.y > doc.page.height - 140) doc.addPage();
+      doc.moveDown(0.4);
+      doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(12.5).text('3. Volatility & Regime State Summary', { width: pageWidth });
+      doc.moveDown(0.4);
+
+      const col1W = 155;
+      const col2W = pageWidth - col1W;
+      const startX = doc.page.margins.left;
+
+      const drawHeader = () => {
+        const y = doc.y;
+        doc.rect(startX, y, pageWidth, 22).fill('#1F2937');
+        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
+        doc.text('Stream / Metric', startX + 6, y + 6, { width: col1W - 12 });
+        doc.text('Summary', startX + col1W + 6, y + 6, { width: col2W - 12 });
+        doc.y = y + 22;
+      };
+
+      drawHeader();
+
+      for (const note of report.stream_notes) {
+        const colonIdx = note.indexOf(':');
+        const col1 = colonIdx >= 0 ? note.slice(0, colonIdx).trim() : note;
+        const col2 = colonIdx >= 0 ? note.slice(colonIdx + 1).trim() : '';
+
+        doc.font('Helvetica').fontSize(8.8);
+        const h1 = doc.heightOfString(col1, { width: col1W - 12 });
+        const h2 = doc.heightOfString(col2, { width: col2W - 12 });
+        const rowH = Math.max(h1, h2) + 12;
+
+        if (doc.y + rowH > doc.page.height - 50) {
+          doc.addPage();
+          drawHeader();
+        }
+
+        const y = doc.y;
+        doc.rect(startX, y, col1W, rowH).strokeColor('#D1D5DB').lineWidth(0.5).stroke();
+        doc.rect(startX + col1W, y, col2W, rowH).strokeColor('#D1D5DB').lineWidth(0.5).stroke();
+        doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8.8).text(col1, startX + 6, y + 6, { width: col1W - 12 });
+        doc.fillColor('#334155').font('Helvetica').fontSize(8.8).text(col2, startX + col1W + 6, y + 6, { width: col2W - 12 });
+        doc.y = y + rowH;
+      }
+    }
+
+    doc.end();
+  });
+}
+
+async function generateExportDocxBuffer(report) {
+  const children = [
+    new DocxParagraph({ text: report.title, heading: DocxHeadingLevel.TITLE }),
+    new DocxParagraph({ text: report.intro }),
+    new DocxParagraph({ text: '1. Methodology & Data Lineage', heading: DocxHeadingLevel.HEADING_1 }),
+    new DocxParagraph({ text: report.methodology }),
+    new DocxParagraph({ text: '2. Recorded Signals & Explanations', heading: DocxHeadingLevel.HEADING_1 }),
+  ];
+
+  for (const item of report.items) {
+    children.push(new DocxParagraph({ text: item.heading, heading: DocxHeadingLevel.HEADING_2 }));
+    children.push(new DocxParagraph({ text: item.body }));
+  }
+
+  if (report.stream_notes.length > 0) {
+    children.push(new DocxParagraph({ text: '3. Volatility & Regime State Summary', heading: DocxHeadingLevel.HEADING_1 }));
+    for (const note of report.stream_notes) {
+      children.push(new DocxParagraph({ text: note, bullet: { level: 0 } }));
+    }
+  }
+
+  const doc = new DocxDocument({
+    sections: [{ properties: {}, children }],
+  });
+  return DocxPacker.toBuffer(doc);
+}
+
+async function generateExportXlsxBuffer(report) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'KUVHURA Observatory';
+  wb.created = new Date();
+
+  const headerStyle = {
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } },
+    font: { color: { argb: 'FFFFFFFF' }, bold: true },
+  };
+
+  const wsRec = wb.addWorksheet('Recorded_Telemetry');
+  const recHeaders = [
+    'ID', 'Domain', 'Label', 'Value', 'Unit', 'Period',
+    'Lineage', 'Status', 'Source Title', 'Source URL', 'Explanation', 'Updated At',
+  ];
+  const recHeaderRow = wsRec.addRow(recHeaders);
+  recHeaderRow.eachCell(cell => {
+    cell.fill = headerStyle.fill;
+    cell.font = headerStyle.font;
+  });
+
+  for (const r of report.records) {
+    wsRec.addRow([
+      r.id || '',
+      r.domain || '',
+      r.label || r.title || '',
+      r.value ?? null,
+      r.unit || '',
+      r.period || '',
+      r.lineage || '',
+      r.status || '',
+      r.source_title || r.source || '',
+      r.source_url || '',
+      r.explanation || '',
+      r.updated_at || report.updated,
+    ]);
+  }
+
+  const wsSt = wb.addWorksheet('Stochastic_Streams');
+  const stHeaders = [
+    'Stream Key', 'Latest Raw', 'Smoothed Value', 'Volatility (Std 10)', 'Regime', 'Status', 'Updated At',
+  ];
+  const stHeaderRow = wsSt.addRow(stHeaders);
+  stHeaderRow.eachCell(cell => {
+    cell.fill = headerStyle.fill;
+    cell.font = headerStyle.font;
+  });
+
+  for (const [key, s] of Object.entries(report.streams || {})) {
+    if (!s || typeof s !== 'object') continue;
+    wsSt.addRow([
+      key,
+      s.latest_raw ?? null,
+      s.smoothed_value ?? null,
+      s.volatility_std_10 ?? null,
+      s.regime || '',
+      s.status || '',
+      s.updated_at || report.updated,
+    ]);
+  }
+
+  for (const ws of [wsRec, wsSt]) {
+    ws.columns.forEach(column => {
+      let maxLen = 12;
+      column.eachCell({ includeEmpty: true }, cell => {
+        const len = String(cell.value ?? '').length;
+        if (len > maxLen) maxLen = len;
+      });
+      column.width = Math.min(Math.max(maxLen + 2, 12), 48);
+    });
+  }
+
+  const arrayBuffer = await wb.xlsx.writeBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+app.get('/api/export', async (req, res) => {
+  try {
+    const fmt = String(req.query.format || 'pdf').trim().toLowerCase();
+    const rawAudience = String(req.query.audience || 'layman').trim().toLowerCase();
+    const audience = rawAudience === 'technical' ? 'technical' : 'layman';
+
+    if (!['pdf', 'docx', 'xlsx'].includes(fmt)) {
+      return res.status(400).json({ error: 'Unsupported format. Use format=pdf, docx, or xlsx.' });
+    }
+
+    const snapshot = getDepthTelemetrySnapshot();
+    const report = buildExportNarrativeSections(snapshot, audience);
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+    res.setHeader('Cache-Control', 'no-store');
+
+    if (fmt === 'pdf') {
+      const pdfBuf = await generateExportPdfBuffer(report);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="kuvhura_report_${audience}_${stamp}.pdf"`);
+      return res.send(pdfBuf);
+    }
+
+    if (fmt === 'docx') {
+      const docxBuf = await generateExportDocxBuffer(report);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="kuvhura_report_${audience}_${stamp}.docx"`);
+      return res.send(docxBuf);
+    }
+
+    const xlsxBuf = await generateExportXlsxBuffer(report);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="kuvhura_telemetry_data_${stamp}.xlsx"`);
+    return res.send(xlsxBuf);
+  } catch (err) {
+    console.warn('[EXPORT] Error generating telemetry export:', err.message);
+    return res.status(500).json({ error: 'Could not generate telemetry export.' });
   }
 });
 

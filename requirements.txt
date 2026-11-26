@@ -11,3 +11,6 @@ aiohttp
 xlrd
 wbgapi
 websockets
+python-docx
+reportlab
+openpyxl
