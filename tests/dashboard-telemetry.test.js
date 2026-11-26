@@ -333,5 +333,64 @@ test('X feed refreshes via live public index before stale cache when X API v2 re
   );
 });
 
+test('ZIMSTAT spatial telemetry falls back to verified baseline when telemetry_cache.json is absent', () => {
+  const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const code = extract(
+    source,
+    'const ZIMSTAT_IMP_PDF_URL =',
+    '\nfunction broadcastExtractionSnapshot('
+  );
+  const getSnapshot = runInNewContext(`${code}; getZimstatSpatialTelemetrySnapshot`, {
+    process: { env: {} },
+    path: { join: (...parts) => parts.join('/') },
+    __dirname: '/nonexistent-render-dir',
+    existsSync: () => false,
+    readFileSync: () => { throw new Error('ENOENT'); },
+    Map, Array, Number, Date, console: { warn() {} }
+  });
+  const snapshot = getSnapshot();
+  assert.equal(snapshot.status, 'ok');
+  assert.equal(snapshot.source, 'verified_baseline');
+  assert.equal(snapshot.spatial_reports.length, 3);
+  assert.equal(snapshot.extraction_reports.length, 2);
+  assert.ok(snapshot.extraction_reports.some(r => r.commodity === 'Platinum (PGMs)' && r.quantity === 3807));
+  assert.ok(snapshot.extraction_reports.some(r => r.commodity === 'Gold' && r.quantity === 9894));
+});
+
+test('fetchXPublicIndexFeed falls back to public X status syndication when Google News RSS returns empty', async () => {
+  const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const code = extract(
+    source,
+    'async function fetchXPublicIndexFeed(',
+    '\nfunction formatSocialFeedHttpError('
+  );
+  const fetchX = runInNewContext(`${code}; fetchXPublicIndexFeed`, {
+    X_PUBLIC_INDEX_RSS_URLS: ['https://news.google.com/rss/search?q=1', 'https://news.google.com/rss/search?q=2'],
+    X_PUBLIC_INDEX_CACHE_MS: 900000,
+    SOCIAL_NOISE_EXCLUDE_REGEX: /cricket/i,
+    AbortSignal,
+    Date, Set, String, Promise,
+    fetch: async () => ({ ok: false, status: 429, text: async () => '' }),
+    parseXPublicRssFeed: () => [],
+    isModelRelevantSocialItem: text => /zimbabwe/i.test(text),
+    isModelRelevantHashtag: () => true,
+    fetchXViaPublicStatusIndex: async () => ([
+      {
+        text: 'Zimbabwe parliament debates 2027 budget and ZiG monetary framework #Zimbabwe',
+        createdAt: '2026-11-25T10:00:00.000Z',
+        url: 'https://x.com/Reuters/status/2124849193592447197',
+        platform: 'X',
+        hashtags: ['#Zimbabwe']
+      }
+    ])
+  });
+  const res = await fetchX({ configured: true });
+  assert.ok(res && res.xMeta);
+  assert.equal(res.xMeta.status, 'connected');
+  assert.equal(res.xMeta.transport, 'x_public_syndication');
+  assert.equal(res.xMeta.postsSampled, 1);
+  assert.equal(res.xMeta.topPosts.length, 1);
+});
+
 
 

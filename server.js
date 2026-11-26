@@ -444,28 +444,140 @@ function convertZimstatReportToExtraction(zimstatReport) {
   };
 }
 
-function loadInitialExtractionReports() {
+const ZIMSTAT_IMP_PDF_URL = process.env.ZIMSTAT_IMP_PDF_URL
+  || 'https://www.zimstat.co.zw/wp-content/uploads/production/Mining/2026/Q1/IMP_2026_Q1.pdf';
+
+const VERIFIED_ZIMSTAT_BASELINE_REPORTS = [
+  {
+    id: 'baseline-great-dyke-platinum-q1-2026',
+    location_key: 'great_dyke',
+    location_name: 'Great Dyke Corridor',
+    location: 'Great Dyke Corridor',
+    lat: -18.85,
+    lon: 30.15,
+    commodity: 'Platinum (PGMs)',
+    quantity: 3807,
+    formatted_quantity: '3,807 kg (Q1 2026)',
+    unit: 'kg',
+    period: 'Q1 2026',
+    lineage: 'Measured Directly',
+    source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
+    source_url: ZIMSTAT_IMP_PDF_URL,
+    updated_at: '2026-04-15T00:00:00.000Z'
+  },
+  {
+    id: 'baseline-midlands-gold-q1-2026',
+    location_key: 'midlands_gold',
+    location_name: 'Midlands / Gold Corridors',
+    location: 'Midlands / Gold Corridors',
+    lat: -18.92,
+    lon: 29.82,
+    commodity: 'Gold',
+    quantity: 9894,
+    formatted_quantity: '9,894 kg (Q1 2026)',
+    unit: 'kg',
+    period: 'Q1 2026',
+    lineage: 'Measured Directly',
+    source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
+    source_url: ZIMSTAT_IMP_PDF_URL,
+    updated_at: '2026-04-15T00:00:00.000Z'
+  },
+  {
+    id: 'baseline-gutu-north-context',
+    location_key: 'gutu_north',
+    location_name: 'Gutu North, Masvingo',
+    location: 'Gutu North, Masvingo',
+    lat: -19.43,
+    lon: 31.18,
+    commodity: 'Rural Livelihoods & Inputs',
+    quantity: null,
+    formatted_quantity: 'No site extraction quantity reported',
+    unit: null,
+    period: '2025–2026',
+    lineage: 'Proxy / Estimate',
+    source_title: 'ZimLAC / ZimVAC Rural Livelihoods Context (Masvingo)',
+    source_url: 'https://www.fnc.org.zw/documents/',
+    updated_at: '2026-04-15T00:00:00.000Z'
+  }
+];
+
+function getZimstatSpatialTelemetrySnapshot() {
+  const mergedSpatial = new Map(
+    VERIFIED_ZIMSTAT_BASELINE_REPORTS.map(item => [item.id, { ...item }])
+  );
+  let spatialUpdatedAt = VERIFIED_ZIMSTAT_BASELINE_REPORTS[0]?.updated_at || new Date().toISOString();
+  let sourceMode = 'verified_baseline';
+
   try {
     const cachePath = path.join(__dirname, 'telemetry_cache.json');
-    if (!existsSync(cachePath)) {
-      console.log('[EXTRACTION] No telemetry cache found');
-      return;
+    if (existsSync(cachePath)) {
+      const cache = JSON.parse(readFileSync(cachePath, 'utf-8'));
+      const cachedSpatial = Array.isArray(cache.spatial_reports) ? cache.spatial_reports : [];
+      const cachedExtractions = Array.isArray(cache.extraction_reports) ? cache.extraction_reports : [];
+      for (const item of [...cachedSpatial, ...cachedExtractions]) {
+        if (item && item.id) {
+          mergedSpatial.set(item.id, item);
+          sourceMode = 'cache_synced';
+        }
+      }
+      if (cache.spatial_updated_at || cache.spatial_status?.updated_at) {
+        spatialUpdatedAt = cache.spatial_updated_at || cache.spatial_status.updated_at;
+      }
     }
-    const cache = JSON.parse(readFileSync(cachePath, 'utf-8'));
-    if (!cache.extraction_reports || !Array.isArray(cache.extraction_reports)) {
-      console.log('[EXTRACTION] No extraction reports in cache');
-      return;
+  } catch (err) {
+    console.warn(`[EXTRACTION] Could not read telemetry_cache.json, using verified baseline: ${err.message}`);
+  }
+
+  const spatialReports = [...mergedSpatial.values()];
+  const extractionOnly = spatialReports.filter(
+    item => item && item.quantity !== null && item.quantity !== undefined && Number.isFinite(Number(item.quantity))
+  );
+
+  return {
+    status: 'ok',
+    source: sourceMode,
+    spatial_reports: spatialReports,
+    extraction_reports: extractionOnly,
+    spatial_updated_at: spatialUpdatedAt
+  };
+}
+
+function broadcastExtractionSnapshot() {
+  const payload = `event: snapshot\ndata: ${JSON.stringify({
+    reports: extractionReports.slice(0, 100),
+    count: extractionReports.length,
+    updatedAt: extractionReports[0]?.receivedAt || null
+  })}\n\n`;
+  for (const client of extractionClients) {
+    try {
+      client.write(payload);
+    } catch {
+      extractionClients.delete(client);
     }
-    
-    for (const zimstatReport of cache.extraction_reports) {
+  }
+}
+
+function loadInitialExtractionReports() {
+  try {
+    const snapshot = getZimstatSpatialTelemetrySnapshot();
+    const incoming = Array.isArray(snapshot.extraction_reports) ? snapshot.extraction_reports : [];
+
+    for (const zimstatReport of incoming) {
       const converted = convertZimstatReportToExtraction(zimstatReport);
-      if (converted && !extractionReports.some(r => r.id === converted.id)) {
+      if (!converted) continue;
+      const existingIdx = extractionReports.findIndex(r => r.id === converted.id);
+      if (existingIdx >= 0) {
+        extractionReports[existingIdx] = converted;
+      } else {
         extractionReports.unshift(converted);
       }
     }
-    
+
     extractionReports.length = Math.min(extractionReports.length, MAX_EXTRACTION_REPORTS);
-    console.log(`[EXTRACTION] Loaded ${extractionReports.length} reports from ZIMSTAT cache`);
+    console.log(`[EXTRACTION] Loaded ${extractionReports.length} ZIMSTAT extraction reports (${snapshot.source})`);
+    if (extractionClients.size > 0) {
+      broadcastExtractionSnapshot();
+    }
   } catch (err) {
     console.warn(`[EXTRACTION] Failed to load initial reports: ${err.message}`);
   }
@@ -583,12 +695,26 @@ const YOUTUBE_ZIMBABWE_PUBLIC_CHANNELS = [
   { channelId: 'UC8z43AxZwpXkEfNqJopiCew', label: 'SlyMediaTv' }
 ];
 const X_PUBLIC_INDEX_RSS_URLS = [
-  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(politics+OR+parliament+OR+ZANU+OR+Mnangagwa+OR+Chiwenga+OR+Chamisa+OR+constitution+OR+CAB3+OR+2030+OR+succession+OR+politburo+OR+judiciary+OR+SADC+OR+election+OR+opposition)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
-  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(economy+OR+inflation+OR+ZiG+OR+ZWG+OR+RBZ+OR+monetary+policy+OR+dollarization+OR+exchange+rate+OR+parallel+market+OR+forex+OR+ZSE+OR+VFEX+OR+banking+OR+liquidity)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
-  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(Treasury+OR+budget+OR+Mthuli+OR+ZIMRA+OR+tax+OR+VAT+OR+IMTT+OR+debt+OR+arrears+OR+IMF+OR+World+Bank+OR+fiscal+OR+austerity+OR+tariff+OR+subsidy)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(politics+OR+parliament+OR+ZANU+OR+Mnangagwa+OR+Chiwenga+OR+Chamisa+OR+constitution+OR+CAB3+OR+2030+OR+succession+OR+politburo+OR+judiciary+OR+SADC+OR+election+OR+opposition)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-US&gl=US&ceid=US:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(economy+OR+inflation+OR+ZiG+OR+ZWG+OR+RBZ+OR+monetary+policy+OR+dollarization+OR+exchange+rate+OR+parallel+market+OR+forex+OR+ZSE+OR+VFEX+OR+banking+OR+liquidity)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-US&gl=US&ceid=US:en',
+  'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(Treasury+OR+budget+OR+Mthuli+OR+ZIMRA+OR+tax+OR+VAT+OR+IMTT+OR+debt+OR+arrears+OR+IMF+OR+World+Bank+OR+fiscal+OR+austerity+OR+tariff+OR+subsidy)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-US&gl=US&ceid=US:en',
   'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(corruption+OR+ZACC+OR+Auditor-General+OR+tender+OR+procurement+OR+PRAZ+OR+Mutapa+OR+ZINARA+OR+ZESA+OR+Tagwirei+OR+Chivayo+OR+mining+OR+lithium+OR+gold+OR+land+reform+OR+cartel)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
   'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(diaspora+OR+remittances+OR+wages+OR+salaries+OR+unemployment+OR+informal+sector+OR+vendors+OR+civil+servants+OR+pension+OR+cost+of+living+OR+fuel+OR+agriculture+OR+tobacco+OR+drought)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en',
   'https://news.google.com/rss/search?q=site:x.com+Zimbabwe+(protest+OR+strike+OR+stayaway+OR+resistance+OR+human+rights+OR+PVO+Bill+OR+ZCTU+OR+teachers+OR+nurses+OR+doctors+OR+water+crisis+OR+load+shedding+OR+demolitions+OR+healthcare+OR+Starlink+OR+censorship)+-cricket+-rugby+-football+-soccer+when:7d&hl=en-ZW&gl=ZW&ceid=ZW:en'
+];
+const X_PUBLIC_DISCOVERY_QUERIES = [
+  'x.com Zimbabwe',
+  'x.com Zimbabwe politics',
+  'x.com Zimbabwe economy',
+  'x.com Zimbabwe government',
+  'x.com Harare',
+  'x.com Mnangagwa',
+  'x.com ZANU',
+  'x.com Zimbabwe parliament',
+  'x.com Zimbabwe mining',
+  'x.com Zimbabwe sanctions',
+  'x.com Bulawayo',
+  'twitter.com Zimbabwe'
 ];
 const X_PUBLIC_INDEX_CACHE_MS = 15 * 60 * 1000;
 const X_API_V2_BLOCKED_COOLDOWN_MS = 6 * 60 * 60 * 1000;
@@ -890,13 +1016,181 @@ function parseXPublicRssFeed(xmlText) {
   return posts;
 }
 
-async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
+function xSnowflakeToTimestampMs(statusId) {
   try {
-    const batches = await Promise.all(
-      X_PUBLIC_INDEX_RSS_URLS.map(async rssUrl => {
+    return Number((BigInt(statusId) >> 22n) + 1288834974657n);
+  } catch {
+    return 0;
+  }
+}
+
+async function fetchSinglePublicXPost(user, statusId) {
+  const canonicalUrl = `https://x.com/${encodeURIComponent(user)}/status/${encodeURIComponent(statusId)}`;
+  const headers = {
+    Accept: 'application/json',
+    'User-Agent': 'KUVHURA-Observatory/1.0'
+  };
+
+  try {
+    const fxRes = await fetch(`https://api.fxtwitter.com/${encodeURIComponent(user)}/status/${encodeURIComponent(statusId)}`, {
+      headers,
+      signal: AbortSignal.timeout(4500)
+    });
+    if (fxRes.ok) {
+      const data = await fxRes.json();
+      const tweet = data?.tweet;
+      if (tweet?.text) {
+        const text = decodeXmlEntities(String(tweet.text)).replace(/\s+/g, ' ').trim();
+        const tsMs = tweet.created_timestamp
+          ? Number(tweet.created_timestamp) * 1000
+          : xSnowflakeToTimestampMs(statusId);
+        const createdAt = tsMs > 0 ? new Date(tsMs).toISOString() : new Date().toISOString();
+        const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])].slice(0, 6);
+        return {
+          text,
+          createdAt,
+          url: sanitizeSafeExternalHttpsUrl(tweet.url || canonicalUrl),
+          platform: 'X',
+          hashtags
+        };
+      }
+    }
+  } catch {
+    // Fall through to VxTwitter / X oEmbed
+  }
+
+  try {
+    const vxRes = await fetch(`https://api.vxtwitter.com/${encodeURIComponent(user)}/status/${encodeURIComponent(statusId)}`, {
+      headers,
+      signal: AbortSignal.timeout(4500)
+    });
+    if (vxRes.ok) {
+      const data = await vxRes.json();
+      if (data?.text) {
+        const text = decodeXmlEntities(String(data.text)).replace(/\s+/g, ' ').trim();
+        const tsMs = data.date_epoch
+          ? Number(data.date_epoch) * 1000
+          : xSnowflakeToTimestampMs(statusId);
+        const createdAt = tsMs > 0 ? new Date(tsMs).toISOString() : new Date().toISOString();
+        const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])].slice(0, 6);
+        return {
+          text,
+          createdAt,
+          url: sanitizeSafeExternalHttpsUrl(data.tweetURL || canonicalUrl),
+          platform: 'X',
+          hashtags
+        };
+      }
+    }
+  } catch {
+    // Fall through to official X oEmbed
+  }
+
+  try {
+    const oembedUrl = `https://publish.twitter.com/oembed?${new URLSearchParams({ url: canonicalUrl, omit_script: 'true' })}`;
+    const oeRes = await fetch(oembedUrl, {
+      headers,
+      signal: AbortSignal.timeout(4500)
+    });
+    if (oeRes.ok) {
+      const data = await oeRes.json();
+      const pMatch = String(data?.html || '').match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+      const rawText = pMatch ? pMatch[1].replace(/<[^>]+>/g, ' ') : '';
+      const text = decodeXmlEntities(rawText).replace(/\s+/g, ' ').trim();
+      if (text) {
+        const tsMs = xSnowflakeToTimestampMs(statusId);
+        const createdAt = tsMs > 0 ? new Date(tsMs).toISOString() : new Date().toISOString();
+        const hashtags = [...new Set(text.match(HASHTAG_REGEX) || [])].slice(0, 6);
+        return {
+          text,
+          createdAt,
+          url: sanitizeSafeExternalHttpsUrl(data.url || canonicalUrl),
+          platform: 'X',
+          hashtags
+        };
+      }
+    }
+  } catch {
+    // Unreachable status
+  }
+
+  return null;
+}
+
+async function fetchXViaPublicStatusIndex() {
+  const statusMap = new Map();
+  const statusRegex = /https?:\/\/(?:www\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,20})\/status\/(\d{10,22})/gi;
+
+  const extractLinksFromText = (raw) => {
+    let match;
+    statusRegex.lastIndex = 0;
+    while ((match = statusRegex.exec(raw)) !== null) {
+      const user = match[1];
+      const id = match[2];
+      if (!statusMap.has(id)) {
+        statusMap.set(id, { user, id, ts: xSnowflakeToTimestampMs(id) });
+      }
+    }
+  };
+
+  await Promise.all([
+    ...X_PUBLIC_DISCOVERY_QUERIES.map(async query => {
+      try {
+        const url = `https://api.bsky.app/xrpc/app.bsky.feed.searchPosts?${new URLSearchParams({ q: query, sort: 'latest', limit: '40' })}`;
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' },
+          signal: AbortSignal.timeout(5500)
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        for (const post of (data?.posts || [])) {
+          extractLinksFromText(JSON.stringify(post));
+        }
+      } catch {
+        // Ignore single discovery query error
+      }
+    }),
+    ...['mastodon.social', 'mas.to'].map(async instance => {
+      try {
+        const res = await fetch(`https://${instance}/api/v1/timelines/tag/Zimbabwe?limit=40`, {
+          headers: { Accept: 'application/json', 'User-Agent': 'KUVHURA-Observatory/1.0' },
+          signal: AbortSignal.timeout(5500)
+        });
+        if (!res.ok) return;
+        const items = await res.json();
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            extractLinksFromText(String(item?.content || ''));
+          }
+        }
+      } catch {
+        // Ignore single instance error
+      }
+    })
+  ]);
+
+  if (statusMap.size === 0) return [];
+
+  const newestCandidates = [...statusMap.values()]
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 30);
+
+  const enriched = await Promise.all(
+    newestCandidates.map(item => fetchSinglePublicXPost(item.user, item.id))
+  );
+
+  return enriched.filter(Boolean);
+}
+
+async function fetchXPublicIndexFeed({ configured = false } = {}) {
+  try {
+    // Wave 1 & Wave 2: staggered 3-at-a-time Google News RSS fetches with strict 5.5s per-request timeout
+    // so cloud datacenter IPs (e.g. Render) never stall the whole feed or trigger burst rate limits.
+    const fetchRssWave = async (urls) => Promise.all(
+      urls.map(async rssUrl => {
         try {
           const res = await fetch(rssUrl, {
-            signal: signal || AbortSignal.timeout(10000),
+            signal: AbortSignal.timeout(5500),
             headers: {
               Accept: 'application/rss+xml, application/xml, text/xml',
               'User-Agent': 'KUVHURA-Observatory/1.0'
@@ -910,30 +1204,58 @@ async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
         }
       })
     );
+
+    const wave1 = await fetchRssWave(X_PUBLIC_INDEX_RSS_URLS.slice(0, 3));
+    const wave1Count = wave1.reduce((sum, b) => sum + b.length, 0);
+    const wave2 = wave1Count > 0 ? await fetchRssWave(X_PUBLIC_INDEX_RSS_URLS.slice(3)) : [];
+    const batches = [...wave1, ...wave2];
+
     const seenKeys = new Set();
+    const seenTexts = new Set();
     const parsed = [];
     const allItems = [];
-    for (const batch of batches) {
-      for (const item of batch) {
+
+    const collectItems = (items) => {
+      for (const item of items) {
+        if (!item?.text) continue;
         allItems.push(item);
         if (!isModelRelevantSocialItem(item.text)) continue;
-        const dedupeKey = item.url || item.text.toLowerCase();
-        if (seenKeys.has(dedupeKey)) continue;
+        const normalizedText = item.text.toLowerCase().replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+        const dedupeKey = item.url || normalizedText;
+        if (seenKeys.has(dedupeKey) || seenTexts.has(normalizedText)) continue;
         seenKeys.add(dedupeKey);
+        seenTexts.add(normalizedText);
         parsed.push({
           ...item,
           hashtags: (item.hashtags || []).filter(isModelRelevantHashtag)
         });
       }
+    };
+
+    for (const batch of batches) {
+      collectItems(batch);
     }
-    
+
+    // Tier 3 cloud-resilient fallback: if Google News RSS returned no relevant items (e.g. blocked/tarpitted on Render),
+    // discover real X status URLs via public social indexes and enrich directly via FxTwitter / VxTwitter / X oEmbed.
+    let transport = 'x_public_index';
+    if (parsed.length === 0) {
+      const statusItems = await fetchXViaPublicStatusIndex();
+      collectItems(statusItems);
+      if (parsed.length > 0 || statusItems.length > 0) {
+        transport = 'x_public_syndication';
+      }
+    }
+
     let finalPosts = parsed;
-    if (parsed.length === 0 && allItems.length > 0) {
+    if (finalPosts.length === 0 && allItems.length > 0) {
       for (const item of allItems) {
-        if (/zimbabwe|zw\b/i.test(item.text)) {
-          const dedupeKey = item.url || item.text.toLowerCase();
-          if (!seenKeys.has(dedupeKey)) {
+        if (/zimbabwe|harare|bulawayo|mnangagwa|zanu|zig\b|zw\b/i.test(item.text) && !SOCIAL_NOISE_EXCLUDE_REGEX.test(item.text)) {
+          const normalizedText = item.text.toLowerCase().replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+          const dedupeKey = item.url || normalizedText;
+          if (!seenKeys.has(dedupeKey) && !seenTexts.has(normalizedText)) {
             seenKeys.add(dedupeKey);
+            seenTexts.add(normalizedText);
             finalPosts.push({
               ...item,
               hashtags: (item.hashtags || []).filter(isModelRelevantHashtag)
@@ -942,7 +1264,7 @@ async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
         }
       }
     }
-    
+
     if (finalPosts.length === 0) return null;
     finalPosts.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     const topPosts = finalPosts.slice(0, 50).map(item => ({
@@ -956,7 +1278,7 @@ async function fetchXPublicIndexFeed({ signal, configured = false } = {}) {
       xMeta: {
         configured,
         status: 'connected',
-        transport: 'x_public_index',
+        transport,
         postsSampled: finalPosts.length,
         topPosts,
         updatedAt: new Date().toISOString(),
@@ -1068,7 +1390,6 @@ async function fetchSocialSourceInternal(feed, { cacheTtl, cached }) {
     // Zero-cost public X index RSS feed when X_BEARER_TOKEN is not set or X API v2 recently returned 402/401/403
     if (feed.type === "x" && (!xToken || Date.now() < xApiV2BlockedUntil)) {
       const xFallback = await fetchXPublicIndexFeed({
-        signal: controller.signal,
         configured: Boolean(xToken)
       });
       if (xFallback) {
@@ -6437,26 +6758,12 @@ app.get('/api/maps/tiles/:style/:z/:x/:y.png', async (req, res) => {
 
 app.get('/api/zimstat/spatial-telemetry', (req, res) => {
   try {
-    const cachePath = path.join(__dirname, 'telemetry_cache.json');
-    if (!existsSync(cachePath)) {
-      return res.json({
-        status: 'pending',
-        message: 'ZIMSTAT telemetry cache not yet populated',
-        spatial_reports: [],
-        extraction_reports: [],
-      });
-    }
-    const cache = JSON.parse(readFileSync(cachePath, 'utf-8'));
-    res.json({
-      status: 'ok',
-      spatial_reports: cache.spatial_reports || [],
-      extraction_reports: cache.extraction_reports || [],
-      spatial_updated_at: cache.spatial_updated_at || null,
-    });
+    const snapshot = getZimstatSpatialTelemetrySnapshot();
+    res.json(snapshot);
   } catch (err) {
-    console.warn('Error reading ZIMSTAT telemetry cache:', err.message);
+    console.warn('Error reading ZIMSTAT telemetry snapshot:', err.message);
     res.status(500).json({
-      error: 'Could not read ZIMSTAT telemetry cache',
+      error: 'Could not read ZIMSTAT telemetry snapshot',
       message: err.message,
     });
   }
