@@ -6,10 +6,18 @@ from xml.sax.saxutils import escape as xml_escape
 
 from flask import Blueprint, request, send_file
 from docx import Document
+from docx.shared import RGBColor
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import (
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
@@ -51,182 +59,274 @@ def _load_cache():
     return cache
 
 
-def _build_narrative_sections(cache, audience="layman"):
-    """Return structured report sections tailored for 'technical' or 'layman' readers."""
+def _partition_records(records):
+    extraction = [r for r in records if r.get("domain") == "extraction"]
+    spatial = [r for r in records if r.get("domain") in ("spatial", "livelihoods")]
+    governance = [r for r in records if r.get("domain") in ("governance", "module")]
+    other = [
+        r
+        for r in records
+        if r.get("domain") not in ("extraction", "spatial", "livelihoods", "governance", "module")
+    ]
+    return extraction, spatial, governance, other
+
+
+def _build_5page_briefing(cache, audience="layman"):
+    """
+    Assemble a structured 5-page executive & analytical briefing tailored for
+    either 'technical' or 'layman' readers from telemetry_cache.json.
+    """
     norm_audience = "technical" if (audience or "").strip().lower() == "technical" else "layman"
     records = cache.get("depth_records") or cache.get("spatial_reports") or []
     streams = cache.get("stochastic_streams") or {}
-    updated = cache.get("depth_updated_at") or cache.get("timestamp") or datetime.now(timezone.utc).isoformat()
+    updated = (
+        cache.get("depth_updated_at")
+        or cache.get("timestamp")
+        or datetime.now(timezone.utc).isoformat()
+    )
 
+    extraction, spatial, governance, other = _partition_records(records)
     direct_count = sum(1 for r in records if r.get("lineage") == "Measured Directly")
     proxy_count = sum(1 for r in records if r.get("lineage") == "Proxy / Estimate")
     bucket_count = sum(1 for r in records if r.get("lineage") == "Conceptual / Analytical Bucket")
+    flagged_count = sum(1 for r in records if r.get("audit_flags"))
 
-    if norm_audience == "technical":
-        title = "KUVHURA Technical Telemetry & Methodological Audit Report"
-        intro = (
-            f"Generated {updated}. This technical briefing details observed primary indicators, "
-            f"derived proxies, analytical regime classifications, and stochastic dispersion parameters "
-            f"from KUVHURA's rolling telemetry cache ({direct_count} Measured Directly, "
-            f"{proxy_count} Proxy / Estimate, {bucket_count} Conceptual / Analytical Bucket)."
-        )
-        methodology = (
-            "Epistemic Governance & Stochastic Layer: Primary figures are validated against source URLs "
-            "and unit sanity bounds before ingestion. Exponential smoothing (alpha=0.2) and rolling 10-period "
-            "sample standard deviations classify systemic stress regimes (Contained, Elevated Friction, Acute Stress) "
-            "without altering raw reported values."
-        )
-    else:
-        title = "KUVHURA Public Briefing: Zimbabwe Political Economy & Livelihoods"
-        intro = (
-            f"Report date: {updated}. This plain-language briefing summarizes what official statistics, "
-            f"parliamentary tracking, and household vulnerability surveys currently show across Zimbabwe. "
-            f"Every figure is labeled clearly to show whether it is an official measurement ({direct_count}), "
-            f"a tracked estimate ({proxy_count}), or an analytical risk classification ({bucket_count})."
-        )
-        methodology = (
-            "How to Read This Briefing: Direct measurements come straight from official statistical bulletins "
-            "and published surveys. Estimates and risk labels help highlight where prices, mining output, "
-            "food security, or new laws are shifting quickly, while separating hard data from analysis."
-        )
+    is_tech = norm_audience == "technical"
 
-    items = []
-    for r in records:
-        label = r.get("label") or r.get("title") or r.get("id") or "Unnamed Indicator"
-        lineage = r.get("lineage") or "Proxy / Estimate"
-        val = r.get("value")
-        unit = r.get("unit") or ""
-        period = r.get("period") or "Current"
-        status = r.get("status") or "cached"
-        src_title = r.get("source_title") or r.get("source") or "KUVHURA Registry"
-        src_url = r.get("source_url") or ""
-        explanation = r.get("explanation") or ""
+    doc_title = (
+        "KUVHURA Observatory: 5-Page Technical Telemetry & Institutional Risk Analysis"
+        if is_tech
+        else "KUVHURA Observatory: 5-Page Executive Briefing on Zimbabwe's Political Economy"
+    )
+    subtitle = (
+        f"Snapshot Timestamp: {updated} | Mode: Technical & Methodological Audit"
+        if is_tech
+        else f"Snapshot Timestamp: {updated} | Mode: Plain-Language Executive Briefing"
+    )
 
-        if norm_audience == "technical":
-            val_str = f"{val} {unit}".strip() if val is not None else "No numeric quantity reported"
-            detail = (
-                f"[{lineage} | Status: {status} | Period: {period}] Value: {val_str}. "
-                f"Source: {src_title} ({src_url}). {explanation}"
-            ).strip()
-        else:
-            val_str = f"{val} {unit}".strip() if val is not None else "Qualitative / tracked update"
-            detail = (
-                f"Category: {lineage} ({period}). Current reading: {val_str}. "
-                f"{explanation} Source: {src_title}."
-            ).strip()
+    # PAGE 1: Executive Summary & Headline Risk Posture
+    p1_paragraphs = [
+        (
+            f"This five-page analytical report synthesizes {len(records)} active telemetry records "
+            f"across KUVHURA's extractive, spatial livelihoods, governance, and stochastic uncertainty layers. "
+            f"To preserve evidentiary rigor, every indicator is strictly partitioned into primary empirical "
+            f"observations ({direct_count} Measured Directly), contextual or derived indicators "
+            f"({proxy_count} Proxy / Estimate), and structural classification frameworks "
+            f"({bucket_count} Conceptual / Analytical Bucket)."
+        ),
+        (
+            "Core Analytical Finding — Divergence Over Uniformity: Headline national indices mask sharp "
+            "sectoral and geographic divergence. In the extractive sector, quarterly contractions in bulk "
+            "index readings and base metals coexist with year-on-year resilience in gold and steady quarterly "
+            "platinum output along the Great Dyke corridor. Similarly, provincial rural food-security averages "
+            "conceal wide district-level dispersion in household income and cereal vulnerability."
+            if is_tech
+            else "Key Takeaway — Different Sectors Are Moving in Opposite Directions: Looking at one national "
+            "headline number hides what is actually happening on the ground. While overall mining output "
+            "dipped quarter-on-quarter due to sharp drops in nickel and diamonds, gold remains higher than a "
+            "year ago and Great Dyke platinum held steady. The same pattern holds in rural provinces, where "
+            "some districts face severe food pressure while neighboring districts show stronger household incomes."
+        ),
+        (
+            "Institutional Bottlenecks & Epistemic Discipline: Legislative friction remains concentrated around "
+            "resource-governance statutory reform—most notably Parliamentary Legal Committee (PLC) review bottlenecks "
+            "on the Mines and Minerals Bill—while climate legislation has progressed further through parliamentary "
+            "readings. Where site-level extraction or sub-ward input figures are not published in primary documents "
+            "(such as Gutu North, Masvingo), KUVHURA explicitly preserves a 'no reported quantity' state rather than "
+            "imputing synthetic values."
+            if is_tech
+            else "Laws, Institutions & Honest Data Boundaries: Key mining legislation continues to face legal and "
+            "procedural delays in Parliament, whereas climate governance bills have moved closer to completion. "
+            "Just as importantly, whenever official reports do not publish a local extraction figure—such as in "
+            "Gutu North, Masvingo—this briefing states that openly instead of guessing."
+        ),
+    ]
 
-        items.append({"heading": str(label), "body": detail, "raw": r})
+    p1_highlights = [
+        f"Total Audited Signals: {len(records)} records ({direct_count} Direct, {proxy_count} Proxy/Estimate, {bucket_count} Analytical Buckets).",
+        f"Data Hygiene & Audit Flags: {flagged_count} records flagged for missing metadata or range review.",
+        f"Active Stochastic Streams: {len(streams)} rolling dispersion and regime-state monitors.",
+        "Primary Institutional Anchors: ZIMSTAT IMP releases, ZimLAC/FNC factsheets, and Parliament/Veritas bill trackers.",
+    ]
 
-    stream_notes = []
+    # PAGE 2: Extractive & Industrial Sector Analysis
+    p2_intro = (
+        "Sectoral decomposition of ZIMSTAT Index of Mineral Production (IMP) series evaluates both "
+        "quarter-on-quarter (QoQ) momentum and year-on-year (YoY) structural trajectory across major corridors."
+        if is_tech
+        else "Mining remains Zimbabwe's primary foreign-currency anchor, but performance varies widely by mineral "
+        "and corridor. Comparing both quarterly and annual changes separates short-term swings from deeper shifts."
+    )
+    p2_items = extraction or other
+
+    # PAGE 3: Spatial Context & Rural Livelihoods
+    p3_intro = (
+        "Spatial telemetry integrates approximate geographic centroids with ZimLAC/ZimVAC household vulnerability "
+        "and income metrics, enforcing strict separation between provincial survey baselines and locality-level gaps."
+        if is_tech
+        else "Map pins in KUVHURA represent approximate reference areas rather than exact mine boundaries or sensor feeds. "
+        "In rural localities like Gutu North (Masvingo), household survey data provides essential livelihood context "
+        "even when site-level extraction quantities are unreported."
+    )
+    p3_items = spatial
+
+    # PAGE 4: Institutional Governance & Advanced Modules (Components 1-8)
+    p4_intro = (
+        "Legislative stage-friction telemetry tracks procedural bottlenecks across resource and environmental bills, "
+        "feeding KUVHURA's Advanced Institutional Modules (Components 1–8: Asset Flight & Debt, Digital Repression [Sf], "
+        "Strike Funds & Legal, Gender & Vulnerability [Vg], and Historical Backtesting & Climate)."
+        if is_tech
+        else "Beyond production numbers, political-economy stability depends on how laws move through Parliament and how "
+        "institutional pressures interact. KUVHURA's eight analytical modules break these pressures down into specific "
+        "areas—such as legal bottlenecks, debt and capital flight, digital controls, gender vulnerability, and climate shocks."
+    )
+    p4_items = governance
+
+    # PAGE 5: Stochastic Uncertainty Layer, Methodology & Full Audit Matrix
+    p5_intro = (
+        "Stochastic Telemetry Specification: Rather than relying on deterministic point forecasts, KUVHURA tracks "
+        "rolling 10-observation sample standard deviation (volatility_std_10) alongside exponentially weighted "
+        "moving averages (alpha = 0.2, capped at 30 historical points). Regime classifications (Contained, Elevated "
+        "Friction, Acute Stress, Unclassified / Stale) function strictly as [Conceptual / Analytical Buckets]."
+        if is_tech
+        else "How Uncertainty Is Measured: Real-world political and economic data arrives unevenly and contains sudden spikes. "
+        "Instead of reacting to every single jump, KUVHURA tracks both how much a signal fluctuates (volatility) and "
+        "its smoothed trend, grouping conditions into clear stages: Contained, Elevated Friction, or Acute Stress."
+    )
+
+    stream_rows = []
     for key, s in streams.items():
         if not isinstance(s, dict):
             continue
-        regime = s.get("regime", "Unclassified")
-        smoothed = s.get("smoothed_value")
-        vol = s.get("volatility_std_10")
-        raw_v = s.get("latest_raw")
-        if norm_audience == "technical":
-            stream_notes.append(
-                f"{key}: raw={raw_v}, smoothed(a=0.2)={smoothed}, rolling_std_10={vol}, regime={regime}."
-            )
-        else:
-            stream_notes.append(
-                f"{key.replace('_', ' ').title()}: Currently assessed as '{regime}' "
-                f"(smoothed index: {smoothed}; volatility band: {vol})."
-            )
+        stream_rows.append(
+            {
+                "stream": key,
+                "raw": s.get("latest_raw"),
+                "smoothed": s.get("smoothed_value"),
+                "std_10": s.get("volatility_std_10"),
+                "regime": s.get("regime", "Unclassified"),
+                "status": s.get("status", "unknown"),
+            }
+        )
 
     return {
-        "title": title,
+        "title": doc_title,
+        "subtitle": subtitle,
         "updated": updated,
         "audience": norm_audience,
-        "intro": intro,
-        "methodology": methodology,
-        "items": items,
-        "stream_notes": stream_notes,
-        "records": records,
-        "streams": streams,
+        "is_tech": is_tech,
+        "page1": {"paragraphs": p1_paragraphs, "highlights": p1_highlights},
+        "page2": {"title": "2. Extractive & Industrial Corridor Analysis", "intro": p2_intro, "items": p2_items},
+        "page3": {"title": "3. Spatial Context, Rural Livelihoods & Agricultural Inputs", "intro": p3_intro, "items": p3_items},
+        "page4": {"title": "4. Legislative Friction & Institutional Modules (Components 1–8)", "intro": p4_intro, "items": p4_items},
+        "page5": {
+            "title": "5. Stochastic Uncertainty Layer, Methodology & Audit Register",
+            "intro": p5_intro,
+            "streams": stream_rows,
+            "all_records": records,
+        },
     }
 
 
-def _generate_pdf(report):
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        rightMargin=40,
-        leftMargin=40,
-        topMargin=42,
-        bottomMargin=42,
+def _format_record_text(r, is_tech):
+    label = r.get("label") or r.get("location_name") or "Indicator"
+    val = r.get("value", r.get("quantity"))
+    unit = r.get("unit") or ""
+    period = r.get("period") or "unspecified"
+    lineage = r.get("lineage") or "Proxy / Estimate"
+    src = r.get("source_title") or "Cited source"
+    val_disp = (
+        f"{val:,} {unit}".strip()
+        if isinstance(val, (int, float)) and not isinstance(val, bool)
+        else "No numeric quantity reported"
     )
-    styles = getSampleStyleSheet()
-    story = [
-        Paragraph(xml_escape(report["title"]), styles["Title"]),
-        Spacer(1, 8),
-        Paragraph(xml_escape(report["intro"]), styles["BodyText"]),
-        Spacer(1, 10),
-        Paragraph("1. Methodology &amp; Data Lineage", styles["Heading2"]),
-        Paragraph(xml_escape(report["methodology"]), styles["BodyText"]),
-        Spacer(1, 12),
-        Paragraph("2. Recorded Signals &amp; Explanations", styles["Heading2"]),
-    ]
 
-    for item in report["items"]:
-        story.append(Paragraph(f"<b>{xml_escape(item['heading'])}</b>", styles["Heading4"]))
-        story.append(Paragraph(xml_escape(item["body"]), styles["BodyText"]))
-        story.append(Spacer(1, 6))
-
-    if report["stream_notes"]:
-        story.append(Spacer(1, 10))
-        story.append(Paragraph("3. Volatility &amp; Regime State Summary", styles["Heading2"]))
-        table_data = [["Stream / Metric", "Summary"]]
-        for note in report["stream_notes"]:
-            parts = note.split(":", 1)
-            table_data.append(
-                [
-                    Paragraph(xml_escape(parts[0].strip()), styles["BodyText"]),
-                    Paragraph(
-                        xml_escape(parts[1].strip() if len(parts) > 1 else note),
-                        styles["BodyText"],
-                    ),
-                ]
-            )
-        tbl = Table(table_data, colWidths=[150, 355])
-        tbl.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("PADDING", (0, 0), (-1, -1), 6),
-                ]
-            )
+    if is_tech:
+        extra = []
+        if r.get("qoq_pct") is not None:
+            extra.append(f"QoQ: {r['qoq_pct']:+.1f}%")
+        if r.get("yoy_pct") is not None:
+            extra.append(f"YoY: {r['yoy_pct']:+.1f}%")
+        extra_str = f" ({', '.join(extra)})" if extra else ""
+        return (
+            f"[{lineage}] Observed: {val_disp}{extra_str} | Period: {period} | "
+            f"Status: {r.get('status', 'cached')} | Source: {src}. "
+            f"Analytical Note: {r.get('notes') or r.get('explanation') or 'N/A'}"
         )
-        story.append(tbl)
-
-    doc.build(story)
-    buf.seek(0)
-    return buf
+    return r.get("explanation") or f"{label}: {val_disp} ({period}, {lineage}) via {src}."
 
 
-def _generate_docx(report):
+def _generate_docx(briefing):
     doc = Document()
-    doc.add_heading(report["title"], level=0)
-    doc.add_paragraph(report["intro"])
+    is_tech = briefing["is_tech"]
 
-    doc.add_heading("1. Methodology & Data Lineage", level=1)
-    doc.add_paragraph(report["methodology"])
+    # --- PAGE 1 ---
+    doc.add_heading(briefing["title"], level=0)
+    sub = doc.add_paragraph(briefing["subtitle"])
+    if sub.runs:
+        sub.runs[0].font.color.rgb = RGBColor(90, 98, 110)
 
-    doc.add_heading("2. Recorded Signals & Explanations", level=1)
-    for item in report["items"]:
-        doc.add_heading(item["heading"], level=2)
-        doc.add_paragraph(item["body"])
+    doc.add_heading("1. Executive Summary & Headline Risk Posture", level=1)
+    for para in briefing["page1"]["paragraphs"]:
+        doc.add_paragraph(para)
 
-    if report["stream_notes"]:
-        doc.add_heading("3. Volatility & Regime State Summary", level=1)
-        for note in report["stream_notes"]:
-            doc.add_paragraph(note, style="List Bullet")
+    doc.add_heading("Key Snapshot Metrics", level=2)
+    for h in briefing["page1"]["highlights"]:
+        doc.add_paragraph(h, style="List Bullet")
+
+    # --- PAGES 2, 3, 4 ---
+    for page_key in ("page2", "page3", "page4"):
+        doc.add_page_break()
+        section = briefing[page_key]
+        doc.add_heading(section["title"], level=1)
+        doc.add_paragraph(section["intro"])
+
+        items = section["items"]
+        if not items:
+            doc.add_paragraph("No active records in this domain for the current cache snapshot.")
+        else:
+            for r in items:
+                heading_txt = f"{r.get('label') or r.get('location_name')} [{r.get('lineage', 'Proxy / Estimate')}]"
+                doc.add_heading(heading_txt, level=2)
+                doc.add_paragraph(_format_record_text(r, is_tech))
+
+    # --- PAGE 5 ---
+    doc.add_page_break()
+    p5 = briefing["page5"]
+    doc.add_heading(p5["title"], level=1)
+    doc.add_paragraph(p5["intro"])
+
+    doc.add_heading("Stochastic Volatility & Regime State Table", level=2)
+    streams = p5["streams"]
+    if streams:
+        tbl = doc.add_table(rows=1, cols=6)
+        tbl.style = "Table Grid"
+        hdr = tbl.rows[0].cells
+        for idx, col_name in enumerate(["Stream", "Raw", "Smoothed", "Volatility (Std10)", "Regime", "Status"]):
+            hdr[idx].text = col_name
+        for s in streams:
+            row = tbl.add_row().cells
+            row[0].text = str(s["stream"])
+            row[1].text = str(s["raw"])
+            row[2].text = str(s["smoothed"])
+            row[3].text = str(s["std_10"])
+            row[4].text = str(s["regime"])
+            row[5].text = str(s["status"])
+    else:
+        doc.add_paragraph("No stochastic streams populated in current snapshot.")
+
+    doc.add_heading("Source Lineage & Audit Register", level=2)
+    reg_tbl = doc.add_table(rows=1, cols=4)
+    reg_tbl.style = "Table Grid"
+    rhdr = reg_tbl.rows[0].cells
+    for idx, col_name in enumerate(["Indicator / Locality", "Period", "Lineage Tag", "Primary Source"]):
+        rhdr[idx].text = col_name
+    for r in p5["all_records"]:
+        row = reg_tbl.add_row().cells
+        row[0].text = str(r.get("label") or r.get("location_name") or "")
+        row[1].text = str(r.get("period") or "N/A")
+        row[2].text = str(r.get("lineage") or "Proxy / Estimate")
+        row[3].text = str(r.get("source_title") or "Cited source")
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -234,10 +334,140 @@ def _generate_docx(report):
     return buf
 
 
-def _generate_xlsx(report):
+def _generate_pdf(briefing):
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=42,
+        rightMargin=42,
+        topMargin=40,
+        bottomMargin=40,
+    )
+    styles = getSampleStyleSheet()
+    sub_style = ParagraphStyle(
+        "SubMeta",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=colors.HexColor("#4B5563"),
+        spaceAfter=10,
+    )
+    body_style = ParagraphStyle(
+        "BodySpaced",
+        parent=styles["BodyText"],
+        fontSize=10,
+        leading=14,
+        spaceAfter=8,
+    )
+    is_tech = briefing["is_tech"]
+
+    story = [
+        Paragraph(xml_escape(briefing["title"]), styles["Title"]),
+        Paragraph(xml_escape(briefing["subtitle"]), sub_style),
+        Paragraph("1. Executive Summary &amp; Headline Risk Posture", styles["Heading1"]),
+    ]
+    for para in briefing["page1"]["paragraphs"]:
+        story.append(Paragraph(xml_escape(para), body_style))
+
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("Key Snapshot Metrics", styles["Heading2"]))
+    for h in briefing["page1"]["highlights"]:
+        story.append(Paragraph(f"• {xml_escape(h)}", body_style))
+
+    for page_key in ("page2", "page3", "page4"):
+        story.append(PageBreak())
+        section = briefing[page_key]
+        story.append(Paragraph(xml_escape(section["title"]), styles["Heading1"]))
+        story.append(Paragraph(xml_escape(section["intro"]), body_style))
+        story.append(Spacer(1, 6))
+
+        items = section["items"]
+        if not items:
+            story.append(Paragraph("No active records in this domain for the current snapshot.", body_style))
+        else:
+            for r in items:
+                label = r.get("label") or r.get("location_name") or "Indicator"
+                lineage = r.get("lineage") or "Proxy / Estimate"
+                story.append(
+                    Paragraph(
+                        f"<b>{xml_escape(str(label))}</b> [{xml_escape(str(lineage))}]",
+                        styles["Heading3"],
+                    )
+                )
+                story.append(Paragraph(xml_escape(_format_record_text(r, is_tech)), body_style))
+
+    # --- PAGE 5 ---
+    story.append(PageBreak())
+    p5 = briefing["page5"]
+    story.append(Paragraph(xml_escape(p5["title"]), styles["Heading1"]))
+    story.append(Paragraph(xml_escape(p5["intro"]), body_style))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("Stochastic Volatility &amp; Regime State Summary", styles["Heading2"]))
+
+    if p5["streams"]:
+        s_data = [["Stream", "Raw", "Smoothed", "Std(10)", "Regime", "Status"]]
+        for s in p5["streams"]:
+            s_data.append(
+                [
+                    str(s["stream"]),
+                    str(s["raw"]),
+                    str(s["smoothed"]),
+                    str(s["std_10"]),
+                    str(s["regime"]),
+                    str(s["status"]),
+                ]
+            )
+        s_tbl = Table(s_data, colWidths=[125, 55, 65, 60, 110, 85])
+        s_tbl.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F2937")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("PADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+        story.append(s_tbl)
+    else:
+        story.append(Paragraph("No stochastic streams populated in current snapshot.", body_style))
+
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Source Lineage &amp; Audit Register", styles["Heading2"]))
+    r_data = [["Indicator / Locality", "Period", "Lineage", "Source"]]
+    for r in p5["all_records"]:
+        r_data.append(
+            [
+                str(r.get("label") or r.get("location_name") or "")[:42],
+                str(r.get("period") or "N/A")[:18],
+                str(r.get("lineage") or "Proxy / Estimate")[:28],
+                str(r.get("source_title") or "Cited source")[:38],
+            ]
+        )
+    r_tbl = Table(r_data, colWidths=[165, 75, 120, 140])
+    r_tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F2937")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("PADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
+    story.append(r_tbl)
+
+    doc.build(story)
+    buf.seek(0)
+    return buf
+
+
+def _generate_xlsx(cache):
     wb = Workbook()
-    ws_rec = wb.active
-    ws_rec.title = "Recorded_Telemetry"
+    ws_data = wb.active
+    ws_data.title = "Recorded_Telemetry"
 
     headers = [
         "ID",
@@ -245,6 +475,8 @@ def _generate_xlsx(report):
         "Label",
         "Value",
         "Unit",
+        "QoQ %",
+        "YoY %",
         "Period",
         "Lineage",
         "Status",
@@ -253,28 +485,36 @@ def _generate_xlsx(report):
         "Explanation",
         "Updated At",
     ]
-    ws_rec.append(headers)
+    ws_data.append(headers)
     header_fill = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True)
-    for cell in ws_rec[1]:
+    header_font = Font(bold=True, color="FFFFFF")
+    for cell in ws_data[1]:
         cell.fill = header_fill
         cell.font = header_font
 
-    for r in report["records"]:
-        ws_rec.append(
+    updated = (
+        cache.get("depth_updated_at")
+        or cache.get("timestamp")
+        or datetime.now(timezone.utc).isoformat()
+    )
+    records = cache.get("depth_records") or cache.get("spatial_reports") or []
+    for r in records:
+        ws_data.append(
             [
                 r.get("id", ""),
                 r.get("domain", ""),
-                r.get("label") or r.get("title") or "",
-                r.get("value"),
+                r.get("label") or r.get("location_name") or "",
+                r.get("value", r.get("quantity")),
                 r.get("unit", ""),
+                r.get("qoq_pct"),
+                r.get("yoy_pct"),
                 r.get("period", ""),
                 r.get("lineage", ""),
                 r.get("status", ""),
                 r.get("source_title") or r.get("source") or "",
                 r.get("source_url", ""),
-                r.get("explanation", ""),
-                r.get("updated_at", report["updated"]),
+                r.get("explanation") or r.get("notes") or "",
+                r.get("updated_at", updated),
             ]
         )
 
@@ -293,7 +533,7 @@ def _generate_xlsx(report):
         cell.fill = header_fill
         cell.font = header_font
 
-    for key, s in (report["streams"] or {}).items():
+    for key, s in (cache.get("stochastic_streams") or {}).items():
         if not isinstance(s, dict):
             continue
         ws_st.append(
@@ -304,11 +544,11 @@ def _generate_xlsx(report):
                 s.get("volatility_std_10"),
                 s.get("regime", ""),
                 s.get("status", ""),
-                s.get("updated_at", report["updated"]),
+                s.get("updated_at", updated),
             ]
         )
 
-    for ws in (ws_rec, ws_st):
+    for ws in (ws_data, ws_st):
         for col in ws.columns:
             max_len = max((len(str(c.value or "")) for c in col), default=12)
             ws.column_dimensions[col[0].column_letter].width = min(max(max_len + 2, 12), 48)
@@ -327,27 +567,28 @@ def export_telemetry():
         audience = "layman"
 
     cache = _load_cache()
-    report = _build_narrative_sections(cache, audience=audience)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
 
     if fmt == "pdf":
-        buf = _generate_pdf(report)
+        briefing = _build_5page_briefing(cache, audience=audience)
+        buf = _generate_pdf(briefing)
         return send_file(
             buf,
             mimetype="application/pdf",
             as_attachment=True,
-            download_name=f"kuvhura_report_{audience}_{stamp}.pdf",
+            download_name=f"kuvhura_5page_briefing_{audience}_{stamp}.pdf",
         )
     if fmt == "docx":
-        buf = _generate_docx(report)
+        briefing = _build_5page_briefing(cache, audience=audience)
+        buf = _generate_docx(briefing)
         return send_file(
             buf,
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             as_attachment=True,
-            download_name=f"kuvhura_report_{audience}_{stamp}.docx",
+            download_name=f"kuvhura_5page_briefing_{audience}_{stamp}.docx",
         )
     if fmt == "xlsx":
-        buf = _generate_xlsx(report)
+        buf = _generate_xlsx(cache)
         return send_file(
             buf,
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

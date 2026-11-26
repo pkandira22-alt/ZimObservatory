@@ -11,7 +11,18 @@ import multer from 'multer';
 import { unlink } from 'node:fs/promises';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import PDFDocument from 'pdfkit';
-import { Document as DocxDocument, Packer as DocxPacker, Paragraph as DocxParagraph, HeadingLevel as DocxHeadingLevel } from 'docx';
+import {
+  Document as DocxDocument,
+  Packer as DocxPacker,
+  Paragraph as DocxParagraph,
+  HeadingLevel as DocxHeadingLevel,
+  TextRun as DocxTextRun,
+  Table as DocxTable,
+  TableRow as DocxTableRow,
+  TableCell as DocxTableCell,
+  WidthType as DocxWidthType,
+  ShadingType as DocxShadingType,
+} from 'docx';
 import ExcelJS from 'exceljs';
 import 'dotenv/config';
 import { requireAuth } from './src/middleware/auth.ts';
@@ -7426,8 +7437,35 @@ app.get('/api/depth-telemetry', (req, res) => {
   }
 });
 
+function formatExportRecordText(r, isTech) {
+  const label = r.label || r.location_name || r.title || 'Indicator';
+  const val = r.value !== undefined ? r.value : r.quantity;
+  const unit = r.unit || '';
+  const period = r.period || 'unspecified';
+  const lineage = r.lineage || 'Proxy / Estimate';
+  const src = r.source_title || r.source || 'Cited source';
+  const isNumeric = typeof val === 'number' && Number.isFinite(val);
+  const valDisp = isNumeric
+    ? `${val.toLocaleString('en-US')} ${unit}`.trim()
+    : 'No numeric quantity reported';
+
+  if (isTech) {
+    const extra = [];
+    if (typeof r.qoq_pct === 'number' && Number.isFinite(r.qoq_pct)) {
+      extra.push(`QoQ: ${r.qoq_pct >= 0 ? '+' : ''}${r.qoq_pct.toFixed(1)}%`);
+    }
+    if (typeof r.yoy_pct === 'number' && Number.isFinite(r.yoy_pct)) {
+      extra.push(`YoY: ${r.yoy_pct >= 0 ? '+' : ''}${r.yoy_pct.toFixed(1)}%`);
+    }
+    const extraStr = extra.length ? ` (${extra.join(', ')})` : '';
+    return `[${lineage}] Observed: ${valDisp}${extraStr} | Period: ${period} | Status: ${r.status || 'cached'} | Source: ${src}. Analytical Note: ${r.notes || r.explanation || 'N/A'}`;
+  }
+  return r.explanation || `${label}: ${valDisp} (${period}, ${lineage}) via ${src}.`;
+}
+
 function buildExportNarrativeSections(snapshot, audience = 'layman') {
   const normAudience = String(audience || '').trim().toLowerCase() === 'technical' ? 'technical' : 'layman';
+  const isTech = normAudience === 'technical';
   const rawRecords = Array.isArray(snapshot?.depth_records) && snapshot.depth_records.length > 0
     ? snapshot.depth_records
     : (Array.isArray(snapshot?.spatial_reports) ? snapshot.spatial_reports : []);
@@ -7448,6 +7486,7 @@ function buildExportNarrativeSections(snapshot, audience = 'layman') {
       explanation: r.explanation || auditedRec?.explanation || r.notes || '',
       lineage: auditedRec?.lineage || r.lineage || 'Proxy / Estimate',
       status: auditedRec?.status || r.status || 'cached',
+      audit_flags: Array.isArray(r.audit_flags) ? r.audit_flags : (auditedRec?.audit_flags || []),
     };
   });
 
@@ -7456,74 +7495,92 @@ function buildExportNarrativeSections(snapshot, audience = 'layman') {
     : {};
   const updated = snapshot?.depth_updated_at || snapshot?.updatedAt || snapshot?.timestamp || new Date().toISOString();
 
+  const extraction = records.filter(r => r.domain === 'extraction');
+  const spatial = records.filter(r => r.domain === 'spatial' || r.domain === 'livelihoods');
+  const governance = records.filter(r => r.domain === 'governance' || r.domain === 'module');
+  const other = records.filter(r => !['extraction', 'spatial', 'livelihoods', 'governance', 'module'].includes(r.domain));
+
   const directCount = records.filter(r => r.lineage === 'Measured Directly').length;
   const proxyCount = records.filter(r => r.lineage === 'Proxy / Estimate').length;
   const bucketCount = records.filter(r => r.lineage === 'Conceptual / Analytical Bucket').length;
+  const flaggedCount = records.filter(r => Array.isArray(r.audit_flags) && r.audit_flags.length > 0).length;
 
-  const title = normAudience === 'technical'
-    ? 'KUVHURA Technical Telemetry & Methodological Audit Report'
-    : 'KUVHURA Public Briefing: Zimbabwe Political Economy & Livelihoods';
+  const title = isTech
+    ? 'KUVHURA Observatory: 5-Page Technical Telemetry & Institutional Risk Analysis'
+    : "KUVHURA Observatory: 5-Page Executive Briefing on Zimbabwe's Political Economy";
 
-  const intro = normAudience === 'technical'
-    ? `Generated ${updated}. This technical briefing details observed primary indicators, derived proxies, analytical regime classifications, and stochastic dispersion parameters from KUVHURA's rolling telemetry cache (${directCount} Measured Directly, ${proxyCount} Proxy / Estimate, ${bucketCount} Conceptual / Analytical Bucket).`
-    : `Report date: ${updated}. This plain-language briefing summarizes what official statistics, parliamentary tracking, and household vulnerability surveys currently show across Zimbabwe. Every figure is labeled clearly to show whether it is an official measurement (${directCount}), a tracked estimate (${proxyCount}), or an analytical risk classification (${bucketCount}).`;
+  const subtitle = isTech
+    ? `Snapshot Timestamp: ${updated} | Mode: Technical & Methodological Audit`
+    : `Snapshot Timestamp: ${updated} | Mode: Plain-Language Executive Briefing`;
 
-  const methodology = normAudience === 'technical'
-    ? 'Epistemic Governance & Stochastic Layer: Primary figures are validated against source URLs and unit sanity bounds before ingestion. Exponential smoothing (alpha=0.2) and rolling 10-period sample standard deviations classify systemic stress regimes (Contained, Elevated Friction, Acute Stress) without altering raw reported values.'
-    : 'How to Read This Briefing: Direct measurements come straight from official statistical bulletins and published surveys. Estimates and risk labels help highlight where prices, mining output, food security, or new laws are shifting quickly, while separating hard data from analysis.';
+  const p1Paragraphs = [
+    `This five-page analytical report synthesizes ${records.length} active telemetry records across KUVHURA's extractive, spatial livelihoods, governance, and stochastic uncertainty layers. To preserve evidentiary rigor, every indicator is strictly partitioned into primary empirical observations (${directCount} Measured Directly), contextual or derived indicators (${proxyCount} Proxy / Estimate), and structural classification frameworks (${bucketCount} Conceptual / Analytical Bucket).`,
+    isTech
+      ? 'Core Analytical Finding — Divergence Over Uniformity: Headline national indices mask sharp sectoral and geographic divergence. In the extractive sector, quarterly contractions in bulk index readings and base metals coexist with year-on-year resilience in gold and steady quarterly platinum output along the Great Dyke corridor. Similarly, provincial rural food-security averages conceal wide district-level dispersion in household income and cereal vulnerability.'
+      : 'Key Takeaway — Different Sectors Are Moving in Opposite Directions: Looking at one national headline number hides what is actually happening on the ground. While overall mining output dipped quarter-on-quarter due to sharp drops in nickel and diamonds, gold remains higher than a year ago and Great Dyke platinum held steady. The same pattern holds in rural provinces, where some districts face severe food pressure while neighboring districts show stronger household incomes.',
+    isTech
+      ? "Institutional Bottlenecks & Epistemic Discipline: Legislative friction remains concentrated around resource-governance statutory reform—most notably Parliamentary Legal Committee (PLC) review bottlenecks on the Mines and Minerals Bill—while climate legislation has progressed further through parliamentary readings. Where site-level extraction or sub-ward input figures are not published in primary documents (such as Gutu North, Masvingo), KUVHURA explicitly preserves a 'no reported quantity' state rather than imputing synthetic values."
+      : 'Laws, Institutions & Honest Data Boundaries: Key mining legislation continues to face legal and procedural delays in Parliament, whereas climate governance bills have moved closer to completion. Just as importantly, whenever official reports do not publish a local extraction figure—such as in Gutu North, Masvingo—this briefing states that openly instead of guessing.',
+  ];
 
-  const items = records.map(r => {
-    const label = r.label || r.title || r.id || 'Unnamed Indicator';
-    const lineage = r.lineage || 'Proxy / Estimate';
-    const val = r.value;
-    const unit = r.unit || '';
-    const period = r.period || 'Current';
-    const status = r.status || 'cached';
-    const srcTitle = r.source_title || r.source || 'KUVHURA Registry';
-    const srcUrl = r.source_url || '';
-    const explanation = r.explanation || '';
+  const p1Highlights = [
+    `Total Audited Signals: ${records.length} records (${directCount} Direct, ${proxyCount} Proxy/Estimate, ${bucketCount} Analytical Buckets).`,
+    `Data Hygiene & Audit Flags: ${flaggedCount} records flagged for missing metadata or range review.`,
+    `Active Stochastic Streams: ${Object.keys(streams).length} rolling dispersion and regime-state monitors.`,
+    'Primary Institutional Anchors: ZIMSTAT IMP releases, ZimLAC/FNC factsheets, and Parliament/Veritas bill trackers.',
+  ];
 
-    let detail;
-    if (normAudience === 'technical') {
-      const valStr = val !== null && val !== undefined ? `${val} ${unit}`.trim() : 'No numeric quantity reported';
-      detail = `[${lineage} | Status: ${status} | Period: ${period}] Value: ${valStr}. Source: ${srcTitle}${srcUrl ? ` (${srcUrl})` : ''}. ${explanation}`.trim();
-    } else {
-      const valStr = val !== null && val !== undefined ? `${val} ${unit}`.trim() : 'Qualitative / tracked update';
-      detail = `Category: ${lineage} (${period}). Current reading: ${valStr}. ${explanation} Source: ${srcTitle}.`.trim();
-    }
+  const p2Intro = isTech
+    ? 'Sectoral decomposition of ZIMSTAT Index of Mineral Production (IMP) series evaluates both quarter-on-quarter (QoQ) momentum and year-on-year (YoY) structural trajectory across major corridors.'
+    : "Mining remains Zimbabwe's primary foreign-currency anchor, but performance varies widely by mineral and corridor. Comparing both quarterly and annual changes separates short-term swings from deeper shifts.";
 
-    return { heading: String(label), body: detail, raw: r };
-  });
+  const p3Intro = isTech
+    ? 'Spatial telemetry integrates approximate geographic centroids with ZimLAC/ZimVAC household vulnerability and income metrics, enforcing strict separation between provincial survey baselines and locality-level gaps.'
+    : 'Map pins in KUVHURA represent approximate reference areas rather than exact mine boundaries or sensor feeds. In rural localities like Gutu North (Masvingo), household survey data provides essential livelihood context even when site-level extraction quantities are unreported.';
 
-  const streamNotes = [];
+  const p4Intro = isTech
+    ? "Legislative stage-friction telemetry tracks procedural bottlenecks across resource and environmental bills, feeding KUVHURA's Advanced Institutional Modules (Components 1–8: Asset Flight & Debt, Digital Repression [Sf], Strike Funds & Legal, Gender & Vulnerability [Vg], and Historical Backtesting & Climate)."
+    : "Beyond production numbers, political-economy stability depends on how laws move through Parliament and how institutional pressures interact. KUVHURA's eight analytical modules break these pressures down into specific areas—such as legal bottlenecks, debt and capital flight, digital controls, gender vulnerability, and climate shocks.";
+
+  const p5Intro = isTech
+    ? 'Stochastic Telemetry Specification: Rather than relying on deterministic point forecasts, KUVHURA tracks rolling 10-observation sample standard deviation (volatility_std_10) alongside exponentially weighted moving averages (alpha = 0.2, capped at 30 historical points). Regime classifications (Contained, Elevated Friction, Acute Stress, Unclassified / Stale) function strictly as [Conceptual / Analytical Buckets].'
+    : 'How Uncertainty Is Measured: Real-world political and economic data arrives unevenly and contains sudden spikes. Instead of reacting to every single jump, KUVHURA tracks both how much a signal fluctuates (volatility) and its smoothed trend, grouping conditions into clear stages: Contained, Elevated Friction, or Acute Stress.';
+
+  const streamRows = [];
   for (const [key, s] of Object.entries(streams)) {
     if (!s || typeof s !== 'object') continue;
-    const regime = s.regime || 'Unclassified';
-    const smoothed = s.smoothed_value ?? 'N/A';
-    const vol = s.volatility_std_10 ?? 'N/A';
-    const rawV = s.latest_raw ?? 'N/A';
-    if (normAudience === 'technical') {
-      streamNotes.push(`${key}: raw=${rawV}, smoothed(a=0.2)=${smoothed}, rolling_std_10=${vol}, regime=${regime}.`);
-    } else {
-      const niceKey = key.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
-      streamNotes.push(`${niceKey}: Currently assessed as '${regime}' (smoothed index: ${smoothed}; volatility band: ${vol}).`);
-    }
+    streamRows.push({
+      stream: key,
+      raw: s.latest_raw ?? 'N/A',
+      smoothed: s.smoothed_value ?? 'N/A',
+      std_10: s.volatility_std_10 ?? 'N/A',
+      regime: s.regime || 'Unclassified',
+      status: s.status || 'unknown',
+    });
   }
 
   return {
     title,
+    subtitle,
     updated,
     audience: normAudience,
-    intro,
-    methodology,
-    items,
-    stream_notes: streamNotes,
+    is_tech: isTech,
+    page1: { paragraphs: p1Paragraphs, highlights: p1Highlights },
+    page2: { title: '2. Extractive & Industrial Corridor Analysis', intro: p2Intro, items: extraction.length ? extraction : other },
+    page3: { title: '3. Spatial Context, Rural Livelihoods & Agricultural Inputs', intro: p3Intro, items: spatial },
+    page4: { title: '4. Legislative Friction & Institutional Modules (Components 1–8)', intro: p4Intro, items: governance },
+    page5: {
+      title: '5. Stochastic Uncertainty Layer, Methodology & Audit Register',
+      intro: p5Intro,
+      streams: streamRows,
+      all_records: records,
+    },
     records,
     streams,
   };
 }
 
-function generateExportPdfBuffer(report) {
+function generateExportPdfBuffer(briefing) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 42 });
     const chunks = [];
@@ -7532,103 +7589,225 @@ function generateExportPdfBuffer(report) {
     doc.on('error', reject);
 
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const startX = doc.page.margins.left;
+    const isTech = briefing.is_tech;
 
-    // Header Banner
-    doc.rect(doc.page.margins.left, doc.y, pageWidth, 4).fill('#1F2937');
-    doc.moveDown(0.6);
-    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(17).text(report.title, { width: pageWidth });
-    doc.moveDown(0.4);
-    doc.fillColor('#334155').font('Helvetica').fontSize(9.5).text(report.intro, { width: pageWidth, lineGap: 2 });
-    doc.moveDown(0.9);
-
-    // Section 1
-    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(12.5).text('1. Methodology & Data Lineage', { width: pageWidth });
-    doc.moveDown(0.3);
-    doc.fillColor('#334155').font('Helvetica').fontSize(9.5).text(report.methodology, { width: pageWidth, lineGap: 2 });
-    doc.moveDown(0.9);
-
-    // Section 2
-    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(12.5).text('2. Recorded Signals & Explanations', { width: pageWidth });
-    doc.moveDown(0.4);
-
-    for (const item of report.items) {
-      if (doc.y > doc.page.height - 110) doc.addPage();
-      doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10).text(item.heading, { width: pageWidth });
-      doc.moveDown(0.15);
-      doc.fillColor('#334155').font('Helvetica').fontSize(9).text(item.body, { width: pageWidth, lineGap: 1.5 });
-      doc.moveDown(0.5);
-    }
-
-    // Section 3: Volatility & Regime Summary Table
-    if (report.stream_notes.length > 0) {
-      if (doc.y > doc.page.height - 140) doc.addPage();
-      doc.moveDown(0.4);
-      doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(12.5).text('3. Volatility & Regime State Summary', { width: pageWidth });
-      doc.moveDown(0.4);
-
-      const col1W = 155;
-      const col2W = pageWidth - col1W;
-      const startX = doc.page.margins.left;
-
+    const drawPdfTable = (headers, rows, colWidths) => {
       const drawHeader = () => {
         const y = doc.y;
-        doc.rect(startX, y, pageWidth, 22).fill('#1F2937');
-        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(9);
-        doc.text('Stream / Metric', startX + 6, y + 6, { width: col1W - 12 });
-        doc.text('Summary', startX + col1W + 6, y + 6, { width: col2W - 12 });
-        doc.y = y + 22;
+        doc.rect(startX, y, pageWidth, 20).fill('#1F2937');
+        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8);
+        let x = startX;
+        headers.forEach((h, i) => {
+          doc.text(h, x + 5, y + 6, { width: colWidths[i] - 10 });
+          x += colWidths[i];
+        });
+        doc.y = y + 20;
       };
 
       drawHeader();
 
-      for (const note of report.stream_notes) {
-        const colonIdx = note.indexOf(':');
-        const col1 = colonIdx >= 0 ? note.slice(0, colonIdx).trim() : note;
-        const col2 = colonIdx >= 0 ? note.slice(colonIdx + 1).trim() : '';
+      for (const cells of rows) {
+        doc.font('Helvetica').fontSize(8);
+        const heights = cells.map((c, i) => doc.heightOfString(String(c ?? ''), { width: colWidths[i] - 10 }));
+        const rowH = Math.max(...heights, 10) + 10;
 
-        doc.font('Helvetica').fontSize(8.8);
-        const h1 = doc.heightOfString(col1, { width: col1W - 12 });
-        const h2 = doc.heightOfString(col2, { width: col2W - 12 });
-        const rowH = Math.max(h1, h2) + 12;
-
-        if (doc.y + rowH > doc.page.height - 50) {
+        if (doc.y + rowH > doc.page.height - 46) {
           doc.addPage();
           drawHeader();
         }
 
         const y = doc.y;
-        doc.rect(startX, y, col1W, rowH).strokeColor('#D1D5DB').lineWidth(0.5).stroke();
-        doc.rect(startX + col1W, y, col2W, rowH).strokeColor('#D1D5DB').lineWidth(0.5).stroke();
-        doc.fillColor('#111827').font('Helvetica-Bold').fontSize(8.8).text(col1, startX + 6, y + 6, { width: col1W - 12 });
-        doc.fillColor('#334155').font('Helvetica').fontSize(8.8).text(col2, startX + col1W + 6, y + 6, { width: col2W - 12 });
+        let x = startX;
+        cells.forEach((c, i) => {
+          doc.rect(x, y, colWidths[i], rowH).strokeColor('#CBD5E1').lineWidth(0.5).stroke();
+          doc.fillColor('#1E293B').font('Helvetica').fontSize(8).text(String(c ?? ''), x + 5, y + 5, { width: colWidths[i] - 10 });
+          x += colWidths[i];
+        });
         doc.y = y + rowH;
       }
+    };
+
+    // --- PAGE 1 ---
+    doc.rect(startX, doc.y, pageWidth, 4).fill('#1F2937');
+    doc.moveDown(0.5);
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(16.5).text(briefing.title, { width: pageWidth });
+    doc.moveDown(0.25);
+    doc.fillColor('#4B5563').font('Helvetica').fontSize(9).text(briefing.subtitle, { width: pageWidth });
+    doc.moveDown(0.8);
+
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(13).text('1. Executive Summary & Headline Risk Posture', { width: pageWidth });
+    doc.moveDown(0.4);
+    for (const para of briefing.page1.paragraphs) {
+      doc.fillColor('#1E293B').font('Helvetica').fontSize(9.8).text(para, { width: pageWidth, lineGap: 2.5 });
+      doc.moveDown(0.55);
     }
+
+    doc.moveDown(0.2);
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(11).text('Key Snapshot Metrics', { width: pageWidth });
+    doc.moveDown(0.3);
+    for (const h of briefing.page1.highlights) {
+      doc.fillColor('#334155').font('Helvetica').fontSize(9.5).text(`•  ${h}`, { width: pageWidth, lineGap: 2 });
+      doc.moveDown(0.25);
+    }
+
+    // --- PAGES 2, 3, 4 ---
+    for (const pageKey of ['page2', 'page3', 'page4']) {
+      doc.addPage();
+      const section = briefing[pageKey];
+      doc.rect(startX, doc.y, pageWidth, 3).fill('#1F2937');
+      doc.moveDown(0.5);
+      doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(13.5).text(section.title, { width: pageWidth });
+      doc.moveDown(0.35);
+      doc.fillColor('#334155').font('Helvetica').fontSize(9.6).text(section.intro, { width: pageWidth, lineGap: 2 });
+      doc.moveDown(0.65);
+
+      if (!section.items || section.items.length === 0) {
+        doc.fillColor('#475569').font('Helvetica').fontSize(9.5).text('No active records in this domain for the current snapshot.', { width: pageWidth });
+      } else {
+        for (const r of section.items) {
+          if (doc.y > doc.page.height - 95) doc.addPage();
+          const label = r.label || r.location_name || 'Indicator';
+          const lineage = r.lineage || 'Proxy / Estimate';
+          doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(10).text(`${label} [${lineage}]`, { width: pageWidth });
+          doc.moveDown(0.15);
+          doc.fillColor('#334155').font('Helvetica').fontSize(9.2).text(formatExportRecordText(r, isTech), { width: pageWidth, lineGap: 2 });
+          doc.moveDown(0.5);
+        }
+      }
+    }
+
+    // --- PAGE 5 ---
+    doc.addPage();
+    const p5 = briefing.page5;
+    doc.rect(startX, doc.y, pageWidth, 3).fill('#1F2937');
+    doc.moveDown(0.5);
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(13.5).text(p5.title, { width: pageWidth });
+    doc.moveDown(0.35);
+    doc.fillColor('#334155').font('Helvetica').fontSize(9.5).text(p5.intro, { width: pageWidth, lineGap: 2 });
+    doc.moveDown(0.6);
+
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(11).text('Stochastic Volatility & Regime State Summary', { width: pageWidth });
+    doc.moveDown(0.35);
+
+    if (p5.streams.length > 0) {
+      const sRows = p5.streams.map(s => [
+        String(s.stream),
+        String(s.raw),
+        String(s.smoothed),
+        String(s.std_10),
+        String(s.regime),
+        String(s.status),
+      ]);
+      drawPdfTable(
+        ['Stream', 'Raw', 'Smoothed', 'Std(10)', 'Regime', 'Status'],
+        sRows,
+        [135, 52, 62, 58, 118, pageWidth - 425]
+      );
+    } else {
+      doc.fillColor('#475569').font('Helvetica').fontSize(9.2).text('No stochastic streams populated in current snapshot.', { width: pageWidth });
+    }
+
+    doc.moveDown(0.8);
+    if (doc.y > doc.page.height - 130) doc.addPage();
+    doc.fillColor('#0F172A').font('Helvetica-Bold').fontSize(11).text('Source Lineage & Audit Register', { width: pageWidth });
+    doc.moveDown(0.35);
+
+    const rRows = p5.all_records.map(r => [
+      String(r.label || r.location_name || '').slice(0, 46),
+      String(r.period || 'N/A').slice(0, 18),
+      String(r.lineage || 'Proxy / Estimate').slice(0, 30),
+      String(r.source_title || 'Cited source').slice(0, 40),
+    ]);
+    drawPdfTable(
+      ['Indicator / Locality', 'Period', 'Lineage', 'Source'],
+      rRows,
+      [170, 72, 122, pageWidth - 364]
+    );
 
     doc.end();
   });
 }
 
-async function generateExportDocxBuffer(report) {
+async function generateExportDocxBuffer(briefing) {
+  const isTech = briefing.is_tech;
+  const makeTable = (headers, rows) => {
+    const headerRow = new DocxTableRow({
+      tableHeader: true,
+      children: headers.map(h => new DocxTableCell({
+        shading: { type: DocxShadingType.SOLID, color: '1F2937', fill: '1F2937' },
+        children: [new DocxParagraph({ children: [new DocxTextRun({ text: h, bold: true, color: 'FFFFFF', size: 18 })] })],
+      })),
+    });
+    const bodyRows = rows.map(cells => new DocxTableRow({
+      children: cells.map(val => new DocxTableCell({
+        children: [new DocxParagraph({ children: [new DocxTextRun({ text: String(val ?? ''), size: 18 })] })],
+      })),
+    }));
+    return new DocxTable({
+      width: { size: 100, type: DocxWidthType.PERCENTAGE },
+      rows: [headerRow, ...bodyRows],
+    });
+  };
+
   const children = [
-    new DocxParagraph({ text: report.title, heading: DocxHeadingLevel.TITLE }),
-    new DocxParagraph({ text: report.intro }),
-    new DocxParagraph({ text: '1. Methodology & Data Lineage', heading: DocxHeadingLevel.HEADING_1 }),
-    new DocxParagraph({ text: report.methodology }),
-    new DocxParagraph({ text: '2. Recorded Signals & Explanations', heading: DocxHeadingLevel.HEADING_1 }),
+    // --- PAGE 1 ---
+    new DocxParagraph({ text: briefing.title, heading: DocxHeadingLevel.TITLE }),
+    new DocxParagraph({
+      children: [new DocxTextRun({ text: briefing.subtitle, color: '5A626E', size: 20 })],
+    }),
+    new DocxParagraph({ text: '1. Executive Summary & Headline Risk Posture', heading: DocxHeadingLevel.HEADING_1 }),
+    ...briefing.page1.paragraphs.map(p => new DocxParagraph({ text: p })),
+    new DocxParagraph({ text: 'Key Snapshot Metrics', heading: DocxHeadingLevel.HEADING_2 }),
+    ...briefing.page1.highlights.map(h => new DocxParagraph({ text: h, bullet: { level: 0 } })),
   ];
 
-  for (const item of report.items) {
-    children.push(new DocxParagraph({ text: item.heading, heading: DocxHeadingLevel.HEADING_2 }));
-    children.push(new DocxParagraph({ text: item.body }));
-  }
+  // --- PAGES 2, 3, 4 ---
+  for (const pageKey of ['page2', 'page3', 'page4']) {
+    const section = briefing[pageKey];
+    children.push(new DocxParagraph({ text: section.title, heading: DocxHeadingLevel.HEADING_1, pageBreakBefore: true }));
+    children.push(new DocxParagraph({ text: section.intro }));
 
-  if (report.stream_notes.length > 0) {
-    children.push(new DocxParagraph({ text: '3. Volatility & Regime State Summary', heading: DocxHeadingLevel.HEADING_1 }));
-    for (const note of report.stream_notes) {
-      children.push(new DocxParagraph({ text: note, bullet: { level: 0 } }));
+    if (!section.items || section.items.length === 0) {
+      children.push(new DocxParagraph({ text: 'No active records in this domain for the current cache snapshot.' }));
+    } else {
+      for (const r of section.items) {
+        const headingTxt = `${r.label || r.location_name || 'Indicator'} [${r.lineage || 'Proxy / Estimate'}]`;
+        children.push(new DocxParagraph({ text: headingTxt, heading: DocxHeadingLevel.HEADING_2 }));
+        children.push(new DocxParagraph({ text: formatExportRecordText(r, isTech) }));
+      }
     }
   }
+
+  // --- PAGE 5 ---
+  const p5 = briefing.page5;
+  children.push(new DocxParagraph({ text: p5.title, heading: DocxHeadingLevel.HEADING_1, pageBreakBefore: true }));
+  children.push(new DocxParagraph({ text: p5.intro }));
+
+  children.push(new DocxParagraph({ text: 'Stochastic Volatility & Regime State Table', heading: DocxHeadingLevel.HEADING_2 }));
+  if (p5.streams.length > 0) {
+    children.push(
+      makeTable(
+        ['Stream', 'Raw', 'Smoothed', 'Volatility (Std10)', 'Regime', 'Status'],
+        p5.streams.map(s => [s.stream, s.raw, s.smoothed, s.std_10, s.regime, s.status])
+      )
+    );
+  } else {
+    children.push(new DocxParagraph({ text: 'No stochastic streams populated in current snapshot.' }));
+  }
+
+  children.push(new DocxParagraph({ text: 'Source Lineage & Audit Register', heading: DocxHeadingLevel.HEADING_2 }));
+  children.push(
+    makeTable(
+      ['Indicator / Locality', 'Period', 'Lineage Tag', 'Primary Source'],
+      p5.all_records.map(r => [
+        r.label || r.location_name || '',
+        r.period || 'N/A',
+        r.lineage || 'Proxy / Estimate',
+        r.source_title || 'Cited source',
+      ])
+    )
+  );
 
   const doc = new DocxDocument({
     sections: [{ properties: {}, children }],
@@ -7636,7 +7815,7 @@ async function generateExportDocxBuffer(report) {
   return DocxPacker.toBuffer(doc);
 }
 
-async function generateExportXlsxBuffer(report) {
+async function generateExportXlsxBuffer(briefing) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'KUVHURA Observatory';
   wb.created = new Date();
@@ -7648,7 +7827,7 @@ async function generateExportXlsxBuffer(report) {
 
   const wsRec = wb.addWorksheet('Recorded_Telemetry');
   const recHeaders = [
-    'ID', 'Domain', 'Label', 'Value', 'Unit', 'Period',
+    'ID', 'Domain', 'Label', 'Value', 'Unit', 'QoQ %', 'YoY %', 'Period',
     'Lineage', 'Status', 'Source Title', 'Source URL', 'Explanation', 'Updated At',
   ];
   const recHeaderRow = wsRec.addRow(recHeaders);
@@ -7657,20 +7836,22 @@ async function generateExportXlsxBuffer(report) {
     cell.font = headerStyle.font;
   });
 
-  for (const r of report.records) {
+  for (const r of briefing.records) {
     wsRec.addRow([
       r.id || '',
       r.domain || '',
-      r.label || r.title || '',
-      r.value ?? null,
+      r.label || r.location_name || r.title || '',
+      r.value !== undefined ? r.value : (r.quantity ?? null),
       r.unit || '',
+      r.qoq_pct ?? null,
+      r.yoy_pct ?? null,
       r.period || '',
       r.lineage || '',
       r.status || '',
       r.source_title || r.source || '',
       r.source_url || '',
-      r.explanation || '',
-      r.updated_at || report.updated,
+      r.explanation || r.notes || '',
+      r.updated_at || briefing.updated,
     ]);
   }
 
@@ -7684,7 +7865,7 @@ async function generateExportXlsxBuffer(report) {
     cell.font = headerStyle.font;
   });
 
-  for (const [key, s] of Object.entries(report.streams || {})) {
+  for (const [key, s] of Object.entries(briefing.streams || {})) {
     if (!s || typeof s !== 'object') continue;
     wsSt.addRow([
       key,
@@ -7693,7 +7874,7 @@ async function generateExportXlsxBuffer(report) {
       s.volatility_std_10 ?? null,
       s.regime || '',
       s.status || '',
-      s.updated_at || report.updated,
+      s.updated_at || briefing.updated,
     ]);
   }
 
@@ -7723,26 +7904,26 @@ app.get('/api/export', async (req, res) => {
     }
 
     const snapshot = getDepthTelemetrySnapshot();
-    const report = buildExportNarrativeSections(snapshot, audience);
+    const briefing = buildExportNarrativeSections(snapshot, audience);
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
     res.setHeader('Cache-Control', 'no-store');
 
     if (fmt === 'pdf') {
-      const pdfBuf = await generateExportPdfBuffer(report);
+      const pdfBuf = await generateExportPdfBuffer(briefing);
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="kuvhura_report_${audience}_${stamp}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="kuvhura_5page_briefing_${audience}_${stamp}.pdf"`);
       return res.send(pdfBuf);
     }
 
     if (fmt === 'docx') {
-      const docxBuf = await generateExportDocxBuffer(report);
+      const docxBuf = await generateExportDocxBuffer(briefing);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.setHeader('Content-Disposition', `attachment; filename="kuvhura_report_${audience}_${stamp}.docx"`);
+      res.setHeader('Content-Disposition', `attachment; filename="kuvhura_5page_briefing_${audience}_${stamp}.docx"`);
       return res.send(docxBuf);
     }
 
-    const xlsxBuf = await generateExportXlsxBuffer(report);
+    const xlsxBuf = await generateExportXlsxBuffer(briefing);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="kuvhura_telemetry_data_${stamp}.xlsx"`);
     return res.send(xlsxBuf);

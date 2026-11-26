@@ -472,7 +472,7 @@ test('data-lineage auditor enforces honesty downgrade, OCR bounds, URL validatio
   assert.match(partitioned.proxy_and_buckets[0].explanation, /\[Conceptual \/ Analytical Bucket\]/);
 });
 
-test('buildExportNarrativeSections formats technical and layman briefings cleanly', () => {
+test('buildExportNarrativeSections formats 5-page technical and layman briefings cleanly', () => {
   const serverSrc = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
   const auditFn = extract(
     serverSrc,
@@ -481,12 +481,12 @@ test('buildExportNarrativeSections formats technical and layman briefings cleanl
   );
   const narrativeFn = extract(
     serverSrc,
-    'function buildExportNarrativeSections(',
+    'function formatExportRecordText(',
     '\nfunction generateExportPdfBuffer('
   );
 
-  const { buildExportNarrativeSections } = runInNewContext(
-    `${auditFn}\n${narrativeFn}\n({ buildExportNarrativeSections })`,
+  const { buildExportNarrativeSections, formatExportRecordText } = runInNewContext(
+    `${auditFn}\n${narrativeFn}\n({ buildExportNarrativeSections, formatExportRecordText })`,
     { Set, Map, URL, Object, Array, Number, String, Date, Boolean }
   );
 
@@ -499,6 +499,8 @@ test('buildExportNarrativeSections formats technical and layman briefings cleanl
         label: 'Gold Production (ZIMSTAT Q1 2026)',
         value: 8420,
         unit: 'kg',
+        qoq_pct: -2.5,
+        yoy_pct: 12.4,
         period: 'Q1 2026',
         lineage: 'Measured Directly',
         status: 'live',
@@ -506,9 +508,21 @@ test('buildExportNarrativeSections formats technical and layman briefings cleanl
         source_url: 'https://www.zimstat.co.zw/imp.pdf',
       },
       {
+        id: 'gutu-livelihoods',
+        domain: 'livelihoods',
+        label: 'Gutu District Food Insecurity',
+        value: 19,
+        unit: 'pct',
+        period: '2025-2026',
+        lineage: 'Measured Directly',
+        status: 'cached',
+        source_title: 'ZimLAC 2025 Factsheet',
+        source_url: 'https://www.fnc.org.zw/factsheet.pdf',
+      },
+      {
         id: 'bill-friction',
         domain: 'governance',
-        label: 'PVO Amendment Bill PLC Friction',
+        label: 'Mines and Minerals Bill PLC Friction',
         value: 72,
         unit: 'score_0_100',
         period: '2026',
@@ -524,22 +538,28 @@ test('buildExportNarrativeSections formats technical and layman briefings cleanl
         smoothed_value: 72,
         volatility_std_10: 14.5,
         regime: 'Acute Stress',
+        status: 'online',
       },
     },
   };
 
   const tech = buildExportNarrativeSections(mockSnapshot, 'technical');
-  assert.match(tech.title, /Technical Telemetry/);
+  assert.match(tech.title, /5-Page Technical Telemetry/);
   assert.equal(tech.audience, 'technical');
-  assert.equal(tech.items.length, 2);
-  assert.match(tech.items[0].body, /\[Measured Directly \| Status: live \| Period: Q1 2026\]/);
-  assert.match(tech.stream_notes[0], /rolling_std_10=14\.5, regime=Acute Stress/);
+  assert.equal(tech.is_tech, true);
+  assert.equal(tech.page1.paragraphs.length, 3);
+  assert.equal(tech.page2.items.length, 1);
+  assert.equal(tech.page3.items.length, 1);
+  assert.equal(tech.page4.items.length, 1);
+  assert.equal(tech.page5.streams.length, 1);
+  assert.equal(tech.page5.all_records.length, 3);
+  assert.match(formatExportRecordText(tech.page2.items[0], true), /QoQ: -2\.5%, YoY: \+12\.4%/);
 
   const layman = buildExportNarrativeSections(mockSnapshot, 'layman');
-  assert.match(layman.title, /Public Briefing/);
+  assert.match(layman.title, /5-Page Executive Briefing/);
   assert.equal(layman.audience, 'layman');
-  assert.match(layman.items[0].body, /Category: Measured Directly \(Q1 2026\)/);
-  assert.match(layman.stream_notes[0], /Legislative Plc Friction: Currently assessed as 'Acute Stress'/);
+  assert.equal(layman.is_tech, false);
+  assert.match(layman.page1.paragraphs[1], /Different Sectors Are Moving in Opposite Directions/);
 
   const fallback = buildExportNarrativeSections(mockSnapshot, 'invalid_mode');
   assert.equal(fallback.audience, 'layman');
