@@ -394,5 +394,84 @@ test('getXBearerToken normalizes quotes and Bearer prefix and supports env alias
   assert.equal(runReddit({ REDDIT_API_KEY: 'your_reddit_key' }), null);
 });
 
+test('data-lineage auditor enforces honesty downgrade, OCR bounds, URL validation, and partitioning', () => {
+  const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const code = extract(
+    source,
+    'const AUDIT_VALID_LINEAGES =',
+    '\napp.get(\'/api/audit/records\','
+  );
+  const { auditAndPartitionRecords, buildAuditedRecord } = runInNewContext(
+    `${code}; ({ auditAndPartitionRecords, buildAuditedRecord })`,
+    { Set, URL, Object, Number, String, Date, Boolean }
+  );
+
+  const ocrGlitch = buildAuditedRecord({
+    id: 'bad-score',
+    label: 'OCR Glitch',
+    domain: 'module',
+    value: 999,
+    unit: 'score_0_100',
+    period: '2026',
+    lineage: 'Measured Directly',
+    status: 'live',
+    source_title: 'Bad Feed',
+    source_url: 'javascript:alert(1)'
+  });
+  assert.equal(ocrGlitch.value, null);
+  assert.equal(ocrGlitch.status, 'stale');
+  assert.equal(ocrGlitch.source_url, null);
+  assert.ok(ocrGlitch.audit_flags.includes('missing_or_invalid_source_url'));
+  assert.ok(ocrGlitch.audit_flags.some(f => f.startsWith('out_of_bounds_for_score_0_100')));
+
+  const missingQty = buildAuditedRecord({
+    id: 'gutu',
+    label: 'Gutu North',
+    domain: 'spatial',
+    value: null,
+    unit: null,
+    period: '2025-2026',
+    lineage: 'Measured Directly',
+    status: 'live',
+    source_title: 'ZimVAC',
+    source_url: 'https://www.fnc.org.zw/documents/'
+  });
+  assert.equal(missingQty.lineage, 'Proxy / Estimate');
+  assert.equal(missingQty.status, 'no_reported_quantity');
+
+  const partitioned = auditAndPartitionRecords([
+    {
+      id: 'plat',
+      label: 'Great Dyke — Platinum',
+      domain: 'extraction',
+      value: 3807,
+      unit: 'kg',
+      period: 'Q1 2026',
+      lineage: 'Measured Directly',
+      status: 'live',
+      source_title: 'ZIMSTAT IMP Q1 2026',
+      source_url: 'https://www.zimstat.co.zw/imp.pdf'
+    },
+    {
+      id: 'bucket',
+      label: 'Component 4: Gender (Vg)',
+      domain: 'module',
+      value: 1.65,
+      unit: 'multiplier',
+      period: '2026',
+      lineage: 'Conceptual / Analytical Bucket',
+      status: 'cached',
+      source_title: 'KUVHURA Methodology',
+      source_url: 'https://www.zimstat.co.zw/'
+    }
+  ]);
+  assert.equal(partitioned.measured_directly.length, 1);
+  assert.equal(partitioned.proxy_and_buckets.length, 1);
+  assert.equal(partitioned.flagged_for_review.length, 0);
+  assert.match(partitioned.measured_directly[0].explanation, /\[Measured Directly\]/);
+  assert.match(partitioned.proxy_and_buckets[0].explanation, /\[Conceptual \/ Analytical Bucket\]/);
+});
+
+
 
 

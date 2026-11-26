@@ -12,6 +12,7 @@ import os
 import re
 import urllib.request
 from datetime import datetime, timezone
+from telemetry_audit import audit_and_partition_records, build_audited_record
 
 try:
     from curl_cffi import requests as _curl_requests
@@ -234,20 +235,56 @@ def populate_spatial_cache(cache_path=CACHE_PATH):
         }
 
     # Live extracted items override matching baseline ids
-    merged = {item["id"]: item for item in get_verified_baseline_reports()}
+    merged = {}
+    for base_item in get_verified_baseline_reports():
+        base_item["status"] = "no_reported_quantity" if base_item.get("quantity") is None else "cached"
+        merged[base_item["id"]] = base_item
     for live_item in fetch_zimstat_imp_reports():
+        live_item["status"] = "live"
         merged[live_item["id"]] = live_item
 
-    all_reports = list(merged.values())
+    all_reports = []
+    audit_inputs = []
+    for item in merged.values():
+        label = f"{item.get('location_name') or item.get('location', 'Zimbabwe')} — {item.get('commodity', 'Telemetry')}"
+        domain = "extraction" if item.get("quantity") is not None else "spatial"
+        audited = build_audited_record(
+            record_id=item["id"],
+            label=label,
+            domain=domain,
+            value=item.get("quantity"),
+            unit=item.get("unit"),
+            period=item.get("period"),
+            lineage=item.get("lineage"),
+            status=item.get("status", "cached"),
+            source_title=item.get("source_title"),
+            source_url=item.get("source_url"),
+            notes=item.get("formatted_quantity"),
+            updated_at=item.get("updated_at"),
+        )
+        enriched = dict(item)
+        enriched["quantity"] = audited["value"]
+        enriched["lineage"] = audited["lineage"]
+        enriched["status"] = audited["status"]
+        enriched["audit_flags"] = audited["audit_flags"]
+        enriched["explanation"] = audited["explanation"]
+        all_reports.append(enriched)
+        audit_inputs.append({**item, "label": label, "domain": domain})
+
     with_quantities = [r for r in all_reports if r.get("quantity") is not None]
+    partitioned = audit_and_partition_records(audit_inputs)
 
     # Populate common key names so any frontend reader sees data immediately
     cache["extraction_reports"] = with_quantities
     cache["spatial_reports"] = all_reports
     cache["locations"] = all_reports
+    cache["audited_telemetry"] = partitioned
     cache["spatial_status"] = {
         "connected": True,
         "count_with_quantities": len(with_quantities),
+        "measured_directly_count": len(partitioned["measured_directly"]),
+        "proxy_and_buckets_count": len(partitioned["proxy_and_buckets"]),
+        "flagged_count": len(partitioned["flagged_for_review"]),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -256,7 +293,9 @@ def populate_spatial_cache(cache_path=CACHE_PATH):
 
     print(
         f"Updated {cache_path}: {len(with_quantities)} extraction reports, "
-        f"{len(all_reports)} total spatial records."
+        f"{len(all_reports)} total spatial records "
+        f"({len(partitioned['measured_directly'])} measured directly, "
+        f"{len(partitioned['flagged_for_review'])} flagged)."
     )
 
 

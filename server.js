@@ -6222,6 +6222,12 @@ function computeLiveModelParameters({
       counts: bucketCounts,
       shares: bucketShares
     },
+    macro: {
+      Debt_GNI: round1(debtGniPct),
+      Inflation: round1(inflationPct),
+      GDP_Growth: round1(gdpGrowthPct),
+      source: wbLive ? 'world_bank_v2' : 'baseline'
+    },
     derived: {
       phi,
       praxis,
@@ -6724,6 +6730,386 @@ app.get('/api/zimstat/spatial-telemetry', (req, res) => {
       error: 'Could not read ZIMSTAT telemetry snapshot',
       message: err.message,
     });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DATA-LINEAGE & SANITY AUDITING ENGINE (mirrors telemetry_audit.py)
+// ---------------------------------------------------------------------------
+const AUDIT_VALID_LINEAGES = new Set([
+  'Measured Directly',
+  'Proxy / Estimate',
+  'Conceptual / Analytical Bucket',
+]);
+
+const AUDIT_VALID_STATUSES = new Set([
+  'live',
+  'cached',
+  'stale',
+  'offline',
+  'no_reported_quantity',
+]);
+
+const AUDIT_UNIT_BOUNDS = {
+  kg: [0.0, 500_000_000.0],
+  'metric tons': [0.0, 50_000_000.0],
+  oz: [0.0, 500_000_000.0],
+  pct: [-100.0, 10_000.0],
+  score_0_100: [0.0, 100.0],
+};
+
+function isValidAuditUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url.trim());
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.host);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeAuditLineage(rawLineage, hasDirectValue = false) {
+  if (AUDIT_VALID_LINEAGES.has(rawLineage)) return rawLineage;
+  const lowered = String(rawLineage || '').trim().toLowerCase();
+  if (lowered.includes('direct') || lowered.includes('measured')) {
+    return hasDirectValue ? 'Measured Directly' : 'Proxy / Estimate';
+  }
+  if (lowered.includes('conceptual') || lowered.includes('bucket') || lowered.includes('regime')) {
+    return 'Conceptual / Analytical Bucket';
+  }
+  return 'Proxy / Estimate';
+}
+
+function checkAuditValueSanity(value, unit) {
+  if (value === null || value === undefined) return { isSane: true, reason: null };
+  if (typeof value === 'boolean' || typeof value !== 'number') {
+    return { isSane: false, reason: 'non_numeric_value' };
+  }
+  if (!Number.isFinite(value)) {
+    return { isSane: false, reason: 'non_finite_value' };
+  }
+  const normUnit = String(unit || '').trim().toLowerCase();
+  if (Object.hasOwn(AUDIT_UNIT_BOUNDS, normUnit)) {
+    const [lo, hi] = AUDIT_UNIT_BOUNDS[normUnit];
+    if (value < lo || value > hi) {
+      return { isSane: false, reason: `out_of_bounds_for_${normUnit}(${value})` };
+    }
+  }
+  return { isSane: true, reason: null };
+}
+
+function explainAuditedRecord(record) {
+  const label = record.label || 'Record';
+  const val = record.value;
+  const unit = record.unit || '';
+  const period = record.period || 'unspecified period';
+  const lineage = record.lineage || 'Proxy / Estimate';
+  const status = record.status || 'cached';
+  const sourceTitle = record.source_title || 'cited source';
+
+  let partOne;
+  if (val !== null && val !== undefined) {
+    const valStr = Number.isInteger(val)
+      ? val.toLocaleString('en-US')
+      : Number(val.toFixed(4)).toLocaleString('en-US', { maximumFractionDigits: 4 });
+    partOne = `${label} is recorded at ${valStr}${unit ? ` ${unit}` : ''} (${period}) via ${sourceTitle} [status: ${status}].`;
+  } else {
+    partOne = `${label} has no reported numeric quantity for ${period} via ${sourceTitle} [status: ${status}].`;
+  }
+
+  let partTwo;
+  if (lineage === 'Measured Directly') {
+    partTwo = 'Tagged [Measured Directly] because it comes from a cited primary or official report without estimation.';
+  } else if (lineage === 'Conceptual / Analytical Bucket') {
+    partTwo = 'Tagged [Conceptual / Analytical Bucket] because it organizes structural regimes or categories rather than acting as a direct physical measurement.';
+  } else {
+    partTwo = 'Tagged [Proxy / Estimate] because it relies on an indirect indicator, derived adjustment, or non-direct observation.';
+  }
+
+  return `${partOne} ${partTwo}`;
+}
+
+function buildAuditedRecord({
+  id = 'unknown',
+  label = 'Untitled',
+  domain = 'general',
+  value = null,
+  unit = null,
+  period = null,
+  lineage = null,
+  status = 'cached',
+  source_title = null,
+  source_url = null,
+  notes = null,
+  updated_at = null,
+} = {}) {
+  const nowIso = new Date().toISOString();
+  const hasNum = typeof value === 'number' && Number.isFinite(value);
+  let cleanLineage = normalizeAuditLineage(lineage, hasNum);
+
+  if (cleanLineage === 'Measured Directly' && !hasNum && (value === null || value === undefined)) {
+    cleanLineage = 'Proxy / Estimate';
+  }
+
+  const { isSane, reason: sanityIssue } = checkAuditValueSanity(value, unit);
+  let cleanStatus = AUDIT_VALID_STATUSES.has(status) ? status : 'cached';
+  let effectiveValue = value === undefined ? null : value;
+
+  if (!isSane) {
+    cleanStatus = 'stale';
+    effectiveValue = null;
+  }
+
+  if (effectiveValue === null && cleanStatus === 'live') {
+    cleanStatus = 'no_reported_quantity';
+  }
+
+  const sourceOk = isValidAuditUrl(source_url);
+  const auditFlags = [];
+  if (!sourceOk) auditFlags.push('missing_or_invalid_source_url');
+  if (!source_title) auditFlags.push('missing_source_title');
+  if (!period) auditFlags.push('missing_period');
+  if (sanityIssue) auditFlags.push(sanityIssue);
+
+  const record = {
+    id: String(id).trim(),
+    label: String(label).trim(),
+    domain: String(domain).trim(),
+    value: effectiveValue,
+    unit: unit || null,
+    period: period || 'unspecified',
+    lineage: cleanLineage,
+    status: cleanStatus,
+    source_title: source_title || 'Unsourced Entry',
+    source_url: sourceOk ? source_url.trim() : null,
+    notes: notes || null,
+    audit_flags: auditFlags,
+    updated_at: updated_at || nowIso,
+  };
+  record.explanation = explainAuditedRecord(record);
+  return record;
+}
+
+function auditAndPartitionRecords(records = []) {
+  const direct = [];
+  const derivedOrBucket = [];
+  const flagged = [];
+
+  for (const raw of records) {
+    if (!raw || typeof raw !== 'object') continue;
+    const rec = buildAuditedRecord({
+      id: raw.id ?? 'unknown',
+      label: raw.label || raw.location_name || raw.commodity || 'Untitled',
+      domain: raw.domain || 'general',
+      value: raw.value !== undefined ? raw.value : raw.quantity,
+      unit: raw.unit ?? null,
+      period: raw.period ?? null,
+      lineage: raw.lineage ?? null,
+      status: raw.status || 'cached',
+      source_title: raw.source_title ?? null,
+      source_url: raw.source_url ?? null,
+      notes: raw.notes || raw.note || raw.context || null,
+      updated_at: raw.updated_at ?? null,
+    });
+
+    if (rec.lineage === 'Measured Directly' && rec.value !== null) {
+      direct.push(rec);
+    } else {
+      derivedOrBucket.push(rec);
+    }
+
+    if (rec.audit_flags.length > 0) {
+      flagged.push(rec);
+    }
+  }
+
+  return {
+    measured_directly: direct,
+    proxy_and_buckets: derivedOrBucket,
+    flagged_for_review: flagged,
+  };
+}
+
+app.get('/api/audit/records', async (req, res) => {
+  try {
+    const nowIso = new Date().toISOString();
+    const todayPeriod = nowIso.slice(0, 10);
+    const inputs = [];
+
+    // 1. ZIMSTAT Spatial & Extraction records
+    const spatialSnapshot = getZimstatSpatialTelemetrySnapshot();
+    const spatialList = Array.isArray(spatialSnapshot?.spatial_reports) ? spatialSnapshot.spatial_reports : [];
+    for (const item of spatialList) {
+      const hasQty = item.quantity !== null && item.quantity !== undefined && Number.isFinite(Number(item.quantity));
+      inputs.push({
+        id: item.id,
+        label: `${item.location_name || item.location || 'Zimbabwe'} — ${item.commodity || 'Telemetry'}`,
+        domain: hasQty ? 'extraction' : 'spatial',
+        value: hasQty ? Number(item.quantity) : null,
+        unit: item.unit || null,
+        period: item.period || '2026',
+        lineage: item.lineage || (hasQty ? 'Measured Directly' : 'Proxy / Estimate'),
+        status: hasQty ? (spatialSnapshot.source === 'cache_synced' ? 'live' : 'cached') : 'no_reported_quantity',
+        source_title: item.source_title || 'ZIMSTAT Spatial Telemetry',
+        source_url: item.source_url || null,
+        notes: item.formatted_quantity || null,
+        updated_at: item.updated_at || spatialSnapshot.spatial_updated_at || nowIso,
+      });
+    }
+
+    // 2. Live Institutional & Macro feeds (Components 1-8)
+    if (latestTreasuryStatus && Number.isFinite(latestTreasuryStatus.score)) {
+      inputs.push({
+        id: 'mod-7-treasury-fiscal',
+        label: 'Component 7: ZimTreasury Fiscal Risk (F_treas)',
+        domain: 'module',
+        value: Number(latestTreasuryStatus.score),
+        unit: 'score_0_100',
+        period: todayPeriod,
+        lineage: 'Measured Directly',
+        status: latestTreasuryStatus.status === 'available' ? 'live' : 'cached',
+        source_title: 'Ministry of Finance & Economic Development (zimtreasury.co.zw)',
+        source_url: 'https://www.zimtreasury.co.zw/',
+        updated_at: latestTreasuryStatus.timestamp || nowIso,
+      });
+    }
+
+    if (layer2MacroCache?.data && Number.isFinite(Number(layer2MacroCache.data.Debt_GNI))) {
+      inputs.push({
+        id: 'mod-7-worldbank-debt-gni',
+        label: 'Component 7: Zimbabwe External Debt / GNI',
+        domain: 'macro',
+        value: Number(layer2MacroCache.data.Debt_GNI),
+        unit: 'pct',
+        period: String(layer2MacroCache.data.year || 'Latest WB'),
+        lineage: layer2MacroCache.data.source === 'world_bank_v2' ? 'Measured Directly' : 'Proxy / Estimate',
+        status: layer2MacroCache.data.source === 'world_bank_v2' ? 'live' : 'cached',
+        source_title: 'World Bank API (DT.DOD.DECT.GN.ZS, ZW)',
+        source_url: 'https://data.worldbank.org/indicator/DT.DOD.DECT.GN.ZS?locations=ZW',
+        updated_at: nowIso,
+      });
+    }
+
+    if (latestHansardStatus && Number.isFinite(latestHansardStatus.score)) {
+      inputs.push({
+        id: 'mod-6-parlzim-hansard',
+        label: 'Component 6: Parliamentary & Statutory Friction (F_parl)',
+        domain: 'module',
+        value: Number(latestHansardStatus.score),
+        unit: 'score_0_100',
+        period: todayPeriod,
+        lineage: 'Measured Directly',
+        status: latestHansardStatus.status === 'available' ? 'live' : 'cached',
+        source_title: 'Parliament of Zimbabwe (parlzim.gov.zw)',
+        source_url: 'https://parlzim.gov.zw/',
+        updated_at: latestHansardStatus.timestamp || nowIso,
+      });
+    }
+
+    const ooniObs = Array.isArray(politicalTimeSeriesCache?.payload?.observations)
+      ? politicalTimeSeriesCache.payload.observations.filter(o => o.series === 'narrative-throttling' && o.metric === 'throttling_measure')
+      : [];
+    const ooniTotal = ooniObs.reduce((sum, item) => sum + (Number.isFinite(Number(item.value)) ? Number(item.value) : 0), 0);
+    if (ooniObs.length > 0) {
+      inputs.push({
+        id: 'mod-2-ooni-anomalies',
+        label: 'Component 2: OONI Zimbabwe Network Anomalies',
+        domain: 'module',
+        value: ooniTotal,
+        unit: 'anomalies',
+        period: ooniObs[ooniObs.length - 1].period || todayPeriod,
+        lineage: 'Measured Directly',
+        status: 'live',
+        source_title: 'OONI Explorer Zimbabwe Measurements',
+        source_url: 'https://api.ooni.io/api/v1/measurements?probe_cc=ZW&anomaly=true&limit=50',
+        updated_at: politicalTimeSeriesCache.payload.updatedAt || nowIso,
+      });
+    }
+
+    // 3. Explicit Proxy / Conceptual Modules (honest non-sensor classifications)
+    inputs.push(
+      {
+        id: 'mod-1-asset-flight-af',
+        label: 'Component 1: Transnational Asset Flight Proxy (A_f)',
+        domain: 'module',
+        value: 2.4,
+        unit: 'index',
+        period: '2026 Calibration',
+        lineage: 'Proxy / Estimate',
+        status: 'cached',
+        source_title: 'KUVHURA Methodology & OAG Audit Library Baseline',
+        source_url: 'https://auditorgeneral.gov.zw/document-library/',
+        updated_at: nowIso,
+      },
+      {
+        id: 'mod-2-digital-repression-sf',
+        label: 'Component 2: Composite Digital Repression Index (S_f)',
+        domain: 'module',
+        value: 79.0,
+        unit: 'score_0_100',
+        period: '2026 Calibration',
+        lineage: 'Proxy / Estimate',
+        status: 'cached',
+        source_title: 'KUVHURA Digital Friction Composite (OONI-informed)',
+        source_url: 'https://explorer.ooni.org/country/ZW',
+        updated_at: nowIso,
+      },
+      {
+        id: 'mod-3-strike-funds',
+        label: 'Component 3: Mutual-Aid & Strike Funds Design',
+        domain: 'module',
+        value: null,
+        unit: null,
+        period: 'Prescriptive Model',
+        lineage: 'Conceptual / Analytical Bucket',
+        status: 'no_reported_quantity',
+        source_title: 'KUVHURA Prescriptive Resilience Framework',
+        source_url: 'https://parlzim.gov.zw/',
+        updated_at: nowIso,
+      },
+      {
+        id: 'mod-4-gender-vulnerability-vg',
+        label: 'Component 4: Gender & Intersectional Vulnerability Multiplier (V_g)',
+        domain: 'module',
+        value: 1.65,
+        unit: 'multiplier',
+        period: '2026 Calibration',
+        lineage: 'Conceptual / Analytical Bucket',
+        status: 'cached',
+        source_title: 'ZIMSTAT Labour Force & KUVHURA Analytical Weighting',
+        source_url: 'https://www.zimstat.co.zw/',
+        updated_at: nowIso,
+      },
+      {
+        id: 'mod-5-8-backtest-climate',
+        label: 'Components 5 & 8: Historical Episode Backtesting & El Niño Shock Calibration',
+        domain: 'module',
+        value: null,
+        unit: null,
+        period: '2008 / 2019 / 2024',
+        lineage: 'Conceptual / Analytical Bucket',
+        status: 'no_reported_quantity',
+        source_title: 'FEWS NET / ZimVAC & KUVHURA Historical Calibration',
+        source_url: 'https://fews.net/southern-africa/zimbabwe',
+        updated_at: nowIso,
+      }
+    );
+
+    const partitioned = auditAndPartitionRecords(inputs);
+    res.json({
+      available: true,
+      updatedAt: nowIso,
+      summary: {
+        total: inputs.length,
+        measured_directly: partitioned.measured_directly.length,
+        proxy_and_buckets: partitioned.proxy_and_buckets.length,
+        flagged_for_review: partitioned.flagged_for_review.length,
+      },
+      ...partitioned,
+    });
+  } catch (err) {
+    console.warn('Error building audited telemetry report:', err.message);
+    res.status(500).json({ error: 'Could not build audited telemetry report.' });
   }
 });
 

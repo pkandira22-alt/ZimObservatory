@@ -246,6 +246,13 @@ async function fetchLivePoliticalTimeSeries(forceRefresh = false) {
           ...item,
           value: Number(item.value)
         }));
+        window.dispatchEvent(new CustomEvent('kuvhura:timeseries-updated', {
+          detail: {
+            observations: serverTimeSeriesObservations,
+            liveSources: data.liveSources || {},
+            updatedAt: data.updatedAt || new Date().toISOString()
+          }
+        }));
         return true;
       }
     } catch {
