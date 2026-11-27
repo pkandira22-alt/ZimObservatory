@@ -565,6 +565,30 @@ test('buildExportNarrativeSections formats 5-page technical and layman briefings
   assert.equal(fallback.audience, 'layman');
 });
 
+test('filterExportRecordsByPeriod handles all-periods and substring period filtering', () => {
+  const serverSrc = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const filterFn = extract(
+    serverSrc,
+    'function filterExportRecordsByPeriod(',
+    '\nasync function generateExportXlsxBuffer('
+  );
+  const { filterExportRecordsByPeriod } = runInNewContext(
+    `${filterFn}\n({ filterExportRecordsByPeriod })`,
+    { Array, String }
+  );
+
+  const sample = [
+    { id: '1', period: 'Q1 2026' },
+    { id: '2', period: '2026 Budget' },
+    { id: '3', period: 'Apr 2025' },
+  ];
+  assert.equal(filterExportRecordsByPeriod(sample, 'all').length, 3);
+  assert.equal(filterExportRecordsByPeriod(sample, 'All Periods').length, 3);
+  assert.equal(filterExportRecordsByPeriod(sample, '*').length, 3);
+  assert.equal(filterExportRecordsByPeriod(sample, 'q1 2026').length, 1);
+  assert.equal(filterExportRecordsByPeriod(sample, '2026').length, 2);
+});
+
 
 
 

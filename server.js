@@ -7143,7 +7143,7 @@ app.get('/api/audit/records', async (req, res) => {
 function depthSampleStd(values) {
   const clean = (Array.isArray(values) ? values : [])
     .filter(v => typeof v === 'number' && Number.isFinite(v));
-  if (clean.length < 2) return null;
+  if (clean.length < 2) return 0.0;
   const mean = clean.reduce((a, b) => a + b, 0) / clean.length;
   const variance = clean.reduce((sum, x) => sum + ((x - mean) ** 2), 0) / (clean.length - 1);
   return Number(Math.sqrt(variance).toFixed(4));
@@ -7218,29 +7218,12 @@ function buildVerifiedDepthBaselineRecords() {
       updated_at: nowIso,
     },
     {
-      id: 'zimstat-diamond-q1-2026',
-      label: 'Diamond Production Index',
-      domain: 'extraction',
-      value: 95.1,
-      unit: 'index_2019_100',
-      period: 'Q1 2026',
-      qoq_pct: -23.9,
-      yoy_pct: -43.9,
-      lineage: 'Measured Directly',
-      status: 'cached',
-      source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
-      source_url: pdfUrl,
-      notes: 'Down 23.9% QoQ from 124.9 in Q4 2025 and down 43.9% YoY from 169.6 in Q1 2025.',
-      updated_at: nowIso,
-    },
-    {
       id: 'zimstat-nickel-q1-2026',
       label: 'Nickel Output',
       domain: 'extraction',
       value: 1486,
       unit: 'metric tons',
       period: 'Q1 2026',
-      index_val: 33.6,
       qoq_pct: -63.8,
       yoy_pct: -52.0,
       lineage: 'Measured Directly',
@@ -7248,6 +7231,49 @@ function buildVerifiedDepthBaselineRecords() {
       source_title: 'ZIMSTAT Index of Mineral Production Q1 2026',
       source_url: pdfUrl,
       notes: 'Dropped from 4,100 mt in Q4 2025 to 1,486 mt in Q1 2026 (-63.8% QoQ; -52.0% YoY).',
+      updated_at: nowIso,
+    },
+    {
+      id: 'mofed-imtt-zig-rate-2026',
+      label: 'IMTT Electronic Transaction Tax Rate (ZiG)',
+      domain: 'macro_fiscal',
+      value: 1.25,
+      unit: 'pct',
+      period: '2026 Budget',
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'Ministry of Finance 2026 National Budget Statement',
+      source_url: 'https://www.zimtreasury.gov.zw/',
+      notes: 'Intermediated Money Transfer Tax reduced to 1.25% on ZiG transactions (1.75% on FX).',
+      updated_at: nowIso,
+    },
+    {
+      id: 'mofed-pit-threshold-2026',
+      label: 'Monthly Tax-Free PAYE Threshold (USD)',
+      domain: 'macro_fiscal',
+      value: 150.0,
+      unit: 'usd',
+      period: '2026 Budget',
+      qoq_pct: 50.0,
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'Ministry of Finance 2026 National Budget Statement',
+      source_url: 'https://www.zimtreasury.gov.zw/',
+      notes: 'Raised from USD 100 to USD 150/month to cushion formal wage earners.',
+      updated_at: nowIso,
+    },
+    {
+      id: 'rbz-policy-rate-anchor-2026',
+      label: 'RBZ Bank Policy Rate Anchor',
+      domain: 'macro_fiscal',
+      value: 35.0,
+      unit: 'pct',
+      period: 'H2 2026',
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'Reserve Bank of Zimbabwe Monetary Policy Disclosures',
+      source_url: 'https://www.rbz.co.zw/',
+      notes: 'Tight liquidity stance maintained to anchor ZiG stability and curb parallel spread.',
       updated_at: nowIso,
     },
     {
@@ -7263,7 +7289,7 @@ function buildVerifiedDepthBaselineRecords() {
       status: 'no_reported_quantity',
       source_title: 'ZimLAC 2025 Masvingo Province Factsheet (FNC)',
       source_url: zimlacUrl,
-      notes: 'No site-level mineral extraction quantity reported for Gutu North. Masvingo provincial projected cereal insecurity (Jan–Mar 2026): 15% (vs Zaka 35%, Mwenezi 25%); Gutu April 2025 avg monthly household income: USD 222 (vs Bikita USD 68); provincial income anchors: casual labour 48%, domestic remittances 29%, crop production 21%.',
+      notes: 'No site-level extraction quantity reported. Provincial cereal insecurity: 15% (vs Zaka 35%, Mwenezi 25%); Gutu avg monthly household income: USD 222 (vs Bikita USD 68).',
       updated_at: nowIso,
     },
     {
@@ -7295,45 +7321,45 @@ function buildVerifiedDepthBaselineRecords() {
       updated_at: nowIso,
     },
     {
+      id: 'parl-hb1-2025-plc-stage',
+      label: 'Mines and Minerals Bill (H.B. 1, 2025) — Parliamentary Stage',
+      domain: 'governance',
+      value: 2,
+      unit: 'stage_code',
+      period: 'Aug–Nov 2026',
+      lineage: 'Measured Directly',
+      status: 'cached',
+      source_title: 'Parliamentary Bill Status Tracker (Veritas / Parliament)',
+      source_url: veritasUrl,
+      notes: 'Empirical status: Referred to National Assembly following Parliamentary Legal Committee (PLC) adverse report.',
+      updated_at: nowIso,
+    },
+    {
       id: 'bill-hb1-2025-mines-minerals',
       label: 'Legislative Stage Friction — Mines and Minerals Bill (H.B. 1, 2025)',
-      domain: 'governance',
+      domain: 'module',
       value: 72.0,
       unit: 'score_0_100',
       period: 'Aug–Nov 2026',
       lineage: 'Conceptual / Analytical Bucket',
       status: 'cached',
-      source_title: 'Parliamentary Bill Status Tracker (Veritas / Parliament)',
+      source_title: 'KUVHURA Component 6 (Legal) & Veritas Tracker',
       source_url: veritasUrl,
-      notes: 'National Assembly considering adverse report from Parliamentary Legal Committee (PLC).',
+      notes: 'Elevated procedural friction due to unresolved PLC constitutional/legal objections.',
       updated_at: nowIso,
     },
     {
       id: 'bill-hb5a-2025-climate-change',
       label: 'Legislative Stage Friction — Climate Change Management Bill (H.B. 5A, 2025)',
-      domain: 'governance',
+      domain: 'module',
       value: 35.0,
       unit: 'score_0_100',
       period: 'Aug–Nov 2026',
       lineage: 'Conceptual / Analytical Bucket',
       status: 'cached',
-      source_title: 'Parliamentary Bill Status Tracker (Veritas / Parliament)',
+      source_title: 'KUVHURA Component 8 (Climate) & Veritas Tracker',
       source_url: veritasUrl,
-      notes: 'Passed final reading in the Senate; lower residual stage friction than PLC-stalled bills.',
-      updated_at: nowIso,
-    },
-    {
-      id: 'bill-hb5-2026-ema-amendment',
-      label: 'Legislative Stage Friction — Environmental Management Amendment Bill (H.B. 5, 2026)',
-      domain: 'governance',
-      value: 45.0,
-      unit: 'score_0_100',
-      period: 'Aug–Nov 2026',
-      lineage: 'Conceptual / Analytical Bucket',
-      status: 'cached',
-      source_title: 'Parliamentary Bill Status Tracker (Veritas / Parliament)',
-      source_url: veritasUrl,
-      notes: 'Bill proofs sent to Attorney-General\'s Office; awaiting final enactment steps.',
+      notes: 'Passed final reading in Senate; low residual legislative bottleneck.',
       updated_at: nowIso,
     },
   ];
@@ -7380,11 +7406,15 @@ function getDepthTelemetrySnapshot() {
     const avgQoq = qoqMagnitudes.length
       ? Number((qoqMagnitudes.reduce((a, b) => a + b, 0) / qoqMagnitudes.length).toFixed(2))
       : null;
-    const bills = depthRecords.filter(r => r.domain === 'governance' && Number.isFinite(Number(r.value)));
-    const maxBill = bills.length ? Math.max(...bills.map(b => Number(b.value))) : null;
+    const bucketBills = depthRecords.filter(
+      r => (r.domain === 'governance' || r.domain === 'module')
+        && r.lineage === 'Conceptual / Analytical Bucket'
+        && Number.isFinite(Number(r.value))
+    );
+    const maxBill = bucketBills.length ? Math.max(...bucketBills.map(b => Number(b.value))) : null;
 
     if (!mergedStreams.mineral_qoq_dispersion) {
-      const vol = depthSampleStd(qoqMagnitudes);
+      const vol = depthSampleStd(avgQoq !== null ? [avgQoq] : []);
       mergedStreams.mineral_qoq_dispersion = {
         latest_raw: avgQoq,
         history: avgQoq !== null ? [avgQoq] : [],
@@ -7399,7 +7429,7 @@ function getDepthTelemetrySnapshot() {
       };
     }
     if (!mergedStreams.legislative_plc_friction) {
-      const vol = depthSampleStd(bills.map(b => Number(b.value)));
+      const vol = depthSampleStd(maxBill !== null ? [maxBill] : []);
       mergedStreams.legislative_plc_friction = {
         latest_raw: maxBill,
         history: maxBill !== null ? [maxBill] : [],
@@ -7421,8 +7451,9 @@ function getDepthTelemetrySnapshot() {
     updatedAt,
     depth_records: depthRecords,
     minerals: depthRecords.filter(r => r.domain === 'extraction'),
+    macro_fiscal: depthRecords.filter(r => r.domain === 'macro_fiscal'),
     livelihoods: depthRecords.filter(r => r.domain === 'livelihoods' || r.domain === 'spatial'),
-    legislative: depthRecords.filter(r => r.domain === 'governance'),
+    legislative: depthRecords.filter(r => r.domain === 'governance' || r.domain === 'module'),
     stochastic_streams: mergedStreams,
     audited: auditAndPartitionRecords(depthRecords),
   };
@@ -7495,10 +7526,10 @@ function buildExportNarrativeSections(snapshot, audience = 'layman') {
     : {};
   const updated = snapshot?.depth_updated_at || snapshot?.updatedAt || snapshot?.timestamp || new Date().toISOString();
 
-  const extraction = records.filter(r => r.domain === 'extraction');
+  const extraction = records.filter(r => r.domain === 'extraction' || r.domain === 'macro_fiscal');
   const spatial = records.filter(r => r.domain === 'spatial' || r.domain === 'livelihoods');
   const governance = records.filter(r => r.domain === 'governance' || r.domain === 'module');
-  const other = records.filter(r => !['extraction', 'spatial', 'livelihoods', 'governance', 'module'].includes(r.domain));
+  const other = records.filter(r => !['extraction', 'macro_fiscal', 'spatial', 'livelihoods', 'governance', 'module'].includes(r.domain));
 
   const directCount = records.filter(r => r.lineage === 'Measured Directly').length;
   const proxyCount = records.filter(r => r.lineage === 'Proxy / Estimate').length;
@@ -7815,7 +7846,18 @@ async function generateExportDocxBuffer(briefing) {
   return DocxPacker.toBuffer(doc);
 }
 
-async function generateExportXlsxBuffer(briefing) {
+function filterExportRecordsByPeriod(records, periodFilter) {
+  const clean = String(periodFilter || '').trim();
+  const lowered = clean.toLowerCase();
+  if (!clean || lowered === 'all' || lowered === 'all periods' || lowered === '*') {
+    return Array.isArray(records) ? records : [];
+  }
+  return (Array.isArray(records) ? records : []).filter(r =>
+    String(r?.period || '').trim().toLowerCase().includes(lowered)
+  );
+}
+
+async function generateExportXlsxBuffer(briefing, periodFilter = 'all') {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'KUVHURA Observatory';
   wb.created = new Date();
@@ -7824,7 +7866,107 @@ async function generateExportXlsxBuffer(briefing) {
     fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } },
     font: { color: { argb: 'FFFFFFFF' }, bold: true },
   };
+  const subhdrStyle = {
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF374151' } },
+    font: { color: { argb: 'FFFFFFFF' }, bold: true },
+  };
+  const accentFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
 
+  const allRecords = Array.isArray(briefing.records) ? briefing.records : [];
+  const filteredRecords = filterExportRecordsByPeriod(allRecords, periodFilter);
+
+  const uniquePeriods = Array.from(
+    new Set(
+      filteredRecords
+        .map(r => String(r?.period || '').trim())
+        .filter(Boolean)
+    )
+  ).sort();
+  const dropdownOptions = uniquePeriods.length > 1
+    ? ['All Periods', ...uniquePeriods]
+    : (uniquePeriods.length === 1 ? uniquePeriods : ['All Periods']);
+  const defaultSelected = dropdownOptions[0];
+
+  // --- TAB 1: Period_Selector & Audited Summary ---
+  const wsSel = wb.addWorksheet('Period_Selector');
+  wsSel.addRow(['KUVHURA Telemetry Export — Period Selector & Lineage Summary', '']);
+  wsSel.getCell('A1').font = { bold: true, size: 13 };
+
+  wsSel.addRow(['API Download Filter', periodFilter || 'all']);
+  wsSel.addRow(['Interactive Period (Dropdown)', defaultSelected]);
+  wsSel.getCell('A2').font = { bold: true };
+  wsSel.getCell('A3').font = { bold: true };
+  wsSel.getCell('B3').fill = accentFill;
+  wsSel.getCell('B3').font = { bold: true };
+
+  wsSel.getCell('B3').dataValidation = {
+    type: 'list',
+    allowBlank: false,
+    formulae: [`"${dropdownOptions.join(',')}"`],
+    showInputMessage: true,
+    promptTitle: 'Select Reporting Period',
+    prompt: "Choose 'All Periods' or a specific reporting period from the list.",
+  };
+
+  wsSel.addRow([]);
+  const selHdr = wsSel.addRow(['Lineage & Domain Breakdown (Driven by Cell B3)', 'Record Count']);
+  selHdr.eachCell(cell => {
+    cell.fill = headerStyle.fill;
+    cell.font = headerStyle.font;
+  });
+
+  const matchDefault = defaultSelected === 'All Periods'
+    ? filteredRecords
+    : filteredRecords.filter(r => String(r?.period || '').trim() === defaultSelected);
+
+  const summaryRows = [
+    [
+      'Total Matching Records',
+      'IF(B3="All Periods", COUNTA(Recorded_Telemetry!A:A)-1, COUNTIF(Recorded_Telemetry!H:H, B3))',
+      matchDefault.length,
+    ],
+    [
+      'Measured Directly (Primary Official Data)',
+      'IF(B3="All Periods", COUNTIF(Recorded_Telemetry!I:I, "Measured Directly"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!I:I, "Measured Directly"))',
+      matchDefault.filter(r => r.lineage === 'Measured Directly').length,
+    ],
+    [
+      'Proxy / Estimate (Contextual / Derived)',
+      'IF(B3="All Periods", COUNTIF(Recorded_Telemetry!I:I, "Proxy / Estimate"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!I:I, "Proxy / Estimate"))',
+      matchDefault.filter(r => r.lineage === 'Proxy / Estimate').length,
+    ],
+    [
+      'Conceptual / Analytical Bucket (Modules & Stages)',
+      'IF(B3="All Periods", COUNTIF(Recorded_Telemetry!I:I, "Conceptual / Analytical Bucket"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!I:I, "Conceptual / Analytical Bucket"))',
+      matchDefault.filter(r => r.lineage === 'Conceptual / Analytical Bucket').length,
+    ],
+    [
+      'Domain: Extractive Sector',
+      'IF(B3="All Periods", COUNTIF(Recorded_Telemetry!B:B, "extraction"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "extraction"))',
+      matchDefault.filter(r => r.domain === 'extraction').length,
+    ],
+    [
+      'Domain: Macro & Fiscal (RBZ / Treasury)',
+      'IF(B3="All Periods", COUNTIF(Recorded_Telemetry!B:B, "macro_fiscal"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "macro_fiscal"))',
+      matchDefault.filter(r => r.domain === 'macro_fiscal').length,
+    ],
+    [
+      'Domain: Spatial & Rural Livelihoods',
+      'IF(B3="All Periods", COUNTIF(Recorded_Telemetry!B:B, "spatial")+COUNTIF(Recorded_Telemetry!B:B, "livelihoods"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "spatial")+COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "livelihoods"))',
+      matchDefault.filter(r => r.domain === 'spatial' || r.domain === 'livelihoods').length,
+    ],
+    [
+      'Domain: Governance & Institutional Modules',
+      'IF(B3="All Periods", COUNTIF(Recorded_Telemetry!B:B, "governance")+COUNTIF(Recorded_Telemetry!B:B, "module"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "governance")+COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "module"))',
+      matchDefault.filter(r => r.domain === 'governance' || r.domain === 'module').length,
+    ],
+  ];
+
+  for (const [metricLabel, formula, initialResult] of summaryRows) {
+    wsSel.addRow([metricLabel, { formula, result: initialResult }]);
+  }
+
+  // --- TAB 2: Recorded_Telemetry ---
   const wsRec = wb.addWorksheet('Recorded_Telemetry');
   const recHeaders = [
     'ID', 'Domain', 'Label', 'Value', 'Unit', 'QoQ %', 'YoY %', 'Period',
@@ -7836,8 +7978,8 @@ async function generateExportXlsxBuffer(briefing) {
     cell.font = headerStyle.font;
   });
 
-  for (const r of briefing.records) {
-    wsRec.addRow([
+  for (const r of filteredRecords) {
+    const row = wsRec.addRow([
       r.id || '',
       r.domain || '',
       r.label || r.location_name || r.title || '',
@@ -7853,39 +7995,59 @@ async function generateExportXlsxBuffer(briefing) {
       r.explanation || r.notes || '',
       r.updated_at || briefing.updated,
     ]);
+    row.getCell(4).numFmt = '#,##0.00';
+    row.getCell(6).numFmt = '+0.0;-0.0;0.0';
+    row.getCell(7).numFmt = '+0.0;-0.0;0.0';
+    row.getCell(13).alignment = { wrapText: true, vertical: 'top' };
   }
 
+  wsRec.autoFilter = `A1:N${Math.max(filteredRecords.length + 1, 2)}`;
+  wsRec.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // --- TAB 3: Stochastic_Streams ---
   const wsSt = wb.addWorksheet('Stochastic_Streams');
   const stHeaders = [
-    'Stream Key', 'Latest Raw', 'Smoothed Value', 'Volatility (Std 10)', 'Regime', 'Status', 'Updated At',
+    'Stream Key', 'Latest Raw', 'Smoothed Value', 'Volatility (Std 10)',
+    'Regime', 'Status', 'History Count', 'Updated At',
   ];
   const stHeaderRow = wsSt.addRow(stHeaders);
   stHeaderRow.eachCell(cell => {
-    cell.fill = headerStyle.fill;
-    cell.font = headerStyle.font;
+    cell.fill = subhdrStyle.fill;
+    cell.font = subhdrStyle.font;
   });
 
   for (const [key, s] of Object.entries(briefing.streams || {})) {
     if (!s || typeof s !== 'object') continue;
-    wsSt.addRow([
+    const hist = Array.isArray(s.history) ? s.history : [];
+    const row = wsSt.addRow([
       key,
       s.latest_raw ?? null,
       s.smoothed_value ?? null,
       s.volatility_std_10 ?? null,
       s.regime || '',
       s.status || '',
+      hist.length,
       s.updated_at || briefing.updated,
     ]);
+    row.getCell(2).numFmt = '#,##0.0000';
+    row.getCell(3).numFmt = '#,##0.0000';
+    row.getCell(4).numFmt = '#,##0.0000';
   }
 
-  for (const ws of [wsRec, wsSt]) {
+  wsSt.views = [{ state: 'frozen', ySplit: 1 }];
+
+  // Auto-fit column widths across all 3 tabs (ignoring formula objects)
+  for (const ws of [wsSel, wsRec, wsSt]) {
     ws.columns.forEach(column => {
-      let maxLen = 12;
+      let maxLen = 14;
       column.eachCell({ includeEmpty: true }, cell => {
-        const len = String(cell.value ?? '').length;
-        if (len > maxLen) maxLen = len;
+        const val = cell.value;
+        if (val && typeof val === 'object' && 'formula' in val) return;
+        const text = String(val ?? '');
+        if (text.startsWith('=')) return;
+        if (text.length > maxLen) maxLen = text.length;
       });
-      column.width = Math.min(Math.max(maxLen + 2, 12), 48);
+      column.width = Math.min(Math.max(maxLen + 3, 15), 50);
     });
   }
 
@@ -7898,6 +8060,7 @@ app.get('/api/export', async (req, res) => {
     const fmt = String(req.query.format || 'pdf').trim().toLowerCase();
     const rawAudience = String(req.query.audience || 'layman').trim().toLowerCase();
     const audience = rawAudience === 'technical' ? 'technical' : 'layman';
+    const period = String(req.query.period || 'all').trim();
 
     if (!['pdf', 'docx', 'xlsx'].includes(fmt)) {
       return res.status(400).json({ error: 'Unsupported format. Use format=pdf, docx, or xlsx.' });
@@ -7923,9 +8086,12 @@ app.get('/api/export', async (req, res) => {
       return res.send(docxBuf);
     }
 
-    const xlsxBuf = await generateExportXlsxBuffer(briefing);
+    const xlsxBuf = await generateExportXlsxBuffer(briefing, period);
+    const periodSlug = period && !['all', 'all periods', '*'].includes(period.toLowerCase())
+      ? `_${period.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`
+      : '';
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="kuvhura_telemetry_data_${stamp}.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="kuvhura_telemetry_data${periodSlug}_${stamp}.xlsx"`);
     return res.send(xlsxBuf);
   } catch (err) {
     console.warn('[EXPORT] Error generating telemetry export:', err.message);

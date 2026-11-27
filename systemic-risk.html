@@ -384,6 +384,15 @@
             </div>
 
             <div class="flex flex-wrap gap-2 items-center">
+                <select id="export-period" aria-label="Reporting period filter" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-md px-2.5 py-2">
+                    <option value="all" selected>Period: All Periods</option>
+                    <option value="Q1 2026">Q1 2026</option>
+                    <option value="2026 Budget">2026 Budget</option>
+                    <option value="H2 2026">H2 2026</option>
+                    <option value="Aug–Nov 2026">Aug–Nov 2026</option>
+                    <option value="Jan–Mar 2026">Jan–Mar 2026</option>
+                    <option value="Apr 2025">Apr 2025</option>
+                </select>
                 <select id="export-audience" aria-label="Report version" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-md px-2.5 py-2">
                     <option value="layman" selected>Layman Version (Plain Language)</option>
                     <option value="technical">Technical Version (Methodology &amp; Audit)</option>
@@ -411,10 +420,11 @@
         async function downloadKuvhuraExport(format) {
             const statusEl = document.getElementById('kuvhura-export-status');
             const audience = document.getElementById('export-audience')?.value === 'technical' ? 'technical' : 'layman';
+            const period = (document.getElementById('export-period')?.value || 'all').trim();
             const fmt = ['pdf', 'docx', 'xlsx'].includes(format) ? format : 'pdf';
-            if (statusEl) statusEl.textContent = `Generating ${fmt.toUpperCase()} (${audience})…`;
+            if (statusEl) statusEl.textContent = `Generating ${fmt.toUpperCase()} (${audience}${period !== 'all' ? `, ${period}` : ''})…`;
 
-            const query = `/api/export?format=${encodeURIComponent(fmt)}&audience=${encodeURIComponent(audience)}`;
+            const query = `/api/export?format=${encodeURIComponent(fmt)}&audience=${encodeURIComponent(audience)}&period=${encodeURIComponent(period)}`;
             const configuredBase = (window.KUVHURA_API_URL || window.KUVHURA_API_BASE_URL || '').replace(/\/+$/, '');
             const isGithubPages = window.location.hostname.endsWith('.github.io');
             const candidates = [];

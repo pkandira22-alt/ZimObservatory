@@ -19,7 +19,9 @@ from reportlab.platypus import (
     TableStyle,
 )
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 export_bp = Blueprint("export_bp", __name__)
 CACHE_PATH = os.environ.get("TELEMETRY_CACHE_PATH", "telemetry_cache.json")
@@ -38,21 +40,31 @@ def _load_cache():
     if not cache.get("depth_records") and not cache.get("spatial_reports"):
         try:
             from depth_telemetry_pipeline import (
-                build_mineral_divergence_records,
-                build_zimlac_livelihoods_records,
-                build_parliament_legislative_records,
+                attach_explanations,
+                build_extractive_records,
+                build_governance_records,
+                build_macro_fiscal_records,
+                build_spatial_livelihood_records,
                 update_stochastic_layer,
             )
 
-            records = (
-                build_mineral_divergence_records()
-                + build_zimlac_livelihoods_records()
-                + build_parliament_legislative_records()
-            )
+            extractive = attach_explanations(build_extractive_records())
+            macro_fiscal = attach_explanations(build_macro_fiscal_records())
+            spatial = attach_explanations(build_spatial_livelihood_records())
+            governance = attach_explanations(build_governance_records())
+            records = extractive + macro_fiscal + spatial + governance
             cache.setdefault("depth_records", records)
             cache.setdefault("depth_updated_at", datetime.now(timezone.utc).isoformat())
             if not cache.get("stochastic_streams"):
-                update_stochastic_layer(cache, records)
+                qoq_mags = [abs(m["qoq_pct"]) for m in extractive if m.get("qoq_pct") is not None]
+                avg_qoq = round(sum(qoq_mags) / len(qoq_mags), 2) if qoq_mags else None
+                update_stochastic_layer(cache, "mineral_qoq_dispersion", avg_qoq)
+                bucket_scores = [
+                    g["value"]
+                    for g in governance
+                    if g.get("lineage") == "Conceptual / Analytical Bucket" and g.get("value") is not None
+                ]
+                update_stochastic_layer(cache, "legislative_plc_friction", max(bucket_scores, default=None))
         except Exception:
             pass
 
@@ -60,13 +72,13 @@ def _load_cache():
 
 
 def _partition_records(records):
-    extraction = [r for r in records if r.get("domain") == "extraction"]
+    extraction = [r for r in records if r.get("domain") in ("extraction", "macro_fiscal")]
     spatial = [r for r in records if r.get("domain") in ("spatial", "livelihoods")]
     governance = [r for r in records if r.get("domain") in ("governance", "module")]
     other = [
         r
         for r in records
-        if r.get("domain") not in ("extraction", "spatial", "livelihoods", "governance", "module")
+        if r.get("domain") not in ("extraction", "macro_fiscal", "spatial", "livelihoods", "governance", "module")
     ]
     return extraction, spatial, governance, other
 
@@ -464,30 +476,110 @@ def _generate_pdf(briefing):
     return buf
 
 
-def _generate_xlsx(cache):
-    wb = Workbook()
-    ws_data = wb.active
-    ws_data.title = "Recorded_Telemetry"
+def _filter_records_by_period(records, period_filter):
+    """Filter records by period query parameter ('all' returns everything)."""
+    if not period_filter or period_filter.strip().lower() in ("all", "all periods", "*"):
+        return records
+    needle = period_filter.strip().lower()
+    return [
+        r for r in records
+        if needle in str(r.get("period") or "").strip().lower()
+    ]
 
+
+def _generate_xlsx(cache, period_filter="all"):
+    wb = Workbook()
+    header_fill = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
+    subhdr_fill = PatternFill(start_color="374151", end_color="374151", fill_type="solid")
+    accent_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    bold_font = Font(bold=True)
+
+    all_records = cache.get("depth_records") or cache.get("spatial_reports") or []
+    filtered_records = _filter_records_by_period(all_records, period_filter)
+
+    unique_periods = sorted({
+        str(r.get("period")).strip()
+        for r in filtered_records
+        if r.get("period") not in (None, "")
+    })
+    dropdown_options = ["All Periods"] + unique_periods if len(unique_periods) > 1 else (unique_periods or ["All Periods"])
+    default_selected = dropdown_options[0]
+
+    # --- TAB 1: Period_Selector & Audited Summary ---
+    ws_sel = wb.active
+    ws_sel.title = "Period_Selector"
+    ws_sel.append(["KUVHURA Telemetry Export — Period Selector & Lineage Summary", ""])
+    ws_sel["A1"].font = Font(bold=True, size=13)
+
+    ws_sel.append(["API Download Filter", period_filter if period_filter else "all"])
+    ws_sel.append(["Interactive Period (Dropdown)", default_selected])
+    ws_sel["A2"].font = bold_font
+    ws_sel["A3"].font = bold_font
+    ws_sel["B3"].fill = accent_fill
+    ws_sel["B3"].font = bold_font
+
+    # Attach Excel dropdown validation in cell B3
+    dv = DataValidation(
+        type="list",
+        formula1=f'"{",".join(dropdown_options)}"',
+        allow_blank=False,
+    )
+    dv.promptTitle = "Select Reporting Period"
+    dv.prompt = "Choose 'All Periods' or a specific reporting period from the list."
+    ws_sel.add_data_validation(dv)
+    dv.add(ws_sel["B3"])
+
+    ws_sel.append([])
+    ws_sel.append(["Lineage & Domain Breakdown (Driven by Cell B3)", "Record Count"])
+    for cell in ws_sel[5]:
+        cell.fill = header_fill
+        cell.font = header_font
+
+    summary_rows = [
+        (
+            "Total Matching Records",
+            '=IF(B3="All Periods", COUNTA(Recorded_Telemetry!A:A)-1, COUNTIF(Recorded_Telemetry!H:H, B3))',
+        ),
+        (
+            "Measured Directly (Primary Official Data)",
+            '=IF(B3="All Periods", COUNTIF(Recorded_Telemetry!I:I, "Measured Directly"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!I:I, "Measured Directly"))',
+        ),
+        (
+            "Proxy / Estimate (Contextual / Derived)",
+            '=IF(B3="All Periods", COUNTIF(Recorded_Telemetry!I:I, "Proxy / Estimate"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!I:I, "Proxy / Estimate"))',
+        ),
+        (
+            "Conceptual / Analytical Bucket (Modules & Stages)",
+            '=IF(B3="All Periods", COUNTIF(Recorded_Telemetry!I:I, "Conceptual / Analytical Bucket"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!I:I, "Conceptual / Analytical Bucket"))',
+        ),
+        (
+            "Domain: Extractive Sector",
+            '=IF(B3="All Periods", COUNTIF(Recorded_Telemetry!B:B, "extraction"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "extraction"))',
+        ),
+        (
+            "Domain: Macro & Fiscal (RBZ / Treasury)",
+            '=IF(B3="All Periods", COUNTIF(Recorded_Telemetry!B:B, "macro_fiscal"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "macro_fiscal"))',
+        ),
+        (
+            "Domain: Spatial & Rural Livelihoods",
+            '=IF(B3="All Periods", COUNTIF(Recorded_Telemetry!B:B, "spatial")+COUNTIF(Recorded_Telemetry!B:B, "livelihoods"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "spatial")+COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "livelihoods"))',
+        ),
+        (
+            "Domain: Governance & Institutional Modules",
+            '=IF(B3="All Periods", COUNTIF(Recorded_Telemetry!B:B, "governance")+COUNTIF(Recorded_Telemetry!B:B, "module"), COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "governance")+COUNTIFS(Recorded_Telemetry!H:H, B3, Recorded_Telemetry!B:B, "module"))',
+        ),
+    ]
+    for metric_label, formula_str in summary_rows:
+        ws_sel.append([metric_label, formula_str])
+
+    # --- TAB 2: Recorded_Telemetry ---
+    ws_data = wb.create_sheet(title="Recorded_Telemetry")
     headers = [
-        "ID",
-        "Domain",
-        "Label",
-        "Value",
-        "Unit",
-        "QoQ %",
-        "YoY %",
-        "Period",
-        "Lineage",
-        "Status",
-        "Source Title",
-        "Source URL",
-        "Explanation",
-        "Updated At",
+        "ID", "Domain", "Label", "Value", "Unit", "QoQ %", "YoY %",
+        "Period", "Lineage", "Status", "Source Title", "Source URL", "Explanation", "Updated At"
     ]
     ws_data.append(headers)
-    header_fill = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
-    header_font = Font(bold=True, color="FFFFFF")
     for cell in ws_data[1]:
         cell.fill = header_fill
         cell.font = header_font
@@ -497,61 +589,77 @@ def _generate_xlsx(cache):
         or cache.get("timestamp")
         or datetime.now(timezone.utc).isoformat()
     )
-    records = cache.get("depth_records") or cache.get("spatial_reports") or []
-    for r in records:
-        ws_data.append(
-            [
-                r.get("id", ""),
-                r.get("domain", ""),
-                r.get("label") or r.get("location_name") or "",
-                r.get("value", r.get("quantity")),
-                r.get("unit", ""),
-                r.get("qoq_pct"),
-                r.get("yoy_pct"),
-                r.get("period", ""),
-                r.get("lineage", ""),
-                r.get("status", ""),
-                r.get("source_title") or r.get("source") or "",
-                r.get("source_url", ""),
-                r.get("explanation") or r.get("notes") or "",
-                r.get("updated_at", updated),
-            ]
-        )
+    for r in filtered_records:
+        ws_data.append([
+            r.get("id"),
+            r.get("domain"),
+            r.get("label") or r.get("location_name"),
+            r.get("value", r.get("quantity")),
+            r.get("unit"),
+            r.get("qoq_pct"),
+            r.get("yoy_pct"),
+            r.get("period"),
+            r.get("lineage"),
+            r.get("status"),
+            r.get("source_title") or r.get("source"),
+            r.get("source_url"),
+            r.get("explanation") or r.get("notes"),
+            r.get("updated_at") or updated,
+        ])
 
-    ws_st = wb.create_sheet(title="Stochastic_Streams")
-    st_headers = [
-        "Stream Key",
-        "Latest Raw",
-        "Smoothed Value",
-        "Volatility (Std 10)",
-        "Regime",
-        "Status",
-        "Updated At",
-    ]
-    ws_st.append(st_headers)
-    for cell in ws_st[1]:
-        cell.fill = header_fill
+    for row_idx in range(2, ws_data.max_row + 1):
+        ws_data.cell(row=row_idx, column=4).number_format = "#,##0.00"
+        ws_data.cell(row=row_idx, column=6).number_format = "+0.0;-0.0;0.0"
+        ws_data.cell(row=row_idx, column=7).number_format = "+0.0;-0.0;0.0"
+        ws_data.cell(row=row_idx, column=13).alignment = Alignment(wrap_text=True, vertical="top")
+
+    ws_data.auto_filter.ref = f"A1:N{max(len(filtered_records) + 1, 2)}"
+    ws_data.freeze_panes = "A2"
+
+    # --- TAB 3: Stochastic_Streams ---
+    ws_stoch = wb.create_sheet(title="Stochastic_Streams")
+    ws_stoch.append([
+        "Stream Key", "Latest Raw", "Smoothed Value", "Volatility (Std 10)",
+        "Regime", "Status", "History Count", "Updated At"
+    ])
+    for cell in ws_stoch[1]:
+        cell.fill = subhdr_fill
         cell.font = header_font
 
-    for key, s in (cache.get("stochastic_streams") or {}).items():
+    for k, s in (cache.get("stochastic_streams") or {}).items():
         if not isinstance(s, dict):
             continue
-        ws_st.append(
-            [
-                key,
-                s.get("latest_raw"),
-                s.get("smoothed_value"),
-                s.get("volatility_std_10"),
-                s.get("regime", ""),
-                s.get("status", ""),
-                s.get("updated_at", updated),
-            ]
-        )
+        hist = s.get("history") or []
+        ws_stoch.append([
+            k,
+            s.get("latest_raw"),
+            s.get("smoothed_value"),
+            s.get("volatility_std_10"),
+            s.get("regime"),
+            s.get("status"),
+            len(hist),
+            s.get("updated_at") or updated,
+        ])
 
-    for ws in (ws_data, ws_st):
-        for col in ws.columns:
-            max_len = max((len(str(c.value or "")) for c in col), default=12)
-            ws.column_dimensions[col[0].column_letter].width = min(max(max_len + 2, 12), 48)
+    for row_idx in range(2, ws_stoch.max_row + 1):
+        for col_idx in (2, 3, 4):
+            ws_stoch.cell(row=row_idx, column=col_idx).number_format = "#,##0.0000"
+
+    ws_stoch.freeze_panes = "A2"
+
+    # Auto-fit column widths across all sheets
+    for ws in (ws_sel, ws_data, ws_stoch):
+        for col_idx in range(1, ws.max_column + 1):
+            col_letter = get_column_letter(col_idx)
+            max_len = max(
+                (
+                    len(str(ws.cell(row=row_idx, column=col_idx).value or ""))
+                    for row_idx in range(1, ws.max_row + 1)
+                    if not str(ws.cell(row=row_idx, column=col_idx).value or "").startswith("=")
+                ),
+                default=14,
+            )
+            ws.column_dimensions[col_letter].width = min(max(max_len + 3, 15), 50)
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -563,6 +671,7 @@ def _generate_xlsx(cache):
 def export_telemetry():
     fmt = (request.args.get("format") or "pdf").strip().lower()
     audience = (request.args.get("audience") or "layman").strip().lower()
+    period = (request.args.get("period") or "all").strip()
     if audience not in ("technical", "layman"):
         audience = "layman"
 
@@ -588,7 +697,7 @@ def export_telemetry():
             download_name=f"kuvhura_5page_briefing_{audience}_{stamp}.docx",
         )
     if fmt == "xlsx":
-        buf = _generate_xlsx(cache)
+        buf = _generate_xlsx(cache, period_filter=period)
         return send_file(
             buf,
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
