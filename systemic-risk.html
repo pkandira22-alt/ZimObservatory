@@ -97,12 +97,12 @@
 
         <!-- KPI Scorecards Grid (6 Cards including Hansard & Ministry of Finance Telemetry) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            <!-- Card 1: Regime Durability Phi -->
+            <!-- Card 1: Bayesian Posterior Durability Phi -->
             <div class="bg-cardbg/90 backdrop-blur border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden">
                 <div class="absolute top-0 right-0 p-3 text-accent/20 font-bold text-3xl">Φ</div>
-                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Regime Durability (Φ)</p>
+                <p class="text-xs uppercase tracking-wider text-slate-400 font-medium">Bayesian Posterior Durability (Φ<sub>bayes</sub>)</p>
                 <p id="kpi-phi" class="text-2xl font-extrabold text-white mt-2 font-mono tabular-nums">--</p>
-                <p id="kpi-phi-note" class="text-xs text-slate-400 mt-2">Bayesian Posterior</p>
+                <p id="kpi-phi-note" class="text-xs text-slate-400 mt-2">Timeline crisis update (clamped 5.00–95.00)</p>
             </div>
 
             <!-- Card 2: Fragility State Index -->
@@ -697,7 +697,15 @@
                     ? latest.macro_volatility
                     : null;
 
-            document.getElementById('kpi-phi').innerText = Number.isFinite(latest.phi) ? latest.phi.toFixed(2) : '--';
+            const kpiPhiEl = document.getElementById('kpi-phi');
+            if (kpiPhiEl) {
+                if (Number.isFinite(latest.phi)) {
+                    const isFloor = latest.phi <= 5.0;
+                    kpiPhiEl.textContent = latest.phi.toFixed(2) + (isFloor ? ' (floor)' : '');
+                } else {
+                    kpiPhiEl.textContent = '--';
+                }
+            }
             const activePlatforms = Array.isArray(data.latestInputs?.sampled_platforms) && data.latestInputs.sampled_platforms.length
                 ? ` · ${data.latestInputs.sampled_platforms.join(', ')}`
                 : '';
@@ -824,14 +832,18 @@
             const fullTimeline = Array.isArray(window.__latestSystemicTimeline) ? window.__latestSystemicTimeline : [];
             const mode = document.getElementById('srTimelineDataModeSelect')?.value || 'ALL';
             const filtered = mode === 'LIVE'
-                ? fullTimeline.map(entry => Number.isFinite(entry.social_volume) ? entry : { date: entry.date })
+                ? fullTimeline.map(entry => (entry.data_mode === 'live' || Number.isFinite(entry.social_volume)) ? entry : { date: entry.date })
                 : fullTimeline;
-            const liveCount = fullTimeline.filter(entry => Number.isFinite(entry.social_volume)).length;
+            const liveCount = fullTimeline.filter(entry => entry.data_mode === 'live' || Number.isFinite(entry.social_volume)).length;
+            const seededCount = Math.max(0, fullTimeline.length - liveCount);
+            const firstDate = fullTimeline[0]?.date || '';
+            const lastDate = fullTimeline[fullTimeline.length - 1]?.date || '';
+            const spanText = firstDate && lastDate ? `${firstDate} → ${lastDate}` : '';
             const labelEl = document.getElementById('window-label');
             if (labelEl) {
                 labelEl.innerText = mode === 'LIVE'
-                    ? `${liveCount} Live ${liveCount === 1 ? 'Day' : 'Days'} in 30 days`
-                    : `${filtered.length}-Day Rolling Window (${liveCount} live)`;
+                    ? `Live-Only (${liveCount} ${liveCount === 1 ? 'day' : 'days'}${spanText ? ` · ${spanText}` : ''})`
+                    : `${filtered.length}-Day Trajectory${spanText ? ` (${spanText})` : ''} · ${liveCount} live, ${seededCount} seeded`;
             }
             renderChart(filtered);
         }
@@ -2581,12 +2593,16 @@
             const isPointsOnly = chartMode === 'scatter';
 
             const seriesDefs = [
-                { label: 'Regime Durability (Φ)', data: phiData, color: '#3b82f6', fillBg: 'rgba(59, 130, 246, 0.18)', barBg: 'rgba(59, 130, 246, 0.65)', defaultFill: true, borderWidth: 2.5, pointRadius: 2.5, borderDash: [] },
+                { label: 'Durability (Φ_bayes)', data: phiData, color: '#3b82f6', fillBg: 'rgba(59, 130, 246, 0.18)', barBg: 'rgba(59, 130, 246, 0.65)', defaultFill: true, borderWidth: 2.5, pointRadius: 2.5, borderDash: [] },
                 { label: 'Fragility State Index (FSI)', data: fsiData, color: '#f59e0b', fillBg: 'rgba(245, 158, 11, 0.16)', barBg: 'rgba(245, 158, 11, 0.65)', defaultFill: false, borderWidth: 2, pointRadius: 2, borderDash: [5, 5] },
                 { label: 'Markov Crisis Prob (%)', data: markovData, color: '#ef4444', fillBg: 'rgba(239, 68, 68, 0.16)', barBg: 'rgba(239, 68, 68, 0.65)', defaultFill: false, borderWidth: 2, pointRadius: 2, borderDash: [] },
                 { label: 'Hansard Friction (Fparl)', data: hansardData, color: '#10b981', fillBg: 'rgba(16, 185, 129, 0.16)', barBg: 'rgba(16, 185, 129, 0.65)', defaultFill: false, borderWidth: 2, pointRadius: 3, borderDash: [] },
                 { label: 'Treasury Fiscal Risk (Ftreas)', data: treasuryData, color: '#d4af37', fillBg: 'rgba(212, 175, 55, 0.16)', barBg: 'rgba(212, 175, 55, 0.65)', defaultFill: false, borderWidth: 2, pointRadius: 3, borderDash: [3, 3] }
             ];
+
+            const isLiveSrEntry = item => Boolean(item && (item.data_mode === 'live' || Number.isFinite(item.social_volume)));
+            const pointBorderColors = timeline.map(item => isLiveSrEntry(item) ? '#ffffff' : 'rgba(148,163,184,0.5)');
+            const pointBorderWidths = timeline.map(item => isLiveSrEntry(item) ? 2 : 1);
 
             const datasets = seriesDefs.map(s => {
                 if (isBar) {
@@ -2599,15 +2615,18 @@
                         borderRadius: 3
                     };
                 }
+                const radii = timeline.map(item => isLiveSrEntry(item) ? (isPointsOnly ? 6 : 5) : (isPointsOnly ? 4 : s.pointRadius));
                 return {
                     label: s.label,
                     data: s.data,
                     borderColor: s.color,
                     backgroundColor: isArea ? s.fillBg : (s.defaultFill && !isPointsOnly ? 'rgba(59, 130, 246, 0.08)' : 'transparent'),
                     pointBackgroundColor: s.color,
+                    pointBorderColor: pointBorderColors,
+                    pointBorderWidth: pointBorderWidths,
                     borderWidth: s.borderWidth,
-                    pointRadius: isPointsOnly ? 4.5 : s.pointRadius,
-                    pointHoverRadius: isPointsOnly ? 6.5 : 5,
+                    pointRadius: radii,
+                    pointHoverRadius: isPointsOnly ? 7 : 6,
                     borderDash: isStepped || isPointsOnly ? [] : s.borderDash,
                     fill: isArea ? true : (s.defaultFill && !isPointsOnly),
                     stepped: isStepped,
@@ -2624,7 +2643,41 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { intersect: isPointsOnly, mode: 'index' },
-                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+                    plugins: {
+                        legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+                        tooltip: {
+                            callbacks: {
+                                title(items) {
+                                    const idx = items?.[0]?.dataIndex;
+                                    const item = Number.isInteger(idx) ? timeline[idx] : null;
+                                    if (!item) return items?.[0]?.label || '';
+                                    const modeTag = isLiveSrEntry(item) ? 'LIVE / STREAM' : 'SEEDED BASELINE';
+                                    return `${item.date}  [${modeTag}]`;
+                                },
+                                afterTitle(items) {
+                                    const idx = items?.[0]?.dataIndex;
+                                    const item = Number.isInteger(idx) ? timeline[idx] : null;
+                                    if (!item) return '';
+                                    if (isLiveSrEntry(item)) {
+                                        const src = item.data_source || item.telemetry_source || 'Live / Stream telemetry';
+                                        return `Source: ${src} · ${item.social_volume} posts`;
+                                    }
+                                    return 'Source: Illustrative Seed Baseline (non-alerting)';
+                                },
+                                label(ctx) {
+                                    const raw = ctx.parsed?.y;
+                                    if (!Number.isFinite(raw)) return `${ctx.dataset.label}: —`;
+                                    if (ctx.datasetIndex === 0) {
+                                        return `${ctx.dataset.label}: ${raw.toFixed(2)}${raw <= 5.0 ? ' (floor)' : ''}`;
+                                    }
+                                    if (ctx.datasetIndex === 2) {
+                                        return `${ctx.dataset.label}: ${raw.toFixed(2)}%`;
+                                    }
+                                    return `${ctx.dataset.label}: ${raw.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
                     scales: {
                         x: {
                             grid: { color: 'rgba(51, 65, 85, 0.3)' },

@@ -5084,7 +5084,16 @@ function getDualEngineTimelineResponse() {
     : null;
   const ytMeta = socialStatus?.youtube;
   return {
-    timeline: TELEMETRY_TIMELINE.map(entry => ({ ...entry })),
+    timeline: TELEMETRY_TIMELINE.map(entry => {
+      const isLive = Number.isFinite(entry.social_volume);
+      return {
+        ...entry,
+        data_mode: isLive ? 'live' : 'seeded',
+        data_source: isLive
+          ? (entry.telemetry_source || 'Live / Stream telemetry')
+          : 'Illustrative Seed Baseline'
+      };
+    }),
     engines: {
       bayesian_status: 'Active (sampled-post and hashtag-mention proxies)',
       markov_status: 'Active (three-state transition matrix)',
