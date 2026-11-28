@@ -660,6 +660,89 @@ test('AI query uses fresh cache evidence in its system instruction and reports c
   assert.equal(requests.length, 2);
 });
 
+test('Google Form responses CSV parser handles Form responses 1 headers, A-04 reverse coding, COR reports, and live model blending', () => {
+  const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const surveyCode = extract(
+    source,
+    "const DEFAULT_SURVEY_FORM_URL =",
+    "\napp.get('/api/survey-telemetry'"
+  );
+  const modelCode = extract(
+    source,
+    'const MODEL_SIGNAL_BUCKET_REGEX =',
+    '\nasync function gatherLiveModelAndStructuralInputs()'
+  );
+  const ctx = {
+    Object, Array, Number, String, Math, Date, URL, URLSearchParams,
+    round1: v => Number(Number(v).toFixed(1)),
+    round2: v => Number(Number(v).toFixed(2)),
+    clampRange: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
+    process: { env: {} }
+  };
+  const helpers = runInNewContext(
+    `${modelCode}\n${surveyCode}\n({ normalizeSurveySheetUrl, parseSurveyResponsesCsv, computeLiveModelParameters, DEFAULT_SURVEY_CSV_URL })`,
+    ctx
+  );
+
+  // 1. URL normalization targets Form responses 1 (gid=1851840275) on the published workbook and blocks non-Google hosts
+  const normalized = helpers.normalizeSurveySheetUrl(
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vR-7nJjf7dWhijm9btwVrpyTRuxzkzW8xnGYayIqfonj_k944D13eicbEXRqEHWAiuSrQ2qXTK3zcMc/pub?output=csv'
+  );
+  assert.equal(normalized, helpers.DEFAULT_SURVEY_CSV_URL);
+  assert.equal(helpers.normalizeSurveySheetUrl('https://evil.example/sheet.csv'), null);
+
+  // 2. Header-only sheet reports connected_awaiting_responses without fabricating data
+  const headers = [
+    'Timestamp',
+    'DEM-01: Residential setting', 'DEM-02: Livelihood', 'DEM-03: Civic org', 'DEM-04: State dependence',
+    'R-01: Systemic governance', 'R-02: Mandate', 'R-03: Palliatives', 'R-04: Entitlement',
+    'A-01: March', 'A-02: Planning', 'A-03: Stay-away', 'A-04: Confined to private circles [REVERSE-CODED]',
+    'P-01: Indivisible unit', 'P-02: Livelihood loyalty', 'P-03: Zero avenues', 'P-04: Tenders',
+    'I-01: Ostracization', 'I-02: Chiefs track', 'I-03: Welfare aid', 'I-04: Informants',
+    'C-01: Violence risk', 'C-02: MOPA/PVO', 'C-03: Pre-trial detention', 'C-04: Surveillance',
+    'COR-01: Perpetrator Institutional Category', 'COR-02: Specific Agency', 'COR-03: Nature of Corrupt Abuse',
+    'COR-04: Detailed Incident Narrative', 'COR-05: Estimated Financial Loss (USD)', 'COR-06: Evidence Available'
+  ];
+  const emptyParsed = helpers.parseSurveyResponsesCsv(headers.join(',') + '\n');
+  assert.equal(emptyParsed.connected, true);
+  assert.equal(emptyParsed.status, 'connected_awaiting_responses');
+  assert.equal(emptyParsed.headersDetected, 20);
+  assert.equal(emptyParsed.responseCount, 0);
+
+  // 3. Populated row properly reverse-codes A-04 (raw 5 -> 1) and extracts COR-01..06
+  const sampleRow = [
+    '2026-11-28 11:30:00',
+    'High-Density Urban', 'Informal Trading', 'Yes', 'Low',
+    '5', '4', '5', '4', // R mean = 4.5 -> 9.0/10
+    '3', '3', '3', '5', // A-04 raw 5 reverse-coded to 1 -> A mean = (3+3+3+1)/4 = 2.5 -> 5.0/10
+    '4', '4', '4', '4', // P mean = 4.0 -> 8.0/10
+    '3', '3', '3', '3', // I mean = 3.0 -> 6.0/10
+    '5', '5', '5', '5', // C mean = 5.0 -> 10.0/10
+    'Municipal Council', 'Harare City Inspector', 'Bribery / Extortion',
+    'Demanded cash for vending stall allocation', '120', 'Audio recording'
+  ];
+  const populated = helpers.parseSurveyResponsesCsv(`${headers.join(',')}\n${sampleRow.join(',')}\n`);
+  assert.equal(populated.status, 'active_with_responses');
+  assert.equal(populated.responseCount, 1);
+  assert.equal(populated.means1to5.R, 4.5);
+  assert.equal(populated.means1to5.A, 2.5);
+  assert.equal(populated.scores1to10.A, 5);
+  assert.equal(populated.whistleblowerReports.length, 1);
+  assert.equal(populated.whistleblowerReports[0].amount, 120);
+  assert.equal(populated.whistleblowerReports[0].entity, 'Harare City Inspector');
+
+  // 4. computeLiveModelParameters blends live survey scores into AL, P, I, C, and uses survey R/A for Praxis
+  const withoutSurvey = helpers.computeLiveModelParameters({ surveyTelemetry: emptyParsed });
+  const withSurvey = helpers.computeLiveModelParameters({ surveyTelemetry: populated });
+  assert.equal(withoutSurvey.praxisInputs.source, 'macro_social_proxy');
+  assert.equal(withSurvey.praxisInputs.source, 'field_survey');
+  assert.equal(withSurvey.praxisInputs.R, 9);
+  assert.equal(withSurvey.praxisInputs.A, 5);
+  assert.ok(withSurvey.parameters.AL.value > withoutSurvey.parameters.AL.value);
+  assert.equal(withSurvey.survey.responseCount, 1);
+});
+
+
 
 
 

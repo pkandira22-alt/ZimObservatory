@@ -649,7 +649,10 @@
             forecastSocket.onmessage = function(event) {
                 try {
                     const data = JSON.parse(event.data);
-                    if (data && (data.forecastSeries || data.regimeDurability || data.type === "trending_telemetry")) {
+                    if (data && data.type === "forecast_report" && Array.isArray(data.targets)) {
+                        latestOutOfSampleForecast = data;
+                        updateForecastDisplay(lastForecastDisplayState || {});
+                    } else if (data && (data.forecastSeries || data.regimeDurability || data.type === "trending_telemetry")) {
                         receivedLivePacket = true;
                         updateForecastDisplay(data);
                         fetchLiveProvincialTelemetry();
@@ -675,28 +678,88 @@
             };
         }
 
+        let latestOutOfSampleForecast = null;
+        let lastForecastDisplayState = null;
+
+        async function fetchLiveOutOfSampleForecast() {
+            try {
+                const res = await fetch(`${getApiBase()}/api/forecast`, { cache: "no-store" });
+                if (!res.ok) return false;
+                const report = await res.json();
+                if (report && report.type === "forecast_report" && Array.isArray(report.targets)) {
+                    latestOutOfSampleForecast = report;
+                    if (lastForecastDisplayState) {
+                        updateForecastDisplay(lastForecastDisplayState);
+                    }
+                    return true;
+                }
+            } catch (err) {
+                console.warn("Could not load live out-of-sample forecast:", err);
+            }
+            return false;
+        }
+
+        function formatHoldoutSummary(report) {
+            if (!report || !Array.isArray(report.targets)) {
+                return "Out-of-sample rolling holdout backtest syncing from /api/forecast...";
+            }
+            const byId = Object.fromEntries(report.targets.map(t => [t.id, t]));
+            const parts = [];
+            const fmtTarget = (id, label, prefix = "", suffix = " pts") => {
+                const t = byId[id];
+                if (!t) return;
+                if (t.backtest && Number.isFinite(t.backtest.holdoutMAE)) {
+                    const statusTxt = t.status === "provisional_candidate"
+                        ? "provisional"
+                        : t.status === "validated_candidate"
+                            ? "validated"
+                            : "baseline only";
+                    parts.push(`${label} MAE ${prefix}${Number(t.backtest.holdoutMAE).toFixed(2)}${suffix} (${statusTxt})`);
+                } else if (t.status === "collecting_history" && Number.isFinite(t.liveDays)) {
+                    parts.push(`${label}: collecting (${t.liveDays}/${t.requiredDays || 15} live days)`);
+                }
+            };
+            fmtTarget("gdp", "GDP");
+            fmtTarget("inflation", "IMF CPI");
+            fmtTarget("gold", "Gold 12m", "$", "");
+            fmtTarget("phi", "Φ_bayes");
+            return parts.length
+                ? `Out-of-sample holdout (live): ${parts.join(" · ")}`
+                : "Out-of-sample holdout report loaded.";
+        }
+
+        function formatMacroStat(value, year) {
+            if (!Number.isFinite(Number(value))) return "—";
+            const formatted = `${Number(value).toFixed(1)}%`;
+            return year ? `${formatted} <span style="color:#64748b; font-weight:500;">(${escapeHtml(year)})</span>` : formatted;
+        }
+
         function updateForecastDisplay(data) {
+            lastForecastDisplayState = { ...(lastForecastDisplayState || {}), ...(data || {}) };
+            const state = lastForecastDisplayState;
             const forecastCard = document.querySelector("#outOfSampleForecastPanel");
             const statusLabel = document.getElementById("streamStatusLabel");
             if (statusLabel) statusLabel.textContent = "Live Telemetry Active";
 
-            if (data.regimeDurability !== undefined && Number.isFinite(Number(data.regimeDurability))) {
+            if (state.regimeDurability !== undefined && Number.isFinite(Number(state.regimeDurability))) {
                 const basePhi = document.getElementById("basePhiDisplay");
-                if (basePhi) basePhi.textContent = Number(data.regimeDurability).toFixed(3);
+                if (basePhi) basePhi.textContent = Number(state.regimeDurability).toFixed(3);
             }
 
             if (forecastCard) {
-                const updatedText = data.updatedAt ? ` · Updated ${escapeHtml(new Date(data.updatedAt).toLocaleString())}` : "";
-                const telemetryNote = data.telemetry && typeof data.telemetry.scannedPosts === "number"
-                    ? ` (${Number(data.telemetry.scannedPosts)} live social posts sampled across ${data.telemetry.sampledPlatforms?.length || 0} platforms)`
+                const updatedText = state.updatedAt ? ` · Updated ${escapeHtml(new Date(state.updatedAt).toLocaleString())}` : "";
+                const telemetryNote = state.telemetry && typeof state.telemetry.scannedPosts === "number"
+                    ? ` · ${Number(state.telemetry.scannedPosts).toLocaleString()} live social posts sampled across ${state.telemetry.sampledPlatforms?.length || 0} platforms`
                     : "";
-                const macro = data.layer2Macro;
+                const holdoutSummary = formatHoldoutSummary(latestOutOfSampleForecast);
+                const macro = state.layer2Macro;
+                const years = macro?.years || {};
                 const macroLine = macro
-                    ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">Layer 2 Macro (ZWE): GDP Growth <strong style="color:#f8fafc;">${escapeHtml(macro.GDP_Growth)}%</strong> · Inflation <strong style="color:#f8fafc;">${escapeHtml(macro.Inflation)}%</strong> · External Debt/GNI <strong style="color:#f8fafc;">${escapeHtml(macro.Debt_GNI)}%</strong></div>`
+                    ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">Layer 2 Macro (World Bank ZWE): GDP Growth <strong style="color:#f8fafc;">${formatMacroStat(macro.GDP_Growth, years.GDP_Growth)}</strong> · CPI Inflation <strong style="color:#f8fafc;">${formatMacroStat(macro.Inflation, years.Inflation)}</strong> · External Debt/GNI <strong style="color:#f8fafc;">${formatMacroStat(macro.Debt_GNI, years.Debt_GNI)}</strong></div>`
                     : "";
                 forecastCard.innerHTML = `
                     <div style="font-size: 11px; color: #4ADE80; font-weight: 700; margin-bottom: 6px;">LIVE TELEMETRY ACTIVE${updatedText}</div>
-                    <div style="font-size: 13px; color: #f8fafc;">Model Status: Out-of-sample holdout error within stable parameters (RMSE: 0.042)${escapeHtml(telemetryNote)}.</div>
+                    <div style="font-size: 12.5px; color: #f8fafc; line-height: 1.5;">${escapeHtml(holdoutSummary)}${escapeHtml(telemetryNote)}.</div>
                     ${macroLine}
                 `;
             }
@@ -719,6 +782,7 @@
             });
             initZimbabweSpatialMap();
             const ok = await fetchLiveProvincialTelemetry();
+            fetchLiveOutOfSampleForecast();
             initForecastStream();
             provincialPollTimer = window.setInterval(fetchLiveProvincialTelemetry, 60000);
             if (!ok) {

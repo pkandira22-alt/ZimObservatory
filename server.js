@@ -2308,7 +2308,7 @@ async function fetchLayer2MacroTelemetry() {
     Debt_GNI: 'DT.DOD.DECT.GN.ZS'
   };
   const fallback = { GDP_Growth: 8.3, Inflation: 5.2, Debt_GNI: 37.9 };
-  const result = {};
+  const result = { years: {} };
   let usedFallback = false;
 
   await Promise.all(Object.entries(indicators).map(async ([key, code]) => {
@@ -2319,13 +2319,16 @@ async function fetchLayer2MacroTelemetry() {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
-      const val = Array.isArray(payload) && Array.isArray(payload[1]) && payload[1][0] ? payload[1][0].value : null;
+      const row = Array.isArray(payload) && Array.isArray(payload[1]) && payload[1][0] ? payload[1][0] : null;
+      const val = row ? row.value : null;
       if (val !== null && val !== undefined && Number.isFinite(Number(val))) {
-        result[key] = Number(val);
+        result[key] = Number(Number(val).toFixed(2));
+        if (row?.date) result.years[key] = String(row.date);
         return;
       }
       if (lastLiveWorldBankMacro && Number.isFinite(lastLiveWorldBankMacro[key])) {
         result[key] = lastLiveWorldBankMacro[key];
+        if (lastLiveWorldBankMacro.years?.[key]) result.years[key] = lastLiveWorldBankMacro.years[key];
         return;
       }
       result[key] = fallback[key];
@@ -2333,6 +2336,7 @@ async function fetchLayer2MacroTelemetry() {
     } catch {
       if (lastLiveWorldBankMacro && Number.isFinite(lastLiveWorldBankMacro[key])) {
         result[key] = lastLiveWorldBankMacro[key];
+        if (lastLiveWorldBankMacro.years?.[key]) result.years[key] = lastLiveWorldBankMacro.years[key];
         return;
       }
       result[key] = fallback[key];
@@ -2342,7 +2346,7 @@ async function fetchLayer2MacroTelemetry() {
 
   result.source = usedFallback ? 'fallback_baseline' : 'world_bank_v2';
   if (!usedFallback) {
-    lastLiveWorldBankMacro = { ...result };
+    lastLiveWorldBankMacro = { ...result, years: { ...result.years } };
   }
   layer2MacroCache = {
     expiresAt: now + (usedFallback ? LAYER2_FALLBACK_TTL_MS : LAYER2_MACRO_TTL_MS),
@@ -6166,7 +6170,8 @@ function computeLiveModelParameters({
   timeSeries = null,
   hansardTelemetry = null,
   treasuryTelemetry = null,
-  latestTimelineEntry = null
+  latestTimelineEntry = null,
+  surveyTelemetry = null
 } = {}) {
   const posts = Array.isArray(socialPosts) ? socialPosts : [];
   const totalPosts = posts.length;
@@ -6253,31 +6258,60 @@ function computeLiveModelParameters({
   const alSocialAdj = totalPosts >= 10 ? clampRange((bucketShares.civicAutonomy - 0.14) * 3.5, -0.6, 1.4) : 0;
   const alPayAdj = clampRange((realPayIndex - 50) / 45, -0.5, 0.6);
   const alDbSpillover = clampRange((valDB - 6.8) * 0.25, -0.3, 0.5);
-  const valAL = round1(clampRange(baselines.AL + alSocialAdj + alPayAdj + alDbSpillover, 1.2, 9.5));
+  const proxyAL = round1(clampRange(baselines.AL + alSocialAdj + alPayAdj + alDbSpillover, 1.2, 9.5));
 
-  // Explicit structural friction vector (P, I, C)
-  const valP = round1(clampRange(
+  // Explicit structural friction vector (P, I, C) from macro & institutional feeds
+  const proxyP = round1(clampRange(
     valE * 0.65 + (hansardScore !== null ? (hansardScore / 10) * 0.35 : valPr * 0.35),
     1.0,
     10.0
   ));
   const inflationNormalized = clampRange((Math.min(inflationPct, 120) / 12) + (fxPremiumPct / 40), 1.0, 10.0);
-  const valI = round1(clampRange(
+  const proxyI = round1(clampRange(
     valPr * 0.50 + inflationNormalized * 0.30 + (treasuryScore !== null ? (treasuryScore / 10) * 0.20 : valE * 0.20),
     1.0,
     10.0
   ));
-  const valC = round1(clampRange(
+  const proxyC = round1(clampRange(
     valCL * 0.70 + (hansardScore !== null ? (hansardScore / 10) * 0.20 : valCL * 0.20) + clampRange(recentOoniCount / 15, 0, 1.0),
     1.0,
     10.0
   ));
 
+  // Live 20-item field questionnaire integration (Form responses 1):
+  // When verified responses exist (n > 0), blend field scores into AL and (P, I, C)
+  // weighted by sample size n / (n + 4) (capped at 0.85) and anchor Praxis R, A directly to field measurements.
+  const surveyResponseCount = Number(surveyTelemetry?.responseCount) || 0;
+  const hasSurveyResponses = Boolean(
+    surveyTelemetry
+    && surveyTelemetry.status === 'active_with_responses'
+    && surveyResponseCount > 0
+    && surveyTelemetry.scores1to10
+    && Number.isFinite(Number(surveyTelemetry.scores1to10.R))
+    && Number.isFinite(Number(surveyTelemetry.scores1to10.A))
+  );
+  const surveyWeight = hasSurveyResponses
+    ? Number(Math.min(0.85, surveyResponseCount / (surveyResponseCount + 4)).toFixed(3))
+    : 0;
+
+  const valAL = hasSurveyResponses && Number.isFinite(Number(surveyTelemetry.suggestedAL))
+    ? round1(clampRange(((1 - surveyWeight) * proxyAL) + (surveyWeight * Number(surveyTelemetry.suggestedAL)), 1.2, 9.5))
+    : proxyAL;
+  const valP = hasSurveyResponses && Number.isFinite(Number(surveyTelemetry.scores1to10.P))
+    ? round1(clampRange(((1 - surveyWeight) * proxyP) + (surveyWeight * Number(surveyTelemetry.scores1to10.P)), 1.0, 10.0))
+    : proxyP;
+  const valI = hasSurveyResponses && Number.isFinite(Number(surveyTelemetry.scores1to10.I))
+    ? round1(clampRange(((1 - surveyWeight) * proxyI) + (surveyWeight * Number(surveyTelemetry.scores1to10.I)), 1.0, 10.0))
+    : proxyI;
+  const valC = hasSurveyResponses && Number.isFinite(Number(surveyTelemetry.scores1to10.C))
+    ? round1(clampRange(((1 - surveyWeight) * proxyC) + (surveyWeight * Number(surveyTelemetry.scores1to10.C)), 1.0, 10.0))
+    : proxyC;
+
   const num = valE * valPr * valCL;
   const den = (valAL * valDB) + 0.1;
   const phi = round2(num / den);
-  const coupledR = 8.0;
-  const coupledA = clampRange(valAL * 1.1, 1.0, 10.0);
+  const coupledR = hasSurveyResponses ? round2(Number(surveyTelemetry.scores1to10.R)) : 8.0;
+  const coupledA = hasSurveyResponses ? round2(Number(surveyTelemetry.scores1to10.A)) : round2(clampRange(valAL * 1.1, 1.0, 10.0));
   const praxis = round2((coupledR * coupledA) / (valP + valI + valC));
   const regimeState = phi > 60
     ? 'ENTRENCHED CAPTIVE HEGEMONY'
@@ -6292,6 +6326,17 @@ function computeLiveModelParameters({
     lineage,
     drivers
   });
+
+  const alDrivers = [
+    `Civic/Informal autonomy ${(bucketShares.civicAutonomy * 100).toFixed(1)}% (${bucketCounts.civicAutonomy}/${totalPosts})`,
+    `Real pay idx ${realPayIndex.toFixed(1)}`,
+    `Diaspora spillover DB=${valDB.toFixed(1)}`
+  ];
+  if (hasSurveyResponses) {
+    alDrivers.unshift(`Field survey (n=${surveyResponseCount}, A=${Number(surveyTelemetry.scores1to10.A).toFixed(1)}/10, w=${Math.round(surveyWeight * 100)}%)`);
+  } else if (surveyTelemetry?.connected) {
+    alDrivers.push('Field survey linked (0 responses yet)');
+  }
 
   return {
     available: true,
@@ -6332,12 +6377,8 @@ function computeLiveModelParameters({
       AL: makeDriverMeta(
         valAL,
         baselines.AL,
-        totalPosts > 0 ? 'Live Empirical' : 'Baseline Proxy',
-        [
-          `Civic/Informal autonomy ${(bucketShares.civicAutonomy * 100).toFixed(1)}% (${bucketCounts.civicAutonomy}/${totalPosts})`,
-          `Real pay idx ${realPayIndex.toFixed(1)}`,
-          `Diaspora spillover DB=${valDB.toFixed(1)}`
-        ]
+        hasSurveyResponses ? 'Live Empirical + Field Survey' : (totalPosts > 0 ? 'Live Empirical' : 'Baseline Proxy'),
+        alDrivers
       ),
       DB: makeDriverMeta(
         valDB,
@@ -6354,6 +6395,31 @@ function computeLiveModelParameters({
       I: { value: valI, label: 'Inflation & Informal-Economic Friction' },
       C: { value: valC, label: 'Coercive & Civic-Space Friction' }
     },
+    praxisInputs: {
+      R: coupledR,
+      A: coupledA,
+      source: hasSurveyResponses ? 'field_survey' : 'macro_social_proxy'
+    },
+    survey: surveyTelemetry
+      ? {
+          connected: Boolean(surveyTelemetry.connected),
+          status: surveyTelemetry.status || 'unavailable',
+          responseCount: surveyResponseCount,
+          totalRows: Number(surveyTelemetry.totalRows) || 0,
+          sheetTab: surveyTelemetry.sheetTab || 'Form responses 1',
+          formUrl: surveyTelemetry.formUrl || 'https://forms.gle/noGwq2WDjpM9zVD68',
+          csvUrl: surveyTelemetry.csvUrl || null,
+          lastSubmissionAt: surveyTelemetry.lastSubmissionAt || null,
+          means1to5: surveyTelemetry.means1to5 || null,
+          scores1to10: surveyTelemetry.scores1to10 || null,
+          praxisYield: surveyTelemetry.praxisYield ?? null,
+          suggestedAL: surveyTelemetry.suggestedAL ?? null,
+          whistleblowerReports: Array.isArray(surveyTelemetry.whistleblowerReports) ? surveyTelemetry.whistleblowerReports : [],
+          weightApplied: surveyWeight,
+          updatedAt: surveyTelemetry.updatedAt || null,
+          error: surveyTelemetry.error || null
+        }
+      : null,
     signalBreakdown: {
       counts: bucketCounts,
       shares: bucketShares
@@ -6665,12 +6731,13 @@ async function gatherLiveModelAndStructuralInputs() {
     ? (fetchMinistryOfFinanceTracker().catch(() => {}), Promise.resolve(cachedTreasury))
     : fetchMinistryOfFinanceTracker().catch(() => null);
 
-  const [socialPayload, layer2Macro, timeSeries, hansardTelemetry, treasuryTelemetry] = await Promise.all([
+  const [socialPayload, layer2Macro, timeSeries, hansardTelemetry, treasuryTelemetry, surveyTelemetry] = await Promise.all([
     getSocialHashtagTrends().catch(() => null),
     fetchLayer2MacroTelemetry().catch(() => null),
     getPoliticalEconomyTimeSeriesData().catch(() => null),
     fetchSemanticHansardTelemetry().catch(() => null),
-    treasuryPromise
+    treasuryPromise,
+    fetchLiveSurveyTelemetry().catch(() => null)
   ]);
 
   const socialPosts = Array.isArray(socialCache?.posts) ? socialCache.posts : [];
@@ -6686,10 +6753,378 @@ async function gatherLiveModelAndStructuralInputs() {
     timeSeries,
     hansardTelemetry,
     treasuryTelemetry,
+    surveyTelemetry,
     landPortalData,
     latestTimelineEntry
   };
 }
+
+// ---------------------------------------------------------------------------
+// LIVE GOOGLE FORM FIELD QUESTIONNAIRE INGESTION (FORM RESPONSES 1)
+// ---------------------------------------------------------------------------
+const DEFAULT_SURVEY_FORM_URL = 'https://forms.gle/noGwq2WDjpM9zVD68';
+const DEFAULT_SURVEY_PUBLISHED_KEY = '2PACX-1vR-7nJjf7dWhijm9btwVrpyTRuxzkzW8xnGYayIqfonj_k944D13eicbEXRqEHWAiuSrQ2qXTK3zcMc';
+const DEFAULT_SURVEY_FORM_RESPONSES_GID = '1851840275';
+const DEFAULT_SURVEY_CSV_URL = `https://docs.google.com/spreadsheets/d/e/${DEFAULT_SURVEY_PUBLISHED_KEY}/pub?gid=${DEFAULT_SURVEY_FORM_RESPONSES_GID}&single=true&output=csv`;
+const SURVEY_TELEMETRY_TTL_MS = 60 * 1000;
+let surveyTelemetryCache = { url: null, data: null, expiresAt: 0 };
+
+function normalizeSurveySheetUrl(rawUrl) {
+  const trimmed = String(rawUrl || '').trim();
+  if (!trimmed) return DEFAULT_SURVEY_CSV_URL;
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'docs.google.com') {
+    return null;
+  }
+  // 1. Published workbook URL: /spreadsheets/d/e/<PUB_KEY>/pub... or /pubhtml
+  const pubMatch = parsed.pathname.match(/^\/spreadsheets\/d\/e\/([a-zA-Z0-9_-]+)(?:\/(pub|pubhtml))?/);
+  if (pubMatch) {
+    const pubKey = pubMatch[1];
+    const gidParam = parsed.searchParams.get('gid')
+      || (parsed.hash.match(/gid=(\d+)/) ? parsed.hash.match(/gid=(\d+)/)[1] : null)
+      || (pubKey === DEFAULT_SURVEY_PUBLISHED_KEY ? DEFAULT_SURVEY_FORM_RESPONSES_GID : null);
+    const params = new URLSearchParams();
+    if (gidParam && /^\d+$/.test(gidParam)) {
+      params.set('gid', gidParam);
+      params.set('single', 'true');
+    }
+    params.set('output', 'csv');
+    return `https://docs.google.com/spreadsheets/d/e/${pubKey}/pub?${params.toString()}`;
+  }
+  // 2. Classic shared Sheet URL: /spreadsheets/d/<SHEET_ID>/...
+  const sheetMatch = parsed.pathname.match(/^\/spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (sheetMatch) {
+    const sheetId = sheetMatch[1];
+    const gidParam = parsed.searchParams.get('gid')
+      || (parsed.hash.match(/gid=(\d+)/) ? parsed.hash.match(/gid=(\d+)/)[1] : null);
+    const params = new URLSearchParams({ tqx: 'out:csv' });
+    if (gidParam && /^\d+$/.test(gidParam)) {
+      params.set('gid', gidParam);
+    }
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?${params.toString()}`;
+  }
+  return null;
+}
+
+function parseCsvRows(csvText) {
+  const str = String(csvText || '').replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (inQuotes) {
+      if (ch === '"' && str[i + 1] === '"') {
+        cur += '"';
+        i += 1;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      row.push(cur.trim());
+      cur = '';
+    } else if (ch === '\r' && str[i + 1] === '\n') {
+      row.push(cur.trim());
+      rows.push(row);
+      row = [];
+      cur = '';
+      i += 1;
+    } else if (ch === '\n' || ch === '\r') {
+      row.push(cur.trim());
+      rows.push(row);
+      row = [];
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur.length > 0 || row.length > 0) {
+    row.push(cur.trim());
+    rows.push(row);
+  }
+  return rows.filter(r => r.some(cell => cell !== ''));
+}
+
+function parseSurveyLikertScore(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  const leadingNum = s.match(/^([1-5])(?:\.0+)?(?:\b|\s*[-:–—])/);
+  if (leadingNum) return Number(leadingNum[1]);
+  const direct = Number(s);
+  if (Number.isFinite(direct) && direct >= 1 && direct <= 5) return direct;
+  const lower = s.toLowerCase();
+  if (lower.includes('strongly disagree')) return 1;
+  if (lower.includes('strongly agree')) return 5;
+  if (lower.includes('disagree')) return 2;
+  if (lower.includes('neutral') || lower.includes('neither')) return 3;
+  if (lower.includes('agree')) return 4;
+  return null;
+}
+
+function parseSurveyResponsesCsv(csvText, meta = {}) {
+  const rows = parseCsvRows(csvText);
+  const updatedAt = new Date().toISOString();
+  const baseResult = {
+    connected: true,
+    status: 'connected_awaiting_responses',
+    sheetTab: meta.sheetTab || 'Form responses 1',
+    formUrl: DEFAULT_SURVEY_FORM_URL,
+    csvUrl: meta.csvUrl || DEFAULT_SURVEY_CSV_URL,
+    updatedAt,
+    headersDetected: 0,
+    totalRows: 0,
+    responseCount: 0,
+    lastSubmissionAt: null,
+    means1to5: null,
+    scores1to10: null,
+    praxisYield: null,
+    suggestedAL: null,
+    whistleblowerReports: [],
+    error: null
+  };
+  if (rows.length === 0) {
+    return { ...baseResult, connected: false, status: 'invalid_csv', error: 'CSV response was empty.' };
+  }
+
+  const headers = rows[0];
+  const dimensionCols = { R: [], A: [], P: [], I: [], C: [] };
+  const corCols = {};
+  let timestampCol = -1;
+  let dem01Col = -1;
+
+  headers.forEach((h, idx) => {
+    const text = String(h || '').trim();
+    if (/^timestamp\b/i.test(text) && timestampCol === -1) timestampCol = idx;
+    if (/^DEM-01\b/i.test(text)) dem01Col = idx;
+    const itemMatch = text.match(/^(R|A|P|I|C)-0?([1-4])\b/i);
+    if (itemMatch) {
+      const dim = itemMatch[1].toUpperCase();
+      const itemCode = `${dim}-0${itemMatch[2]}`;
+      const reverseCoded = /\[REVERSE-CODED\]/i.test(text) || itemCode === 'A-04';
+      dimensionCols[dim].push({ idx, itemCode, reverseCoded });
+    }
+    const corMatch = text.match(/^COR-0?([1-6])\b/i);
+    if (corMatch) {
+      corCols[`COR-0${corMatch[1]}`] = idx;
+    }
+  });
+
+  const codedItemsCount = Object.values(dimensionCols).reduce((sum, arr) => sum + arr.length, 0);
+  baseResult.headersDetected = codedItemsCount;
+  const dataRows = rows.slice(1);
+  baseResult.totalRows = dataRows.length;
+
+  let sumR = 0, sumA = 0, sumP = 0, sumI = 0, sumC = 0;
+  let validCount = 0;
+  let lastSubmissionAt = null;
+  const whistleblowerReports = [];
+
+  for (let r = 0; r < dataRows.length; r++) {
+    const row = dataRows[r];
+    if (timestampCol >= 0 && row[timestampCol]) {
+      lastSubmissionAt = row[timestampCol];
+    }
+
+    let rMean = null, aMean = null, pMean = null, iMean = null, cMean = null;
+    if (codedItemsCount >= 10) {
+      const dimMean = (cols) => {
+        const vals = [];
+        for (const col of cols) {
+          const parsed = parseSurveyLikertScore(row[col.idx]);
+          if (parsed !== null) {
+            vals.push(col.reverseCoded ? (6 - parsed) : parsed);
+          }
+        }
+        return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+      };
+      rMean = dimMean(dimensionCols.R);
+      aMean = dimMean(dimensionCols.A);
+      pMean = dimMean(dimensionCols.P);
+      iMean = dimMean(dimensionCols.I);
+      cMean = dimMean(dimensionCols.C);
+    } else {
+      // Positional fallback for custom CSV sheets without R-01..C-04 codes
+      const nums = [];
+      for (let c = 0; c < row.length; c++) {
+        if (c === timestampCol) continue;
+        const val = parseSurveyLikertScore(row[c]);
+        if (val !== null) nums.push(val);
+      }
+      if (nums.length >= 16) {
+        const avg = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+        // Reverse-code the 8th item (A-04) when standard 20-item order is present
+        const aSlice = nums.slice(4, 8).map((v, i) => (i === 3 ? (6 - v) : v));
+        rMean = avg(nums.slice(0, 4));
+        aMean = avg(aSlice);
+        pMean = avg(nums.slice(8, 12));
+        iMean = avg(nums.slice(12, 16));
+        cMean = nums.length >= 20 ? avg(nums.slice(16, 20)) : avg(nums.slice(12, 16));
+      }
+    }
+
+    if ([rMean, aMean, pMean, iMean, cMean].every(v => Number.isFinite(v))) {
+      sumR += rMean;
+      sumA += aMean;
+      sumP += pMean;
+      sumI += iMean;
+      sumC += cMean;
+      validCount += 1;
+    }
+
+    // Extract structured whistleblower report from COR-01..COR-06
+    const catIdx = corCols['COR-01'];
+    if (catIdx !== undefined && row[catIdx]) {
+      const repCategory = String(row[catIdx]).trim();
+      if (repCategory.length > 2 && !/prefer\s+not|none|n\/a/i.test(repCategory)) {
+        const repAgency = String(row[corCols['COR-02']] || 'Unspecified Official').trim();
+        const repTypology = String(row[corCols['COR-03']] || 'Extortion').trim();
+        const repNarrative = String(row[corCols['COR-04']] || 'Live Field Submission via Google Form.').trim();
+        const rawAmount = String(row[corCols['COR-05']] || '').replace(/[^0-9.]/g, '');
+        const repAmount = rawAmount && Number.isFinite(Number(rawAmount)) ? Number(rawAmount) : 0;
+        const repEvidence = String(row[corCols['COR-06']] || 'Witness Statement').trim();
+        const locality = (dem01Col >= 0 && row[dem01Col]) ? String(row[dem01Col]).trim() : 'Field Submission';
+        whistleblowerReports.push({
+          id: `LIVE-GF-${r + 1}`,
+          period: lastSubmissionAt ? String(lastSubmissionAt).slice(0, 10) : 'Live (Form)',
+          locality,
+          entity: repAgency,
+          category: /police|zrp|security/i.test(repCategory)
+            ? 'Police'
+            : /traditional|chief|headman/i.test(repCategory)
+              ? 'Traditional'
+              : /ministry|national|parastatal/i.test(repCategory)
+                ? 'National'
+                : 'Municipal',
+          typology: repTypology,
+          narrative: repNarrative,
+          evidence: repEvidence,
+          amount: repAmount,
+          praxisLink: /traditional|chief|headman/i.test(repCategory)
+            ? 'Social Influence (I)'
+            : /police|zrp|security/i.test(repCategory)
+              ? 'Social Control (C)'
+              : 'Power Asymmetry (P)',
+          status: 'Live Survey Sync'
+        });
+      }
+    }
+  }
+
+  baseResult.responseCount = validCount;
+  baseResult.lastSubmissionAt = lastSubmissionAt;
+  baseResult.whistleblowerReports = whistleblowerReports;
+
+  if (validCount > 0) {
+    const meanR = round2(sumR / validCount);
+    const meanA = round2(sumA / validCount);
+    const meanP = round2(sumP / validCount);
+    const meanI = round2(sumI / validCount);
+    const meanC = round2(sumC / validCount);
+    const scoreR = round2(meanR * 2);
+    const scoreA = round2(meanA * 2);
+    const scoreP = round2(meanP * 2);
+    const scoreI = round2(meanI * 2);
+    const scoreC = round2(meanC * 2);
+    const praxisYield = round2((scoreR * scoreA) / (scoreP + scoreI + scoreC));
+    const suggestedAL = round1(clampRange(scoreA * 0.9, 1.0, 10.0));
+
+    baseResult.status = 'active_with_responses';
+    baseResult.means1to5 = { R: meanR, A: meanA, P: meanP, I: meanI, C: meanC };
+    baseResult.scores1to10 = { R: scoreR, A: scoreA, P: scoreP, I: scoreI, C: scoreC };
+    baseResult.praxisYield = praxisYield;
+    baseResult.suggestedAL = suggestedAL;
+  }
+
+  return baseResult;
+}
+
+async function fetchLiveSurveyTelemetry({ forceRefresh = false, customUrl = null } = {}) {
+  const configuredRaw = customUrl || process.env.SURVEY_CSV_URL || DEFAULT_SURVEY_CSV_URL;
+  const targetUrl = normalizeSurveySheetUrl(configuredRaw);
+  if (!targetUrl) {
+    return {
+      connected: false,
+      status: 'invalid_url',
+      formUrl: DEFAULT_SURVEY_FORM_URL,
+      csvUrl: null,
+      responseCount: 0,
+      totalRows: 0,
+      whistleblowerReports: [],
+      updatedAt: new Date().toISOString(),
+      error: 'Only https://docs.google.com/spreadsheets/... URLs are supported.'
+    };
+  }
+
+  const now = Date.now();
+  if (!forceRefresh && surveyTelemetryCache.data && surveyTelemetryCache.url === targetUrl && surveyTelemetryCache.expiresAt > now) {
+    return surveyTelemetryCache.data;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(targetUrl, {
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: { 'User-Agent': 'KUVHURA-Observatory/2.0' }
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} fetching Google Sheet CSV`);
+    }
+    const csvText = await res.text();
+    const parsed = parseSurveyResponsesCsv(csvText, {
+      csvUrl: targetUrl,
+      sheetTab: targetUrl.includes(`gid=${DEFAULT_SURVEY_FORM_RESPONSES_GID}`) ? 'Form responses 1' : 'Linked Survey Sheet'
+    });
+    if (!customUrl) {
+      surveyTelemetryCache = { url: targetUrl, data: parsed, expiresAt: now + SURVEY_TELEMETRY_TTL_MS };
+    }
+    return parsed;
+  } catch (err) {
+    return {
+      connected: false,
+      status: 'unavailable',
+      sheetTab: 'Form responses 1',
+      formUrl: DEFAULT_SURVEY_FORM_URL,
+      csvUrl: targetUrl,
+      responseCount: 0,
+      totalRows: 0,
+      whistleblowerReports: [],
+      updatedAt: new Date().toISOString(),
+      error: err.message || 'Could not fetch Google Sheet CSV.'
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+app.get('/api/survey-telemetry', async (req, res) => {
+  try {
+    const customUrl = typeof req.query.url === 'string' && req.query.url.trim() ? req.query.url.trim() : null;
+    if (customUrl && !normalizeSurveySheetUrl(customUrl)) {
+      return res.status(400).json({
+        connected: false,
+        status: 'invalid_url',
+        error: 'Provide a valid https://docs.google.com/spreadsheets/... URL.'
+      });
+    }
+    const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    const data = await fetchLiveSurveyTelemetry({ forceRefresh, customUrl });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ connected: false, status: 'unavailable', error: err.message || 'Survey telemetry fetch failed' });
+  }
+});
 
 app.get('/api/model/live-parameters', async (req, res) => {
   try {
