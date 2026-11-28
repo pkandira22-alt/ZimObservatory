@@ -12,6 +12,8 @@ try:
 except ImportError:
     PdfReader = None
 
+from src.lib.spatial_pin_formatter import format_spatial_pin_payload, build_spatial_pin_collection
+
 CACHE_PATH = "telemetry_cache.json"
 ZIMSTAT_IMP_Q1_2026_URL = (
     "https://www.zimstat.co.zw/wp-content/uploads/production/Mining/2026/Q1/IMP_2026_Q1.pdf"
@@ -239,6 +241,20 @@ def build_spatial_livelihood_records():
             "updated_at": now_iso,
         },
     ]
+
+
+def build_formatted_spatial_pins():
+    """
+    Build spatial pin payloads with explicit separation between:
+      - Site-level extraction gaps (missing quantities from primary filings)
+      - Official survey baselines (ZimLAC/FNC provincial surveys)
+      - Measured vs proxy/estimate lineage classifications
+    
+    Returns:
+        Dict with 'all_pins', 'measured_directly', 'proxy_estimate', and counts.
+    """
+    raw_records = build_spatial_livelihood_records()
+    return build_spatial_pin_collection(raw_records)
 
 
 def build_governance_records():

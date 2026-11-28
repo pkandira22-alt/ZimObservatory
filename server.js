@@ -26,6 +26,7 @@ import {
 import ExcelJS from 'exceljs';
 import 'dotenv/config';
 import { requireAuth } from './src/middleware/auth.ts';
+import { formatFeedTelemetry, filterExcludedFeeds } from './src/lib/feed-telemetry.js';
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -1899,18 +1900,36 @@ async function getSocialHashtagTrendsInternal({ forceRefresh = false } = {}) {
     .slice(0, 50);
   const successfulSources = results.filter(result => !result.failed && !result.stale);
   const sampledPlatforms = [...new Set(successfulSources.map(result => result.platform))];
-  const sourceStatuses = results.map(result => ({
-    name: result.name,
-    platform: result.platform,
-    status: result.failed ? "unavailable" : result.stale ? "stale" : "connected",
-    posts: result.posts.length,
-    updatedAt: result.updatedAt,
-    refreshIntervalSeconds: result.refreshIntervalSeconds,
-    ...(result.youtubeMeta?.transport ? { transport: result.youtubeMeta.transport } : {}),
-    ...(result.xMeta?.transport ? { transport: result.xMeta.transport } : {}),
-    ...(result.redditMeta?.transport ? { transport: result.redditMeta.transport } : {}),
-    ...(result.failed || result.stale ? { message: result.error } : {})
-  }));
+  
+  // Map feed results to telemetry shape with explicit offline/empty/online status
+  const sourceStatuses = results.map(result => {
+    const telemetry = {
+      name: result.name,
+      platform: result.platform,
+      posts: result.posts.length,
+      updatedAt: result.updatedAt,
+      refreshIntervalSeconds: result.refreshIntervalSeconds,
+      ...(result.youtubeMeta?.transport ? { transport: result.youtubeMeta.transport } : {}),
+      ...(result.xMeta?.transport ? { transport: result.xMeta.transport } : {}),
+      ...(result.redditMeta?.transport ? { transport: result.redditMeta.transport } : {}),
+    };
+    
+    // Set explicit status and reason for feed telemetry
+    if (result.failed) {
+      telemetry.status = "offline";
+      telemetry.reason = result.error || "Feed disconnected or rate-limited";
+    } else if (result.stale) {
+      telemetry.status = "stale";
+      telemetry.message = result.error;
+    } else if (result.posts.length === 0) {
+      telemetry.status = "empty";
+      telemetry.reason = "No matching posts in window";
+    } else {
+      telemetry.status = "online";
+    }
+    
+    return telemetry;
+  });
 
   const xResult = results.find(result => result.platform === 'X');
   const xSummary = xResult?.stale && xResult.xMeta
