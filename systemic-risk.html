@@ -965,7 +965,8 @@
             const yt = social.youtube || {};
             const xData = social.x || {};
             const sources = Array.isArray(social.sources) ? social.sources : [];
-            const connectedSources = sources.filter(s => s.status === 'connected');
+            const isSourceOnline = s => s && (s.status === 'online' || (s.status === 'connected' && Number(s.posts || 0) > 0));
+            const connectedSources = sources.filter(isSourceOnline);
             const rawHashtags = Array.isArray(social.hashtags) ? social.hashtags : [];
             const ytConnected = yt.status === 'connected';
             const xConnected = xData.status === 'connected';
@@ -1017,25 +1018,40 @@
             });
 
             sourcesEl.replaceChildren();
-            const baseSources = sources;
+            const availableSources = sources.filter(s => s.status !== 'offline' && s.status !== 'unavailable');
             const displaySources = platformFilter === 'all'
-                ? baseSources
-                : baseSources.filter(s => s.platform === platformFilter);
+                ? availableSources
+                : availableSources.filter(s => s.platform === platformFilter);
             displaySources.forEach(src => {
                 const pill = document.createElement('span');
-                const ok = src.status === 'connected';
+                const isOnline = isSourceOnline(src);
+                const isEmpty = src.status === 'empty' || (src.status === 'connected' && Number(src.posts || 0) === 0);
+                const isStale = src.status === 'stale';
                 const selected = platformFilter !== 'all' && src.platform === platformFilter;
-                pill.className = ok
+                pill.className = isOnline
                     ? (selected
                         ? 'text-[11px] px-2.5 py-1 rounded border border-sky-400/60 bg-sky-500/15 text-sky-200 font-semibold'
                         : 'text-[11px] px-2.5 py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-medium')
-                    : 'text-[11px] px-2.5 py-1 rounded border border-slate-700 bg-slate-800/70 text-slate-400';
-                pill.textContent = ok ? `${src.name}: ${src.posts}` : `${src.name}: ${src.status === 'stale' ? 'Cached' : 'Unavailable'}`;
-                if (src.message) pill.title = src.message;
+                    : isEmpty
+                        ? 'text-[11px] px-2.5 py-1 rounded border border-slate-600/60 bg-slate-800/60 text-slate-300 font-medium'
+                        : isStale
+                            ? 'text-[11px] px-2.5 py-1 rounded border border-amber-500/40 bg-amber-500/10 text-amber-300 font-medium'
+                            : 'text-[11px] px-2.5 py-1 rounded border border-slate-700 bg-slate-800/70 text-slate-400';
+                const statusLabel = isOnline
+                    ? `${src.posts}`
+                    : isEmpty
+                        ? 'Empty'
+                        : isStale
+                            ? 'Cached'
+                            : src.status || 'Unavailable';
+                pill.textContent = `${src.name}: ${statusLabel}`;
+                if (src.reason || src.message) pill.title = src.reason || src.message;
                 sourcesEl.append(pill);
             });
             if (!displaySources.length) {
-                sourcesEl.textContent = 'No sources for the selected platform.';
+                sourcesEl.textContent = platformFilter === 'all'
+                    ? 'No available sources (offline feeds excluded).'
+                    : 'No sources for the selected platform.';
             }
 
             const filteredHashtags = rawHashtags
