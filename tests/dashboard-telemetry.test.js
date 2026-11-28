@@ -742,6 +742,51 @@ test('Google Form responses CSV parser handles Form responses 1 headers, A-04 re
   assert.equal(withSurvey.survey.responseCount, 1);
 });
 
+test('copilot-hypothesis module formats statistical catalog, filters invalid test IDs, and builds grounded system instructions', async () => {
+  const mod = await import(new URL('../src/lib/copilot-hypothesis.js', import.meta.url));
+  assert.equal(Object.keys(mod.HYPOTHESIS_TEST_CATALOG).length, 6);
+  assert.deepEqual(
+    mod.normalizeSelectedHypothesisTests(['two_sample_t_test', 'invalid_test', 'mann_whitney_u', 'two_sample_t_test']),
+    ['two_sample_t_test', 'mann_whitney_u']
+  );
+  assert.equal(mod.normalizeSelectedHypothesisTests(['not_real']), null);
+
+  const filteredPrompt = mod.formatHypothesisCatalogPrompt(['correlation_test']);
+  assert.match(filteredPrompt, /Pearson r \/ Spearman rho Correlation Test \[correlation_test\]/);
+  assert.doesNotMatch(filteredPrompt, /Two-Sample Welch t-Test/);
+
+  const dir = mkdtempSync(join(tmpdir(), 'kuvhura-copilot-'));
+  try {
+    const cacheFile = join(dir, 'telemetry_cache.json');
+    writeFileSync(cacheFile, JSON.stringify({
+      depth_records: [{
+        id: 'ZIM-01',
+        label: 'Gold output index',
+        value: 112.4,
+        unit: 'index',
+        period: '2026-Q2',
+        source_title: 'ZIMSTAT IMP',
+        notes: 'Verified quarterly print'
+      }],
+      stochastic_streams: {
+        hansard_friction: { latest_raw: 50.8, smoothed_value: 51.2, volatility_std_10: 3.1, regime: 'Elevated', status: 'live' }
+      }
+    }));
+    const instruction = await mod.buildAuditableCopilotSystemInstruction({
+      cachePath: cacheFile,
+      selectedTests: ['variance_f_or_levene']
+    });
+    assert.match(instruction, /AUDIT & STATISTICAL RIGOR RULES/);
+    assert.match(instruction, /\[ZIM-01\] Gold output index: 112\.4 index \(2026-Q2\) \| Source: ZIMSTAT IMP/);
+    assert.match(instruction, /\[Module: hansard_friction\] raw=50\.8, smoothed=51\.2/);
+    assert.match(instruction, /Levene \/ Variance Ratio Check \[variance_f_or_levene\]/);
+    assert.doesNotMatch(instruction, /Chi-Square Test/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+
 
 
 
