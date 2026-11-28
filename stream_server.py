@@ -155,9 +155,16 @@ except ImportError:
     BeautifulSoup = None
 from prescriptive_orientation import evaluate_orientation, evaluate_state_classification
 from server import fetch_social_hashtag_trends
+try:
+    from forecasting_model import build_forecast_report
+except Exception:
+    build_forecast_report = None
 
 CONNECTED_CLIENTS = set()
 LATEST_TRENDS = None
+LATEST_FORECAST_REPORT = None
+LATEST_FORECAST_TS = 0.0
+FORECAST_CACHE_TTL_SECONDS = 1800
 TREND_REFRESH_SECONDS = 60
 LAYER2_MACRO_TTL_SECONDS = 6 * 60 * 60
 LAYER2_MACRO_CACHE = {"expires_at": 0.0, "data": None}
@@ -2638,6 +2645,41 @@ async def dual_engine_timeline(_request):
     )
 
 
+async def forecast_report_endpoint(_request):
+    global LATEST_FORECAST_REPORT, LATEST_FORECAST_TS
+    now = time.time()
+    if LATEST_FORECAST_REPORT and (now - LATEST_FORECAST_TS) < FORECAST_CACHE_TTL_SECONDS:
+        return web.json_response(
+            LATEST_FORECAST_REPORT,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    if build_forecast_report is None:
+        return web.json_response(
+            {"type": "forecast_report", "error": "forecasting_model unavailable", "targets": []},
+            status=503,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    try:
+        report = await asyncio.to_thread(build_forecast_report)
+        LATEST_FORECAST_REPORT = report
+        LATEST_FORECAST_TS = time.time()
+        return web.json_response(
+            report,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as exc:
+        if LATEST_FORECAST_REPORT:
+            return web.json_response(
+                LATEST_FORECAST_REPORT,
+                headers={"Access-Control-Allow-Origin": "*"},
+            )
+        return web.json_response(
+            {"type": "forecast_report", "error": str(exc), "targets": []},
+            status=502,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+
 def _load_extraction_reports_from_cache():
     """Load extraction reports from telemetry_cache.json"""
     reports = []
@@ -2785,6 +2827,7 @@ async def live_endpoint(request):
 def create_app():
     app = web.Application()
     app.router.add_get("/api/timeline", dual_engine_timeline)
+    app.router.add_get("/api/forecast", forecast_report_endpoint)
     app.router.add_get("/api/extraction-reports/stream", extraction_reports_stream)
     app.router.add_route("*", "/", live_endpoint)
     app.router.add_route("*", "/health", health)

@@ -5082,6 +5082,89 @@ async function fetchMinistryOfFinanceTrackerInternal(forceRefresh = false) {
   return result;
 }
 
+let latestAuditOversightStatus = null;
+let auditOversightCache = { expiresAt: 0, data: null };
+const AUDIT_OVERSIGHT_TTL_MS = 60 * 60 * 1000;
+
+function stripBasicHtmlEntities(text) {
+  return String(text || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&#8217;|&rsquo;/g, "'")
+    .replace(/&#8211;|&ndash;/g, '–')
+    .replace(/&#8212;|&mdash;/g, '—')
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function fetchOagPrazAuditTelemetry({ forceRefresh = false } = {}) {
+  if (!forceRefresh && auditOversightCache.data && auditOversightCache.expiresAt > Date.now()) {
+    return auditOversightCache.data;
+  }
+
+  const hdrs = { 'User-Agent': 'KUVHURA-Observatory/1.0' };
+  const [oagRes, prazRes] = await Promise.allSettled([
+    (async () => {
+      const url = 'https://auditorgeneral.gov.zw/document-library/';
+      const resp = await fetch(url, { headers: hdrs, signal: AbortSignal.timeout(12000) });
+      if (!resp.ok) throw new Error(`OAG HTTP ${resp.status}`);
+      const html = await resp.text();
+      const seen = new Set();
+      const reports = [];
+      const regex = /href=["']([^"']+\.pdf[^"']*)["']/gi;
+      let m;
+      while ((m = regex.exec(html)) !== null) {
+        const href = m[1];
+        if (!href || seen.has(href)) continue;
+        seen.add(href);
+        const fileName = decodeURIComponent(href.split('/').pop() || 'Audit Report.pdf').replace(/\.pdf.*$/i, '').replace(/[-_]+/g, ' ').trim();
+        reports.push({ title: fileName, url: href });
+      }
+      return { status: 'available', sourceUrl: url, pdfCount: reports.length, latestReports: reports.slice(0, 8) };
+    })(),
+    (async () => {
+      const url = 'https://www.praz.org.zw/wp-json/wp/v2/posts?per_page=10';
+      const resp = await fetch(url, { headers: { ...hdrs, Accept: 'application/json' }, signal: AbortSignal.timeout(12000) });
+      if (!resp.ok) throw new Error(`PRAZ HTTP ${resp.status}`);
+      const posts = await resp.json();
+      if (!Array.isArray(posts)) throw new Error('Unexpected PRAZ WP response');
+      const notices = posts.map(p => ({
+        date: typeof p.date === 'string' ? p.date.slice(0, 10) : null,
+        title: stripBasicHtmlEntities(p.title?.rendered || 'PRAZ Notice'),
+        url: p.link || 'https://www.praz.org.zw/'
+      }));
+      return { status: 'available', sourceUrl: 'https://www.praz.org.zw/', noticeCount: notices.length, latestNotices: notices.slice(0, 8) };
+    })()
+  ]);
+
+  const oag = oagRes.status === 'fulfilled'
+    ? oagRes.value
+    : { status: 'unavailable', sourceUrl: 'https://auditorgeneral.gov.zw/document-library/', pdfCount: 0, latestReports: [], error: oagRes.reason?.message || 'unreachable' };
+  const praz = prazRes.status === 'fulfilled'
+    ? prazRes.value
+    : { status: 'unavailable', sourceUrl: 'https://www.praz.org.zw/', noticeCount: 0, latestNotices: [], error: prazRes.reason?.message || 'unreachable' };
+
+  const liveSources = (oag.status === 'available' ? 1 : 0) + (praz.status === 'available' ? 1 : 0);
+  const result = {
+    status: liveSources > 0 ? 'available' : 'unavailable',
+    liveSources,
+    totalSources: 2,
+    oag,
+    praz,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (result.status === 'available') {
+    latestAuditOversightStatus = result;
+  }
+  auditOversightCache = {
+    expiresAt: Date.now() + (result.status === 'available' ? AUDIT_OVERSIGHT_TTL_MS : 5 * 60 * 1000),
+    data: result.status === 'available' ? result : (latestAuditOversightStatus || result)
+  };
+  return auditOversightCache.data;
+}
+
 function getDualEngineTimelineResponse() {
   const hansardStatus = latestHansardStatus
     ? { ...latestHansardStatus }
@@ -5089,6 +5172,9 @@ function getDualEngineTimelineResponse() {
   const treasuryStatus = (latestTreasuryStatus && latestTreasuryStatus.status === 'available' && Number.isFinite(latestTreasuryStatus.score))
     ? { ...latestTreasuryStatus }
     : (readVerifiedTreasuryCache() || (latestTreasuryStatus ? { ...latestTreasuryStatus } : { score: null, status: 'awaiting_check', source: 'unavailable', accessibleSources: 0, totalSources: TREASURY_PORTAL_CATALOG.length, sources: [], tracked_topics: [] }));
+  const auditStatus = latestAuditOversightStatus
+    ? { ...latestAuditOversightStatus }
+    : { status: 'awaiting_check', liveSources: 0, totalSources: 2, oag: { status: 'awaiting_check', pdfCount: 0 }, praz: { status: 'awaiting_check', noticeCount: 0 } };
   const socialStatus = latestSocialTelemetry
     ? {
         available: Boolean(latestSocialTelemetry.available),
@@ -5125,6 +5211,9 @@ function getDualEngineTimelineResponse() {
       treasury_status: treasuryStatus.status === 'available'
         ? `Active (${treasuryStatus.accessibleSources || 0}/${treasuryStatus.totalSources || TREASURY_PORTAL_CATALOG.length} zimtreasury.co.zw portals · score ${treasuryStatus.score})`
         : 'Awaiting Ministry of Finance portal sync',
+      audit_oversight_status: auditStatus.status === 'available'
+        ? `Active (OAG: ${auditStatus.oag?.pdfCount || 0} audit PDFs · PRAZ: ${auditStatus.praz?.noticeCount || 0} notices)`
+        : 'Awaiting OAG & PRAZ portal sync',
       youtube_status: ytMeta?.status === 'connected'
         ? `Active (${ytMeta.transport === 'youtube_public_feeds' ? 'Zero-Quota Public Feeds' : 'API v3'} · ${ytMeta.videosSampled} live Zimbabwe videos · ${(ytMeta.totalViews || 0).toLocaleString()} views)`
         : (ytMeta?.message || 'Awaiting YouTube telemetry sync')
@@ -5136,7 +5225,8 @@ function getDualEngineTimelineResponse() {
       ? { ...latestFsiInputs }
       : { status: 'awaiting_sourced_macro_data', macro_stress_proxy: null },
     hansardStatus,
-    treasuryStatus
+    treasuryStatus,
+    auditStatus
   };
 }
 
@@ -5272,15 +5362,19 @@ async function refreshDualEngineTimelineDataInternal({ allowPersistence = true, 
     ? (fetchMinistryOfFinanceTracker().catch(() => {}), Promise.resolve(cachedTreasury))
     : fetchMinistryOfFinanceTracker();
 
-  const [socialPayload, layer2Macro, hansardTelemetry, treasuryTelemetry] = await Promise.all([
+  const [socialPayload, layer2Macro, hansardTelemetry, treasuryTelemetry, auditTelemetry] = await Promise.all([
     getSocialHashtagTrends(),
     fetchLayer2MacroTelemetry(),
     fetchSemanticHansardTelemetry(),
-    treasuryPromise
+    treasuryPromise,
+    fetchOagPrazAuditTelemetry().catch(() => null)
   ]);
 
   latestHansardStatus = hansardTelemetry ? { ...hansardTelemetry } : { score: null, status: 'unavailable', source: 'unavailable' };
   latestTreasuryStatus = treasuryTelemetry ? { ...treasuryTelemetry } : { score: null, status: 'unavailable', source: 'unavailable' };
+  if (auditTelemetry) {
+    latestAuditOversightStatus = { ...auditTelemetry };
+  }
 
   if (socialPayload?.available && Array.isArray(socialPayload.hashtags) && Number.isFinite(socialPayload.scannedPosts)) {
     const nowDate = new Date();
@@ -8167,6 +8261,390 @@ app.post('/api/zimstat/sync', (req, res) => {
   );
 });
 
+const FORECAST_CACHE_TTL_MS = 30 * 60 * 1000;
+let forecastReportCache = { data: null, fetchedAt: 0 };
+let forecastReportInFlight = null;
+
+function forecastPredictSeries(history, method, horizon = 1) {
+  if (!history.length) return 0;
+  if (method === 'last_value') return history[history.length - 1];
+  if (method === 'mean_5') {
+    const slice = history.slice(-5);
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
+  }
+  if (method === 'drift_5') {
+    const width = Math.min(5, history.length - 1);
+    if (width < 1) return history[history.length - 1];
+    const step = (history[history.length - 1] - history[history.length - 1 - width]) / width;
+    return history[history.length - 1] + step * horizon;
+  }
+  if (method === 'seasonal_12') {
+    return history.length >= 13 ? history[history.length - 13] : history[history.length - 1];
+  }
+  if (method === 'drift_12') {
+    if (history.length < 13) return history[history.length - 1];
+    return history[history.length - 1] + (history[history.length - 1] - history[history.length - 13]) * (horizon / 12);
+  }
+  return history[history.length - 1];
+}
+
+function runRollingOriginBacktest(values, methods, horizon, minTrain, holdoutCount) {
+  const eligible = [];
+  for (let i = minTrain - 1; i < values.length - horizon; i++) eligible.push(i);
+  const testCount = Math.min(holdoutCount, Math.max(0, Math.floor(eligible.length / 2)));
+  const testOrigins = testCount ? eligible.slice(-testCount) : [];
+  const valOrigins = testCount ? eligible.slice(0, -testCount) : [];
+  if (valOrigins.length < 3 || testOrigins.length < 3) {
+    return {
+      status: 'insufficient_history',
+      reason: 'Not enough rolling-origin observations for separate model selection and holdout testing.',
+      validationForecasts: valOrigins.length,
+      holdoutForecasts: testOrigins.length
+    };
+  }
+  const mae = pairs => pairs.reduce((sum, [p, a]) => sum + Math.abs(p - a), 0) / pairs.length;
+  const valErrors = {};
+  for (const method of methods) {
+    valErrors[method] = mae(valOrigins.map(o => [forecastPredictSeries(values.slice(0, o + 1), method, horizon), values[o + horizon]]));
+  }
+  const selectedMethod = Object.entries(valErrors).sort((a, b) => a[1] - b[1])[0][0];
+  const holdout = {};
+  for (const method of methods) {
+    const pairs = testOrigins.map(o => [forecastPredictSeries(values.slice(0, o + 1), method, horizon), values[o + horizon]]);
+    holdout[method] = { mae: mae(pairs), forecasts: pairs.length };
+  }
+  const naiveMae = holdout.last_value.mae;
+  const selectedMae = holdout[selectedMethod].mae;
+  const beatsNaive = selectedMethod !== 'last_value' && selectedMae < naiveMae;
+  return {
+    status: beatsNaive ? 'skill_over_naive' : 'no_skill_over_naive',
+    selectedMethod,
+    validationMAE: valErrors[selectedMethod],
+    holdoutMAE: selectedMae,
+    naiveHoldoutMAE: naiveMae,
+    skillVsNaive: naiveMae === 0 ? 0 : 1 - selectedMae / naiveMae,
+    beatsNaive,
+    validationForecasts: valOrigins.length,
+    holdoutForecasts: testOrigins.length,
+    holdoutOriginsOverlap: horizon > 1
+  };
+}
+
+async function buildNodeForecastReport() {
+  const now = new Date();
+  const nowYear = now.getUTCFullYear();
+  const targets = [];
+
+  const fetchWorldBankAnnual = async (id, indicator, label, unit) => {
+    const url = `https://api.worldbank.org/v2/country/ZW/indicator/${indicator}?format=json&per_page=1000`;
+    const resp = await fetch(url, { headers: { 'User-Agent': 'KUVHURA-Observatory/1.0' }, signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) throw new Error(`World Bank HTTP ${resp.status}`);
+    const payload = await resp.json();
+    const rows = Array.isArray(payload) && Array.isArray(payload[1]) ? payload[1] : [];
+    const obs = rows
+      .filter(r => r && r.value !== null && Number.isFinite(Number(r.value)))
+      .map(r => [Number(r.date), Number(r.value)])
+      .sort((a, b) => a[0] - b[0]);
+    if (!obs.length) throw new Error('No observations returned');
+    const years = obs.map(o => o[0]);
+    const values = obs.map(o => o[1]);
+    const latestYear = years[years.length - 1];
+    const backtest = runRollingOriginBacktest(values, ['last_value', 'mean_5', 'drift_5'], 1, 15, 10);
+    const target = {
+      id,
+      label,
+      unit,
+      source: 'World Bank API',
+      sourceUrl: url,
+      latestObserved: { period: latestYear, value: values[values.length - 1] },
+      backtest
+    };
+    if (nowYear - latestYear > 3) {
+      target.status = 'stale_data';
+      target.reason = `Latest observation is ${latestYear}; one-period-ahead forecast withheld.`;
+    } else if (backtest.status === 'insufficient_history') {
+      target.status = 'insufficient_history';
+      target.reason = backtest.reason;
+    } else if (backtest.beatsNaive) {
+      target.status = 'validated_candidate';
+      target.forecast = {
+        period: latestYear + 1,
+        value: forecastPredictSeries(values, backtest.selectedMethod, 1),
+        method: backtest.selectedMethod
+      };
+    } else {
+      target.status = 'baseline_only';
+      target.forecast = {
+        period: latestYear + 1,
+        value: values[values.length - 1],
+        method: 'last-observation baseline'
+      };
+      target.reason = 'The selected one-year-ahead candidate did not beat persistence on the held-out window. Displayed value is a reference baseline.';
+    }
+    return target;
+  };
+
+  try {
+    targets.push(await fetchWorldBankAnnual('gdp', 'NY.GDP.MKTP.KD.ZG', 'Zimbabwe GDP growth', '% annual'));
+  } catch (err) {
+    targets.push({ id: 'gdp', label: 'Zimbabwe GDP growth', status: 'unavailable', reason: `Could not load historical data: ${err.message}` });
+  }
+
+  const fetchImfAnnualInflation = async () => {
+    const url = 'https://www.imf.org/external/datamapper/api/v1/PCPIPCH/ZWE';
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'KUVHURA-Observatory/1.0', Accept: 'application/json' },
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!resp.ok) throw new Error(`IMF WEO HTTP ${resp.status}`);
+    const payload = await resp.json();
+    const zwe = payload?.values?.PCPIPCH?.ZWE || {};
+    const obs = Object.entries(zwe)
+      .map(([yr, val]) => [Number(yr), Number(val)])
+      .filter(([yr, val]) => Number.isFinite(yr) && yr <= nowYear && Number.isFinite(val))
+      .sort((a, b) => a[0] - b[0]);
+    if (obs.length < 18) throw new Error('Insufficient IMF WEO CPI history');
+    const years = obs.map(o => o[0]);
+    const values = obs.map(o => o[1]);
+    const latestYear = years[years.length - 1];
+    const backtest = runRollingOriginBacktest(values, ['last_value', 'mean_5', 'drift_5'], 1, 15, 10);
+    const target = {
+      id: 'inflation',
+      label: 'Zimbabwe CPI inflation (IMF WEO)',
+      unit: '% annual',
+      source: 'IMF World Economic Outlook DataMapper (PCPIPCH/ZWE)',
+      sourceUrl: 'https://www.imf.org/external/datamapper/PCPIPCH@WEO/ZWE',
+      latestObserved: { period: latestYear, value: values[values.length - 1] },
+      backtest
+    };
+    if (backtest.status === 'insufficient_history') {
+      target.status = 'insufficient_history';
+      target.reason = backtest.reason;
+    } else if (backtest.beatsNaive) {
+      target.status = 'validated_candidate';
+      target.forecast = {
+        period: latestYear + 1,
+        value: forecastPredictSeries(values, backtest.selectedMethod, 1),
+        method: backtest.selectedMethod
+      };
+    } else {
+      target.status = 'baseline_only';
+      target.forecast = {
+        period: latestYear + 1,
+        value: values[values.length - 1],
+        method: 'last-observation baseline'
+      };
+      target.reason = 'IMF WEO historical CPI series evaluated on rolling holdout; candidate did not beat persistence so the latest annual reading is shown as a reference baseline.';
+    }
+    return target;
+  };
+
+  try {
+    targets.push(await fetchImfAnnualInflation());
+  } catch (imfErr) {
+    try {
+      targets.push(await fetchWorldBankAnnual('inflation', 'FP.CPI.TOTL.ZG', 'Zimbabwe annual CPI inflation (World Bank)', '% annual'));
+    } catch (err) {
+      targets.push({ id: 'inflation', label: 'Zimbabwe CPI inflation', status: 'unavailable', reason: `IMF (${imfErr.message}) & World Bank (${err.message})` });
+    }
+  }
+
+  try {
+    const goldUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?range=10y&interval=1mo';
+    const resp = await fetch(goldUrl, { headers: { 'User-Agent': 'KUVHURA-Observatory/1.0' }, signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) throw new Error(`Yahoo Finance HTTP ${resp.status}`);
+    const payload = await resp.json();
+    const res0 = payload?.chart?.result?.[0];
+    const ts = res0?.timestamp || [];
+    const closes = res0?.indicators?.quote?.[0]?.close || [];
+    const obs = [];
+    for (let i = 0; i < Math.min(ts.length, closes.length); i++) {
+      if (closes[i] !== null && Number.isFinite(Number(closes[i]))) {
+        const d = new Date(ts[i] * 1000);
+        obs.push([`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`, Number(closes[i])]);
+      }
+    }
+    if (!obs.length) throw new Error('No gold futures prices');
+    const values = obs.map(o => o[1]);
+    const latestMonth = obs[obs.length - 1][0];
+    const [y, m] = latestMonth.split('-').map(Number);
+    const nextPeriod = `${y + 1}-${String(m).padStart(2, '0')}`;
+    const backtest = runRollingOriginBacktest(values, ['last_value', 'seasonal_12', 'drift_12'], 12, 60, 24);
+    targets.push({
+      id: 'gold',
+      label: 'Gold futures (GC=F, 12-month horizon)',
+      unit: 'USD/oz',
+      source: 'Yahoo Finance (GC=F)',
+      sourceUrl: goldUrl,
+      latestObserved: { period: latestMonth, value: values[values.length - 1] },
+      backtest,
+      status: backtest.status === 'insufficient_history' ? 'insufficient_history' : (backtest.beatsNaive ? 'provisional_candidate' : 'baseline_only'),
+      forecast: backtest.status === 'insufficient_history'
+        ? undefined
+        : {
+            period: nextPeriod,
+            value: backtest.beatsNaive ? forecastPredictSeries(values, backtest.selectedMethod, 12) : values[values.length - 1],
+            method: backtest.beatsNaive ? backtest.selectedMethod : 'last-observation baseline'
+          },
+      reason: backtest.beatsNaive
+        ? 'Positive rolling holdout over persistence; 12-month monthly horizons overlap and remain provisional.'
+        : 'Candidate did not beat persistence on the rolling holdout window.'
+    });
+  } catch (err) {
+    targets.push({ id: 'gold', label: 'Gold futures (GC=F)', status: 'unavailable', reason: `Could not load historical data: ${err.message}` });
+  }
+
+  const buildLiveDailyTarget = (id, label, unit, extractValue, sourceLabel) => {
+    const liveEntries = TELEMETRY_TIMELINE
+      .filter(e => Number.isFinite(e.social_volume) && Number.isFinite(extractValue(e)));
+    const requiredDays = 15;
+    const latestEntry = liveEntries[liveEntries.length - 1] || null;
+    if (liveEntries.length < requiredDays) {
+      return {
+        id,
+        label,
+        unit,
+        source: sourceLabel,
+        status: 'collecting_history',
+        liveDays: liveEntries.length,
+        requiredDays,
+        latestObserved: latestEntry ? { period: latestEntry.date, value: extractValue(latestEntry) } : null,
+        reason: `Recording live daily snapshots (${liveEntries.length}/${requiredDays} live days collected; seeded history excluded from holdout backtesting).`
+      };
+    }
+    const vals = liveEntries.map(extractValue);
+    const backtest = runRollingOriginBacktest(vals, ['last_value', 'mean_5', 'drift_5'], 1, 8, 6);
+    const nextDate = new Date(`${latestEntry.date}T00:00:00Z`);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const nextPeriod = nextDate.toISOString().slice(0, 10);
+    return {
+      id,
+      label,
+      unit,
+      source: sourceLabel,
+      liveDays: liveEntries.length,
+      requiredDays,
+      latestObserved: { period: latestEntry.date, value: vals[vals.length - 1] },
+      backtest,
+      status: backtest.beatsNaive ? 'provisional_candidate' : 'baseline_only',
+      forecast: {
+        period: nextPeriod,
+        value: backtest.beatsNaive ? forecastPredictSeries(vals, backtest.selectedMethod, 1) : vals[vals.length - 1],
+        method: backtest.beatsNaive ? backtest.selectedMethod : 'last-observation baseline'
+      },
+      reason: backtest.beatsNaive
+        ? `Rolling holdout across ${liveEntries.length} live recorded days.`
+        : `Rolling holdout across ${liveEntries.length} live days did not beat persistence; latest live reading shown as baseline.`
+    };
+  };
+
+  targets.push(
+    buildLiveDailyTarget(
+      'protests',
+      'Civic discourse intensity (sampled daily posts)',
+      'posts/day',
+      e => e.social_volume,
+      'KUVHURA live social stream (5 platforms · proxy, not verified protest-event counts)'
+    ),
+    buildLiveDailyTarget(
+      'phi',
+      'Bayesian Posterior Durability (Φ_bayes)',
+      'index (5–95)',
+      e => e.phi,
+      'KUVHURA persisted daily Bayesian snapshots'
+    )
+  );
+
+  return {
+    type: 'forecast_report',
+    worker: 'node-native-backtest',
+    generatedAt: now.toISOString().replace(/\.\d+Z$/, '+00:00'),
+    horizon: 'one annual observation for macro series; 12 months for gold; 1-day live snapshot tracking for civic & Φ_bayes',
+    methodology: 'Rolling-origin backtests select candidates on earlier validation origins and score them on later holdouts against last-observation persistence. Inflation uses historical IMF WEO observations (≤ current year). Civic discourse and Φ_bayes exclude seeded history and evaluate once 15 live daily snapshots accumulate.',
+    targets
+  };
+}
+
+function runPythonForecastWorker() {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.join(__dirname, 'forecasting_model.py');
+    execFile('python3', [scriptPath], { timeout: 12000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout) => {
+      if (err) return reject(err);
+      try {
+        const parsed = JSON.parse(String(stdout || '').trim());
+        if (parsed && parsed.type === 'forecast_report' && Array.isArray(parsed.targets)) {
+          return resolve({ ...parsed, worker: 'python-forecasting-model' });
+        }
+        return reject(new Error('Invalid forecast_report JSON from forecasting_model.py'));
+      } catch (parseErr) {
+        return reject(parseErr);
+      }
+    });
+  });
+}
+
+async function getForecastReport({ forceRefresh = false } = {}) {
+  const now = Date.now();
+  if (!forceRefresh && forecastReportCache.data && (now - forecastReportCache.fetchedAt) < FORECAST_CACHE_TTL_MS) {
+    return forecastReportCache.data;
+  }
+  if (forecastReportInFlight) return forecastReportInFlight;
+
+  forecastReportInFlight = (async () => {
+    try {
+      const pyReport = await runPythonForecastWorker();
+      // If Python ZIMSTAT inflation or civic/phi targets are unavailable, enrich cleanly from live IMF/timeline Node backtest
+      const needsEnrich = (pyReport.targets || []).some(t =>
+        (t.id === 'inflation' && (t.status === 'unavailable' || t.status === 'stale_data'))
+        || ((t.id === 'protests' || t.id === 'phi') && t.status === 'unavailable')
+      );
+      if (needsEnrich) {
+        const nodeReport = await buildNodeForecastReport();
+        const nodeById = Object.fromEntries((nodeReport.targets || []).map(t => [t.id, t]));
+        pyReport.targets = pyReport.targets.map(t => {
+          if (t.id === 'inflation' && (t.status === 'unavailable' || t.status === 'stale_data') && nodeById.inflation && nodeById.inflation.status !== 'unavailable') {
+            return nodeById.inflation;
+          }
+          if ((t.id === 'protests' || t.id === 'phi') && t.status === 'unavailable' && nodeById[t.id]) {
+            return nodeById[t.id];
+          }
+          return t;
+        });
+      }
+      forecastReportCache = { data: pyReport, fetchedAt: Date.now() };
+      return pyReport;
+    } catch {
+      const nodeReport = await buildNodeForecastReport();
+      forecastReportCache = { data: nodeReport, fetchedAt: Date.now() };
+      return nodeReport;
+    } finally {
+      forecastReportInFlight = null;
+    }
+  })();
+
+  return forecastReportInFlight;
+}
+
+app.get('/api/audit-oversight', async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === '1';
+    const data = await fetchOagPrazAuditTelemetry({ forceRefresh });
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ status: 'unavailable', error: err.message });
+  }
+});
+
+app.get('/api/forecast', async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === '1';
+    const report = await getForecastReport({ forceRefresh });
+    res.json(report);
+  } catch (err) {
+    res.status(502).json({ type: 'forecast_report', error: err.message, targets: [] });
+  }
+});
+
 app.get('/api/timeline/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -8194,6 +8672,14 @@ app.get('/api/timeline/stream', async (req, res) => {
   };
 
   await sendSnapshot();
+  getForecastReport()
+    .then(report => {
+      if (!closed && report && report.type === 'forecast_report') {
+        res.write(`event: telemetry\ndata: ${JSON.stringify(report)}\n\n`);
+      }
+    })
+    .catch(() => {});
+
   const interval = setInterval(sendSnapshot, 60000);
   const keepalive = setInterval(() => {
     if (!closed) res.write(': keepalive\n\n');
@@ -8734,6 +9220,13 @@ server.on('upgrade', async (req, socket) => {
 
   const timer = setInterval(pushTelemetry, 60000);
   await pushTelemetry();
+  getForecastReport()
+    .then(report => {
+      if (!closed && !socket.destroyed && report && report.type === 'forecast_report') {
+        socket.write(buildWebSocketFrame(JSON.stringify(report), 0x1));
+      }
+    })
+    .catch(() => {});
 });
 
 if (process.argv.includes('--update-treasury-cache')) {
