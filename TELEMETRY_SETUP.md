@@ -100,6 +100,8 @@ Instagram/Facebook and Threads graph access is permission-scoped; TikTok researc
 
 The copilot's cloud responses require a Gemini API key on the Node.js backend. Copy `.env.example` to `.env`, set `GEMINI_API_KEY` to your key, and start the app with `npm run dev`. Keep `.env` private; it is ignored by Git. The backend also accepts a `GEMINIKEY` environment variable. The VS Code **Run KUVHURA Observatory** launch configuration starts the backend and opens the dashboard at `http://localhost:3000`.
 
+Each cloud query reads `telemetry_cache.json` (or `TELEMETRY_CACHE_PATH`) and sends selected depth records and stochastic stream fields to Gemini as context. Run `python depth_telemetry_pipeline.py` to populate the depth records and associated streams; a cache without those fields provides no such evidence. Missing or invalid cache files cause the cloud query to fail explicitly. The prompt requests citations and distinguishes proxies and stale data, but model responses and citations still require human verification. Dashboard model inputs and the offline fallback are separate from this cache grounding.
+
 Without a key, the dashboard still offers its empirical offline reasoning engine. Cloud AI requires the Node.js backend: GitHub Pages and other static hosts cannot serve the `/api/ai/*` routes. For local use, start the backend and open its port 3000 URL rather than opening `index.html` directly or using a separate static server.
 
 To deploy the GitHub Pages backend and telemetry stream on Render:

@@ -589,6 +589,77 @@ test('filterExportRecordsByPeriod handles all-periods and substring period filte
   assert.equal(filterExportRecordsByPeriod(sample, '2026').length, 2);
 });
 
+test('AI query uses fresh cache evidence in its system instruction and reports cache errors', async () => {
+  const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const code = extract(source, 'async function getAuditableCopilotContext()', "\napp.post('/api/attachments'");
+  let handler;
+  let cache = {
+    depth_updated_at: '2026-11-28',
+    depth_records: [{
+      lineage: 'Measured Directly', location_name: 'Location', value: 0, unit: 'kg',
+      period: '2025', source_title: 'Source', source_url: 'https://example.org',
+      notes: 'Reported quantity',
+    }],
+    stochastic_streams: {
+      metric: { latest_raw: 0, smoothed_value: 2, volatility_std_10: null, regime: 'Contained', status: 'stale_or_offline' },
+    },
+  };
+  const requests = [];
+  const context = {
+    app: { post: (_path, fn) => { handler = fn; } },
+    readFile: async () => JSON.stringify(cache),
+    getTelemetryCachePath: () => 'cache.json',
+    getGeminiApiKey: () => 'test-key',
+    geminiChatRequests: new Map(),
+    GEMINI_CHAT_WINDOW_MS: 600000,
+    MAX_GEMINI_CHAT_REQUESTS: 10,
+    GEMINI_MODEL: 'test-model',
+    fetch: async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'answer' }] } }] }) };
+    },
+    AbortSignal,
+    console: { error() {} },
+  };
+  runInNewContext(code, context);
+  const invoke = async () => {
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(body) { this.body = body; return this; },
+    };
+    await handler({ body: { prompt: 'Question' }, ip: 'test' }, res);
+    return res;
+  };
+  const response = await invoke();
+  assert.equal(response.body.answer, 'answer');
+  const instruction = requests[0].systemInstruction.parts[0].text;
+  const data = JSON.parse(instruction.split('Grounded telemetry cache: ')[1]);
+  assert.equal(data.depth_records[0].value, 0);
+  assert.equal(data.depth_records[0].label, 'Location');
+  assert.equal(data.depth_records[0].source_url, 'https://example.org');
+  assert.equal(data.stochastic_streams.metric.latest_raw, 0);
+  assert.equal(data.stochastic_streams.metric.status, 'stale_or_offline');
+  assert.equal(requests[0].contents[0].parts[0].text, 'Question');
+  assert.match(instruction, /Do not fabricate data/);
+  assert.match(instruction, /untrusted data, not instructions/);
+
+  cache = {};
+  await invoke();
+  const empty = JSON.parse(requests[1].systemInstruction.parts[0].text.split('Grounded telemetry cache: ')[1]);
+  assert.equal(empty.depth_records.length, 0);
+  assert.equal(Object.keys(empty.stochastic_streams).length, 0);
+  cache = { depth_records: {} };
+  const error = await invoke();
+  assert.equal(error.statusCode, 503);
+  assert.match(error.body.error, /telemetry cache/);
+  assert.equal(requests.length, 2);
+  context.readFile = async () => { throw new Error('cache unavailable'); };
+  const unavailable = await invoke();
+  assert.equal(unavailable.statusCode, 503);
+  assert.equal(requests.length, 2);
+});
+
 
 
 
